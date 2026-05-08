@@ -66,6 +66,13 @@ function StarRating({ value, onChange, compact = false }) {
 }
 
 function LineItems({ field, value, onChange }) {
+  function createItem(item = {}, index = itemsRef.current.length) {
+    return {
+      _clientId: item._clientId || `item-${field.id}-${Date.now()}-${index}-${Math.random().toString(36).slice(2)}`,
+      ...item,
+    };
+  }
+
   const [items, setItems] = useState(() => normalizeArray(value).map((item, index) => ({
     _clientId: item._clientId || `item-${Date.now()}-${index}`,
     ...item,
@@ -77,10 +84,7 @@ function LineItems({ field, value, onChange }) {
     : 0;
 
   useEffect(() => {
-    const nextItems = normalizeArray(value).map((item, index) => ({
-      _clientId: item._clientId || `item-${Date.now()}-${index}`,
-      ...item,
-    }));
+    const nextItems = normalizeArray(value).map((item, index) => createItem(item, index));
     itemsRef.current = nextItems;
     setItems(nextItems);
   }, [field.id]);
@@ -88,7 +92,10 @@ function LineItems({ field, value, onChange }) {
   function update(index, key, nextValue) {
     const nextItems = itemsRef.current.map((item, itemIndex) => (itemIndex === index ? { ...item, [key]: nextValue } : item));
     itemsRef.current = nextItems;
-    onChange(nextItems);
+  }
+
+  function commit() {
+    onChange(itemsRef.current);
     setTotalTick((tick) => tick + 1);
   }
 
@@ -101,7 +108,7 @@ function LineItems({ field, value, onChange }) {
   }
 
   function add() {
-    const nextItems = [...itemsRef.current, { _clientId: `item-${Date.now()}-${itemsRef.current.length}`, name: '', amount: '' }];
+    const nextItems = [...itemsRef.current, createItem({ name: '', amount: '' })];
     itemsRef.current = nextItems;
     setItems(nextItems);
     onChange(nextItems);
@@ -113,8 +120,22 @@ function LineItems({ field, value, onChange }) {
       {items.map((item, index) => (
         <div className={field.itemRating ? 'line-item-row has-rating' : 'line-item-row'} key={item._clientId}>
           <div className="line-item-main">
-            <input defaultValue={item.name || ''} onInput={(event) => update(index, 'name', event.currentTarget.value)} placeholder={field.nameLabel || '항목'} />
-            <input type="number" inputMode="numeric" defaultValue={item.amount || ''} onInput={(event) => update(index, 'amount', event.currentTarget.value)} placeholder={field.amountLabel || '금액'} />
+            <input
+              defaultValue={item.name || ''}
+              onInput={(event) => update(index, 'name', event.currentTarget.value)}
+              onBlur={commit}
+              autoComplete="off"
+              placeholder={field.nameLabel || '항목'}
+            />
+            <input
+              type="number"
+              inputMode="numeric"
+              defaultValue={item.amount || ''}
+              onInput={(event) => update(index, 'amount', event.currentTarget.value)}
+              onBlur={commit}
+              autoComplete="off"
+              placeholder={field.amountLabel || '금액'}
+            />
             <button type="button" className="icon-button small-icon" onClick={() => remove(index)}>×</button>
           </div>
           {field.itemRating && (
@@ -122,7 +143,8 @@ function LineItems({ field, value, onChange }) {
               <span>항목 평점</span>
               <StarRating compact value={itemsRef.current[index]?.rating || 0} onChange={(nextRating) => {
                 update(index, 'rating', nextRating);
-                setItems(itemsRef.current);
+                onChange(itemsRef.current);
+                setItems([...itemsRef.current]);
               }} />
             </div>
           )}
@@ -147,6 +169,8 @@ export default function FieldInput({ field, value, onChange }) {
   const [tmdbResults, setTmdbResults] = useState([]);
   const [tmdbError, setTmdbError] = useState('');
   const [searching, setSearching] = useState(false);
+  const tmdbCacheRef = useRef(new Map());
+  const tmdbRequestRef = useRef(0);
 
   const photoPreview = useMemo(() => {
     if (value instanceof File) return URL.createObjectURL(value);
@@ -161,22 +185,34 @@ export default function FieldInput({ field, value, onChange }) {
     setTagText('');
   }
 
-  async function searchTmdb() {
-    const query = tmdbQuery.trim();
+  async function searchTmdb(nextQuery = tmdbQuery) {
+    const query = nextQuery.trim();
     if (!query || !supabase) return;
+    const cacheKey = query.toLowerCase();
+    if (tmdbCacheRef.current.has(cacheKey)) {
+      setTmdbResults(tmdbCacheRef.current.get(cacheKey));
+      return;
+    }
+
+    const requestId = tmdbRequestRef.current + 1;
+    tmdbRequestRef.current = requestId;
     setSearching(true);
     setTmdbError('');
     try {
       const { data, error } = await supabase.functions.invoke('tmdb-search', {
         body: { query },
       });
+      if (requestId !== tmdbRequestRef.current) return;
       if (error) throw error;
-      setTmdbResults(data?.results || []);
+      const results = data?.results || [];
+      tmdbCacheRef.current.set(cacheKey, results);
+      setTmdbResults(results);
     } catch {
+      if (requestId !== tmdbRequestRef.current) return;
       setTmdbResults([]);
       setTmdbError('TMDB 검색 함수를 확인해주세요.');
     } finally {
-      setSearching(false);
+      if (requestId === tmdbRequestRef.current) setSearching(false);
     }
   }
 
@@ -189,8 +225,8 @@ export default function FieldInput({ field, value, onChange }) {
     }
 
     const timer = window.setTimeout(() => {
-      searchTmdb();
-    }, 450);
+      searchTmdb(query);
+    }, 280);
 
     return () => window.clearTimeout(timer);
   }, [field.type, tmdbQuery]);

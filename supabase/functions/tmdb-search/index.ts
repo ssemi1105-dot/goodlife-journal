@@ -6,6 +6,9 @@ const corsHeaders = {
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 };
 
+let genreCache: { expiresAt: number; value: { movie: Record<number, string>; tv: Record<number, string> } } | null = null;
+const GENRE_CACHE_MS = 1000 * 60 * 60 * 24;
+
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
@@ -14,6 +17,8 @@ function json(body: unknown, status = 200) {
 }
 
 async function fetchGenreMap(apiKey: string) {
+  if (genreCache && genreCache.expiresAt > Date.now()) return genreCache.value;
+
   const [movieResponse, tvResponse] = await Promise.all([
     fetch(`https://api.themoviedb.org/3/genre/movie/list?api_key=${apiKey}&language=ko-KR`),
     fetch(`https://api.themoviedb.org/3/genre/tv/list?api_key=${apiKey}&language=ko-KR`),
@@ -21,7 +26,11 @@ async function fetchGenreMap(apiKey: string) {
   const [movieData, tvData] = await Promise.all([movieResponse.json(), tvResponse.json()]);
   const movieGenres = Object.fromEntries((movieData.genres || []).map((genre: any) => [genre.id, genre.name]));
   const tvGenres = Object.fromEntries((tvData.genres || []).map((genre: any) => [genre.id, genre.name]));
-  return { movie: movieGenres, tv: tvGenres };
+  genreCache = {
+    expiresAt: Date.now() + GENRE_CACHE_MS,
+    value: { movie: movieGenres, tv: tvGenres },
+  };
+  return genreCache.value;
 }
 
 serve(async (req) => {
@@ -42,10 +51,13 @@ serve(async (req) => {
     include_adult: 'false',
   });
 
-  const response = await fetch(`https://api.themoviedb.org/3/search/multi?${params}`);
+  const [response, genreMap] = await Promise.all([
+    fetch(`https://api.themoviedb.org/3/search/multi?${params}`),
+    fetchGenreMap(apiKey),
+  ]);
   if (!response.ok) return json({ error: 'TMDB request failed.' }, response.status);
 
-  const [data, genreMap] = await Promise.all([response.json(), fetchGenreMap(apiKey)]);
+  const data = await response.json();
   const results = (data.results || [])
     .filter((item: any) => ['movie', 'tv'].includes(item.media_type))
     .slice(0, 8)

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { CATEGORY_MAP } from '../data/categoryDefinitions';
 import FieldInput from './FieldInput';
 import { calcDutchPay, calcInvestment, formatMoney, toNumber, todayIso } from '../utils/recordUtils';
@@ -23,11 +23,14 @@ function buildInitialForm(category, record) {
 export default function RecordModal({ categoryId, record, onClose, onSave }) {
   const category = CATEGORY_MAP[categoryId];
   const [form, setForm] = useState(() => buildInitialForm(category, record));
+  const formRef = useRef(form);
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    setForm(buildInitialForm(category, record));
+    const nextForm = buildInitialForm(category, record);
+    formRef.current = nextForm;
+    setForm(nextForm);
   }, [category, record]);
 
   const dutchPay = categoryId === 'dining' ? calcDutchPay(form) : null;
@@ -49,8 +52,15 @@ export default function RecordModal({ categoryId, record, onClose, onSave }) {
       if (categoryId === 'overseasTravel' && ['airfare', 'lodgingCost', 'localExpenses'].includes(fieldId)) {
         next.krwAmount = String(toNumber(next.airfare) + toNumber(next.lodgingCost) + toNumber(next.localExpenses));
       }
+      formRef.current = next;
       return next;
     });
+  }
+
+  function blurActiveInput() {
+    if (document.activeElement instanceof HTMLElement) {
+      document.activeElement.blur();
+    }
   }
 
   async function submit(event) {
@@ -64,7 +74,7 @@ export default function RecordModal({ categoryId, record, onClose, onSave }) {
     setSaving(true);
     onClose();
     try {
-      await onSave(categoryId, form, record);
+      await onSave(categoryId, formRef.current, record);
     } catch (err) {
       window.alert(err.message || '저장에 실패했습니다.');
     }
@@ -113,7 +123,7 @@ export default function RecordModal({ categoryId, record, onClose, onSave }) {
 
         <footer className="modal-actions">
           <button type="button" className="secondary-button" onClick={onClose}>취소</button>
-          <button type="submit" className="primary-button" disabled={saving}>{saving ? '저장 중' : '저장'}</button>
+          <button type="submit" className="primary-button" disabled={saving} onPointerDownCapture={blurActiveInput}>{saving ? '저장 중' : '저장'}</button>
         </footer>
       </form>
     </div>
