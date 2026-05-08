@@ -133,10 +133,23 @@ export default function App() {
 
       {recordsLoading && <div className="sync-indicator">동기화 중</div>}
 
-      <nav className="bottom-nav">
-        <button className={view === 'home' ? 'is-active' : ''} onClick={() => setView('home')}>홈</button>
-        <button className="add-fab" onClick={() => openAdd(view === 'category' ? activeCategory : null)}>＋</button>
-        <button className={view === 'settings' ? 'is-active' : ''} onClick={() => setView('settings')}>설정</button>
+      <button
+        type="button"
+        className="bottom-fab"
+        onClick={() => openAdd(view === 'category' ? activeCategory : null)}
+        aria-label="기록 추가"
+      >
+        +
+      </button>
+
+      <nav className="bottom-nav" aria-label="하단 내비게이션">
+        <button type="button" className={view === 'home' ? 'is-active' : ''} onClick={() => setView('home')}>
+          <span>홈</span>
+        </button>
+        <span className="bottom-nav-spacer" aria-hidden="true" />
+        <button type="button" className={view === 'settings' ? 'is-active' : ''} onClick={() => setView('settings')}>
+          <span>설정</span>
+        </button>
       </nav>
 
       {showPicker && (
