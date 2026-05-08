@@ -76,7 +76,7 @@ function LineItems({ field, value, onChange }) {
   return (
     <div className="line-items">
       {items.map((item, index) => (
-        <div className={field.itemRating ? 'line-item-row has-rating' : 'line-item-row'} key={`${index}-${item.name}`}>
+        <div className={field.itemRating ? 'line-item-row has-rating' : 'line-item-row'} key={`line-item-${index}`}>
           <div className="line-item-main">
             <input value={item.name || ''} onChange={(event) => update(index, 'name', event.target.value)} placeholder={field.nameLabel || '항목'} />
             <input type="number" value={item.amount || ''} onChange={(event) => update(index, 'amount', event.target.value)} placeholder={field.amountLabel || '금액'} />
@@ -158,7 +158,7 @@ export default function FieldInput({ field, value, onChange }) {
   }, [field.type, tmdbQuery]);
 
   if (field.type === 'textarea') {
-    return <textarea value={value || ''} onChange={(event) => onChange(event.target.value)} placeholder={field.placeholder || ''} rows={5} />;
+    return <textarea value={value || ''} onChange={(event) => onChange(event.target.value)} placeholder={field.placeholder || ''} rows={3} />;
   }
 
   if (field.type === 'select') {

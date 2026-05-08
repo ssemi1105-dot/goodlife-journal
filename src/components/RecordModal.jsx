@@ -62,13 +62,11 @@ export default function RecordModal({ categoryId, record, onClose, onSave }) {
     }
 
     setSaving(true);
+    onClose();
     try {
       await onSave(categoryId, form, record);
-      onClose();
     } catch (err) {
-      setError(err.message || '저장에 실패했습니다.');
-    } finally {
-      setSaving(false);
+      window.alert(err.message || '저장에 실패했습니다.');
     }
   }
 
