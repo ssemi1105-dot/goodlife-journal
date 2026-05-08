@@ -1,9 +1,11 @@
-import { CATEGORIES, CATEGORY_ICONS, FINANCE_MODES } from '../data/categoryDefinitions';
 import { useEffect, useState } from 'react';
+import { CATEGORIES, CATEGORY_ICONS, FINANCE_MODES } from '../data/categoryDefinitions';
 import AdminUserList from './AdminUserList';
+import ShareSettingsPanel from './ShareSettingsPanel';
 import CompactToggle from './ui/CompactToggle';
 
 export default function SettingsScreen({
+  userId,
   profile,
   settings,
   records = [],
@@ -74,8 +76,8 @@ export default function SettingsScreen({
   const selectedHidden = selectedCategory ? settings.hidden_categories.includes(selectedCategory.id) : false;
 
   return (
-    <main className="screen">
-      <header className="sub-header">
+    <main className="screen settings-screen">
+      <header className="sub-header modern-sub-header">
         <button className="icon-button" onClick={onBack} aria-label="뒤로">‹</button>
         <div>
           <p className="eyebrow">Settings</p>
@@ -83,85 +85,101 @@ export default function SettingsScreen({
         </div>
       </header>
 
-      <section className="settings-panel">
-        <h2>프로필</h2>
-        <label className="field">
+      <section className="settings-panel profile-panel">
+        <div className="section-title compact-section-title">
+          <div>
+            <p className="eyebrow">Profile</p>
+            <h2>내 프로필</h2>
+          </div>
+          <span>{profile?.role || 'member'}</span>
+        </div>
+        <label className="field compact-field">
           <span>이름</span>
           <input
             value={profileName}
             onChange={(event) => setProfileName(event.target.value)}
-            onCompositionEnd={(event) => setProfileName(event.currentTarget.value)}
             autoComplete="name"
+            placeholder="표시 이름"
           />
         </label>
-        <button className="primary-button compact" type="button" onClick={saveProfileName} disabled={profileSaving}>
-          {profileSaving ? '저장 중' : '이름 저장'}
-        </button>
-        <button className="secondary-button" onClick={onSignOut}>로그아웃</button>
+        <div className="settings-actions-row">
+          <button className="primary-button compact" type="button" onClick={saveProfileName} disabled={profileSaving}>
+            {profileSaving ? '저장 중' : '저장'}
+          </button>
+          <button className="secondary-button compact" type="button" onClick={onSignOut}>로그아웃</button>
+        </div>
       </section>
 
       <section className="settings-panel">
-        <div className="section-title">
+        <div className="section-title compact-section-title">
           <div>
-            <h2>카테고리 표시와 집계</h2>
-            <p className="muted">기록 수 기준 자동정렬을 켜면 많이 쓰는 카테고리가 홈에서 먼저 보입니다.</p>
+            <p className="eyebrow">Categories</p>
+            <h2>카테고리 설정</h2>
           </div>
+          <CompactToggle
+            checked={Boolean(settings.sort_by_record_count)}
+            onChange={toggleSortByRecordCount}
+            label="기록순"
+          />
         </div>
-        <CompactToggle
-          checked={Boolean(settings.sort_by_record_count)}
-          onChange={toggleSortByRecordCount}
-          label={`기록순 정렬 ${settings.sort_by_record_count ? '켜짐' : '꺼짐'}`}
-          className="wide-toggle"
-        />
 
-        <div className="category-settings-list">
+        <div className="category-settings-list compact-category-list">
           {displayedCategoryOrder.map((categoryId) => {
             const category = CATEGORIES.find((item) => item.id === categoryId);
             if (!category) return null;
             const hidden = settings.hidden_categories.includes(category.id);
             return (
-              <article
+              <button
+                type="button"
                 className={hidden ? 'category-setting-card is-hidden' : 'category-setting-card'}
                 key={category.id}
                 onClick={() => setSelectedCategoryId(category.id)}
               >
                 <div className="category-setting-head">
-                  <span className="tile-icon" style={{ background: `${category.color}18`, color: category.color }}>{CATEGORY_ICONS[category.id]}</span>
+                  <span className="tile-icon" style={{ background: `${category.color}16`, color: category.color }}>{CATEGORY_ICONS[category.id]}</span>
                   <div>
                     <strong>{category.label}</strong>
                     <small>
-                      {countByCategory[category.id] || 0}개 기록 · {hidden ? '숨김' : '표시 중'} · {FINANCE_MODES[settings.finance_modes[category.id] || 'excluded']}
+                      {countByCategory[category.id] || 0}개 · {hidden ? '숨김' : '표시'} · {FINANCE_MODES[settings.finance_modes[category.id] || 'excluded']}
                     </small>
                   </div>
                 </div>
-              </article>
+                <span className="row-chevron">›</span>
+              </button>
             );
           })}
         </div>
       </section>
 
-      <section className="settings-panel">
-        <h2>한국투자 API</h2>
-        <p className="muted">연동 준비중입니다. APP KEY와 APP SECRET은 브라우저에 저장하지 않고 Supabase Edge Function secret으로만 다루는 구조를 사용합니다.</p>
+      <ShareSettingsPanel userId={userId} />
+
+      <section className="settings-panel integration-panel">
+        <div className="section-title compact-section-title">
+          <div>
+            <p className="eyebrow">Integrations</p>
+            <h2>데이터/연동</h2>
+          </div>
+        </div>
+        <div className="settings-row">
+          <div>
+            <strong>한국투자 API</strong>
+            <span>키와 토큰은 브라우저가 아니라 Supabase Edge Function secret으로만 다루도록 준비되어 있습니다.</span>
+          </div>
+        </div>
       </section>
 
       <AdminUserList enabled={isOwner} />
 
-      <section className="settings-panel">
-        <h2>공유 기능 준비</h2>
-        <p className="muted">현재 버전은 개인 기록 중심입니다. DB에는 공유 권한 구조를 미리 넣어 두어, 이후 친구와 기록 비교, 카테고리별 상위 비율, 작품/장소별 평점 비교 기능을 붙일 수 있습니다.</p>
-      </section>
-
       {selectedCategory && (
         <div className="modal-backdrop">
-          <section className="category-option-modal">
+          <section className="category-option-modal bottom-sheet">
             <header className="modal-header">
               <div className="category-setting-head">
-                <span className="tile-icon" style={{ background: `${selectedCategory.color}18`, color: selectedCategory.color }}>
+                <span className="tile-icon" style={{ background: `${selectedCategory.color}16`, color: selectedCategory.color }}>
                   {CATEGORY_ICONS[selectedCategory.id]}
                 </span>
                 <div>
-                  <p className="eyebrow">Category Settings</p>
+                  <p className="eyebrow">Category</p>
                   <h2>{selectedCategory.label}</h2>
                 </div>
               </div>
@@ -169,10 +187,11 @@ export default function SettingsScreen({
             </header>
 
             <div className="category-option-group">
-              <span>표시 여부</span>
-              <button type="button" className="option-wide-button" onClick={() => toggleHidden(selectedCategory.id)}>
-                {selectedHidden ? '홈에 보이기' : '홈에서 숨기기'}
-              </button>
+              <CompactToggle
+                checked={!selectedHidden}
+                onChange={() => toggleHidden(selectedCategory.id)}
+                label={selectedHidden ? '홈에서 숨김' : '홈에 표시'}
+              />
             </div>
 
             <div className="category-option-group">

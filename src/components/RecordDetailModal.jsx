@@ -1,5 +1,6 @@
 import { CATEGORY_ICONS, CATEGORY_MAP } from '../data/categoryDefinitions';
 import { formatMoney, formatPeriod, getRecordTitle, toNumber } from '../utils/recordUtils';
+import VideoFriendReactions from './VideoFriendReactions';
 import RecordImagePreview from './ui/RecordImagePreview';
 
 function renderValue(value) {
@@ -76,6 +77,8 @@ export default function RecordDetailModal({ record, onClose, onEdit, onDelete })
             );
           })}
         </div>
+
+        <VideoFriendReactions record={record} />
 
         <footer className="modal-actions">
           <button type="button" className="secondary-button" onClick={() => onEdit(record)}>수정</button>

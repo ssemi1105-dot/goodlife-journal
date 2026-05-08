@@ -119,6 +119,7 @@ export default function App() {
 
       {view === 'settings' && (
         <SettingsScreen
+          userId={auth.userId}
           profile={auth.profile}
           settings={normalizedSettings}
           records={records}
