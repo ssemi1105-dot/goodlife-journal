@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { CATEGORY_ICONS, CATEGORY_MAP } from '../data/categoryDefinitions';
+import { APP_VERSION } from '../lib/appVersion';
 import { formatMoney, summarizeMonth } from '../utils/recordUtils';
 import RecordCard from './RecordCard';
 import SearchModal from './SearchModal';
@@ -38,7 +39,7 @@ export default function Dashboard({
     <main className="screen">
       <section className="topbar compact-topbar">
         <div>
-          <p className="eyebrow">Goodlife Journal</p>
+          <p className="eyebrow app-version-label">Goodlife Journal <span>v{APP_VERSION}</span></p>
           <h1>{profile?.display_name || '사용자'}님의 기록</h1>
         </div>
         <button type="button" className={hasSearch ? 'search-icon-button is-active' : 'search-icon-button'} onClick={() => setShowSearch(true)} aria-label="검색">

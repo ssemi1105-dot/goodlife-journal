@@ -152,6 +152,22 @@ h3 {
   text-transform: uppercase;
 }
 
+.app-version-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.app-version-label span {
+  border-radius: 999px;
+  background: #171717;
+  color: white;
+  padding: 2px 7px;
+  font-size: 10px;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
 .muted,
 .empty-text {
   color: #64748b;
