@@ -8,6 +8,12 @@
   text-rendering: optimizeLegibility;
 }
 
+html,
+body,
+#root {
+  min-height: 100%;
+}
+
 * {
   box-sizing: border-box;
 }
@@ -57,7 +63,6 @@ select:focus {
   margin: 0 auto;
   padding-bottom: calc(78px + env(safe-area-inset-bottom));
   background: rgba(255, 255, 255, 0.72);
-  backdrop-filter: blur(14px);
   border-inline: 1px solid rgba(226, 232, 240, 0.9);
 }
 
@@ -468,7 +473,7 @@ h3 {
   position: fixed;
   left: 50%;
   bottom: 0;
-  z-index: 20;
+  z-index: 45;
   width: min(1040px, 100%);
   transform: translateX(-50%);
   display: grid;
@@ -997,7 +1002,6 @@ h3 {
   padding: 10px 14px 14px;
   border-top: 1px solid #e2e8f0;
   background: rgba(255, 255, 255, 0.97);
-  backdrop-filter: blur(10px);
 }
 
 .settings-panel {

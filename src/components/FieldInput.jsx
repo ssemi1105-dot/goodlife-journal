@@ -6,6 +6,13 @@ function normalizeArray(value) {
   return Array.isArray(value) ? value : [];
 }
 
+function makeLineItem(fieldId, item = {}, index = 0) {
+  return {
+    _clientId: item._clientId || `line-${fieldId}-${Date.now()}-${index}-${Math.random().toString(36).slice(2)}`,
+    ...item,
+  };
+}
+
 function ChoiceGroup({ field, value, onChange, multiple = false, mood = false }) {
   const selected = multiple ? normalizeArray(value) : [value].filter(Boolean);
 
@@ -65,16 +72,45 @@ function StarRating({ value, onChange, compact = false }) {
   );
 }
 
-function LineItems({ field, value, onChange }) {
-  function createItem(item = {}, index = itemsRef.current.length) {
-    return {
-      _clientId: item._clientId || `item-${field.id}-${Date.now()}-${index}-${Math.random().toString(36).slice(2)}`,
-      ...item,
-    };
-  }
+function LineItemRow({ field, item, onUpdate, onRemove, onRatingChange }) {
+  return (
+    <div className={field.itemRating ? 'line-item-row has-rating' : 'line-item-row'}>
+      <div className="line-item-main">
+        <input
+          type="text"
+          inputMode="text"
+          enterKeyHint="next"
+          defaultValue={item.name || ''}
+          onChange={(event) => onUpdate(item._clientId, 'name', event.currentTarget.value)}
+          autoComplete="off"
+          autoCorrect="off"
+          spellCheck="false"
+          placeholder={field.nameLabel || '항목'}
+        />
+        <input
+          type="number"
+          inputMode="numeric"
+          enterKeyHint="done"
+          defaultValue={item.amount || ''}
+          onChange={(event) => onUpdate(item._clientId, 'amount', event.currentTarget.value)}
+          autoComplete="off"
+          placeholder={field.amountLabel || '금액'}
+        />
+        <button type="button" className="icon-button small-icon" onClick={() => onRemove(item._clientId)}>×</button>
+      </div>
+      {field.itemRating && (
+        <div className="line-item-rating">
+          <span>항목 평점</span>
+          <StarRating compact value={item.rating || 0} onChange={(nextRating) => onRatingChange(item._clientId, nextRating)} />
+        </div>
+      )}
+    </div>
+  );
+}
 
+function LineItems({ field, value, onChange, onDraftChange }) {
   const [items, setItems] = useState(() => normalizeArray(value).map((item, index) => ({
-    _clientId: item._clientId || `item-${Date.now()}-${index}`,
+    _clientId: item._clientId || `line-${field.id}-${Date.now()}-${index}`,
     ...item,
   })));
   const [totalTick, setTotalTick] = useState(0);
@@ -84,32 +120,41 @@ function LineItems({ field, value, onChange }) {
     : 0;
 
   useEffect(() => {
-    const nextItems = normalizeArray(value).map((item, index) => createItem(item, index));
+    const nextItems = normalizeArray(value).map((item, index) => makeLineItem(field.id, item, index));
     itemsRef.current = nextItems;
     setItems(nextItems);
+    setTotalTick((tick) => tick + 1);
   }, [field.id]);
 
-  function update(index, key, nextValue) {
-    const nextItems = itemsRef.current.map((item, itemIndex) => (itemIndex === index ? { ...item, [key]: nextValue } : item));
+  function publishDraft(nextItems) {
     itemsRef.current = nextItems;
+    onDraftChange?.(nextItems);
   }
 
-  function commit() {
-    onChange(itemsRef.current);
-    setTotalTick((tick) => tick + 1);
+  function update(clientId, key, nextValue) {
+    const nextItems = itemsRef.current.map((item) => (item._clientId === clientId ? { ...item, [key]: nextValue } : item));
+    publishDraft(nextItems);
   }
 
-  function remove(index) {
-    const nextItems = itemsRef.current.filter((_, itemIndex) => itemIndex !== index);
-    itemsRef.current = nextItems;
+  function remove(clientId) {
+    const nextItems = itemsRef.current.filter((item) => item._clientId !== clientId);
+    publishDraft(nextItems);
     setItems(nextItems);
     onChange(nextItems);
     setTotalTick((tick) => tick + 1);
   }
 
   function add() {
-    const nextItems = [...itemsRef.current, createItem({ name: '', amount: '' })];
-    itemsRef.current = nextItems;
+    const nextItems = [...itemsRef.current, makeLineItem(field.id, { name: '', amount: '' }, itemsRef.current.length)];
+    publishDraft(nextItems);
+    setItems(nextItems);
+    onChange(nextItems);
+    setTotalTick((tick) => tick + 1);
+  }
+
+  function changeRating(clientId, nextRating) {
+    const nextItems = itemsRef.current.map((item) => (item._clientId === clientId ? { ...item, rating: nextRating } : item));
+    publishDraft(nextItems);
     setItems(nextItems);
     onChange(nextItems);
     setTotalTick((tick) => tick + 1);
@@ -117,38 +162,15 @@ function LineItems({ field, value, onChange }) {
 
   return (
     <div className="line-items">
-      {items.map((item, index) => (
-        <div className={field.itemRating ? 'line-item-row has-rating' : 'line-item-row'} key={item._clientId}>
-          <div className="line-item-main">
-            <input
-              defaultValue={item.name || ''}
-              onInput={(event) => update(index, 'name', event.currentTarget.value)}
-              onBlur={commit}
-              autoComplete="off"
-              placeholder={field.nameLabel || '항목'}
-            />
-            <input
-              type="number"
-              inputMode="numeric"
-              defaultValue={item.amount || ''}
-              onInput={(event) => update(index, 'amount', event.currentTarget.value)}
-              onBlur={commit}
-              autoComplete="off"
-              placeholder={field.amountLabel || '금액'}
-            />
-            <button type="button" className="icon-button small-icon" onClick={() => remove(index)}>×</button>
-          </div>
-          {field.itemRating && (
-            <div className="line-item-rating">
-              <span>항목 평점</span>
-              <StarRating compact value={itemsRef.current[index]?.rating || 0} onChange={(nextRating) => {
-                update(index, 'rating', nextRating);
-                onChange(itemsRef.current);
-                setItems([...itemsRef.current]);
-              }} />
-            </div>
-          )}
-        </div>
+      {items.map((item) => (
+        <LineItemRow
+          key={item._clientId}
+          field={field}
+          item={item}
+          onUpdate={update}
+          onRemove={remove}
+          onRatingChange={changeRating}
+        />
       ))}
       <button type="button" className="secondary-button add-line-button" onClick={add}>
         항목 추가
@@ -163,7 +185,7 @@ function LineItems({ field, value, onChange }) {
   );
 }
 
-export default function FieldInput({ field, value, onChange }) {
+export default function FieldInput({ field, value, onChange, onDraftChange }) {
   const [tagText, setTagText] = useState('');
   const [tmdbQuery, setTmdbQuery] = useState(typeof value === 'object' ? value?.title || '' : value || '');
   const [tmdbResults, setTmdbResults] = useState([]);
@@ -295,7 +317,7 @@ export default function FieldInput({ field, value, onChange }) {
   }
 
   if (field.type === 'lineItems') {
-    return <LineItems field={field} value={value} onChange={onChange} />;
+    return <LineItems field={field} value={value} onChange={onChange} onDraftChange={onDraftChange} />;
   }
 
   if (field.type === 'photo') {

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { CATEGORY_MAP } from '../data/categoryDefinitions';
 import FieldInput from './FieldInput';
 import { calcDutchPay, calcInvestment, formatMoney, toNumber, todayIso } from '../utils/recordUtils';
@@ -36,38 +36,37 @@ export default function RecordModal({ categoryId, record, onClose, onSave }) {
   const dutchPay = categoryId === 'dining' ? calcDutchPay(form) : null;
   const investment = categoryId === 'investment' ? calcInvestment(form) : null;
 
-  const requiredMissing = useMemo(() => {
-    return category.fields.find((field) => field.required && !form[field.id]);
-  }, [category.fields, form]);
+  function applyDerivedValues(next, fieldId) {
+    if (categoryId === 'delivery' && (fieldId === 'menuItems' || fieldId === 'deliveryFee')) {
+      next.totalAmount = String(toNumber(next.menuItems) + toNumber(next.deliveryFee));
+    }
+    if (categoryId === 'salary' && (fieldId === 'grossAmount' || fieldId === 'tax') && !toNumber(next.netAmount)) {
+      next.netAmount = String(Math.max(0, toNumber(next.grossAmount) - toNumber(next.tax)));
+    }
+    if (categoryId === 'overseasTravel' && ['airfare', 'lodgingCost', 'localExpenses'].includes(fieldId)) {
+      next.krwAmount = String(toNumber(next.airfare) + toNumber(next.lodgingCost) + toNumber(next.localExpenses));
+    }
+    return next;
+  }
 
   function setField(fieldId, value) {
     setForm((current) => {
-      const next = { ...current, [fieldId]: value };
-      if (categoryId === 'delivery' && (fieldId === 'menuItems' || fieldId === 'deliveryFee')) {
-        next.totalAmount = String(toNumber(next.menuItems) + toNumber(next.deliveryFee));
-      }
-      if (categoryId === 'salary' && (fieldId === 'grossAmount' || fieldId === 'tax') && !toNumber(next.netAmount)) {
-        next.netAmount = String(Math.max(0, toNumber(next.grossAmount) - toNumber(next.tax)));
-      }
-      if (categoryId === 'overseasTravel' && ['airfare', 'lodgingCost', 'localExpenses'].includes(fieldId)) {
-        next.krwAmount = String(toNumber(next.airfare) + toNumber(next.lodgingCost) + toNumber(next.localExpenses));
-      }
+      const next = applyDerivedValues({ ...current, [fieldId]: value }, fieldId);
       formRef.current = next;
       return next;
     });
   }
 
-  function blurActiveInput() {
-    if (document.activeElement instanceof HTMLElement) {
-      document.activeElement.blur();
-    }
+  function setFieldDraft(fieldId, value) {
+    formRef.current = applyDerivedValues({ ...formRef.current, [fieldId]: value }, fieldId);
   }
 
   async function submit(event) {
     event.preventDefault();
     setError('');
-    if (requiredMissing) {
-      setError(`${requiredMissing.label} 항목을 입력해주세요.`);
+    const missing = category.fields.find((field) => field.required && !formRef.current[field.id]);
+    if (missing) {
+      setError(`${missing.label} 항목을 입력해주세요.`);
       return;
     }
 
@@ -97,7 +96,12 @@ export default function RecordModal({ categoryId, record, onClose, onSave }) {
             return (
               <div className="field" key={field.id}>
                 <span>{field.label}{field.required && <b> *</b>}</span>
-                <FieldInput field={field} value={form[field.id]} onChange={(value) => setField(field.id, value)} />
+                <FieldInput
+                  field={field}
+                  value={form[field.id]}
+                  onChange={(value) => setField(field.id, value)}
+                  onDraftChange={(value) => setFieldDraft(field.id, value)}
+                />
               </div>
             );
           })}
@@ -123,7 +127,7 @@ export default function RecordModal({ categoryId, record, onClose, onSave }) {
 
         <footer className="modal-actions">
           <button type="button" className="secondary-button" onClick={onClose}>취소</button>
-          <button type="submit" className="primary-button" disabled={saving} onPointerDownCapture={blurActiveInput}>{saving ? '저장 중' : '저장'}</button>
+          <button type="submit" className="primary-button" disabled={saving}>{saving ? '저장 중' : '저장'}</button>
         </footer>
       </form>
     </div>
