@@ -1,5 +1,6 @@
 import { CATEGORY_ICONS, CATEGORY_MAP } from '../data/categoryDefinitions';
-import { formatMoney, getRecordTitle, toNumber } from '../utils/recordUtils';
+import { formatMoney, formatPeriod, getRecordTitle, toNumber } from '../utils/recordUtils';
+import RecordImagePreview from './ui/RecordImagePreview';
 
 function renderValue(value) {
   if (value === null || value === undefined || value === '' || value === false) return null;
@@ -22,7 +23,7 @@ function renderValue(value) {
     return value.join(', ');
   }
   if (typeof value === 'object') {
-    if (value.title) return value.title;
+    if (value.title || value.tmdbTitle) return value.title || value.tmdbTitle;
     return null;
   }
   if (typeof value === 'boolean') return value ? '예' : '아니오';
@@ -35,7 +36,7 @@ export default function RecordDetailModal({ record, onClose, onEdit, onDelete })
   const data = record.data || {};
   const title = getRecordTitle(record.category_id, data);
   const fields = category?.fields || [];
-  const imageUrl = record.photoUrl || data.title?.poster || '';
+  const extraPhotoUrls = Array.isArray(data.photos) ? data.photos.map((photo) => photo.signedUrl).filter(Boolean).slice(1) : [];
 
   return (
     <div className="modal-backdrop">
@@ -48,10 +49,15 @@ export default function RecordDetailModal({ record, onClose, onEdit, onDelete })
           <button type="button" className="icon-button" onClick={onClose} aria-label="닫기">×</button>
         </header>
 
-        {imageUrl && <img className="detail-photo" src={imageUrl} alt="" />}
+        <RecordImagePreview record={record} large />
+        {extraPhotoUrls.length > 0 && (
+          <div className="detail-photo-grid">
+            {extraPhotoUrls.map((url) => <img src={url} alt="" key={url} />)}
+          </div>
+        )}
 
         <div className="detail-meta-row">
-          <span>{record.occurred_on}</span>
+          <span>{formatPeriod(data) || record.occurred_on}</span>
           {toNumber(record.rating) > 0 && <span>평점 {Number(record.rating).toFixed(1)}</span>}
           {toNumber(record.amount) > 0 && <span>{formatMoney(record.amount)}</span>}
           {toNumber(record.income_amount) > 0 && <span className="income-text">수입 {formatMoney(record.income_amount)}</span>}
@@ -59,7 +65,7 @@ export default function RecordDetailModal({ record, onClose, onEdit, onDelete })
 
         <div className="detail-fields">
           {fields.map((field) => {
-            if (['photo', 'date'].includes(field.id)) return null;
+            if (['photo', 'photos', 'date'].includes(field.id)) return null;
             const value = renderValue(data[field.id]);
             if (!value) return null;
             return (

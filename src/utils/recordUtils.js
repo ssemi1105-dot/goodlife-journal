@@ -21,15 +21,22 @@ export function formatMoney(value) {
 export function getRecordTitle(categoryId, data = {}) {
   const category = CATEGORY_MAP[categoryId];
   if (!category) return data.title || '기록';
+  if (categoryId === 'investment') return data.assetName || data.symbol || data.ticker || '투자';
+  if (categoryId === 'hospital') return data.hospitalName || data.hospital || '병원진료';
   const raw = data[category.titleField];
-  if (typeof raw === 'object' && raw?.title) return raw.title;
+  if (typeof raw === 'object' && (raw?.title || raw?.tmdbTitle)) return raw.title || raw.tmdbTitle;
   if (Array.isArray(raw)) {
     const names = raw
       .map((item) => (item && typeof item === 'object' ? item.name : item))
       .filter(Boolean);
     if (names.length > 0) return names.join(', ');
   }
-  if (categoryId === 'shopping') return data.product || data.store || '쇼핑';
+  if (categoryId === 'shopping') {
+    const items = data.productItems || data.items || [];
+    const first = Array.isArray(items) ? items.find((item) => item?.name) : null;
+    if (first) return items.length > 1 ? `${first.name} 외 ${items.length - 1}개` : first.name;
+    return data.product || data.storeName || data.store || '쇼핑';
+  }
   return raw || category.label;
 }
 
@@ -40,8 +47,9 @@ export function getRecordRating(data = {}) {
 export function deriveRecordColumns(categoryId, formData = {}) {
   const category = CATEGORY_MAP[categoryId];
   const title = getRecordTitle(categoryId, formData);
-  const occurredOn = formData.date || todayIso();
-  const amount = category?.amountField ? toNumber(formData[category.amountField]) : 0;
+  const occurredOn = formData.startDate || formData.date || todayIso();
+  let amount = category?.amountField ? toNumber(formData[category.amountField]) : 0;
+  if (categoryId === 'hospital') amount = toNumber(formData.netMedicalCost);
   const baseIncome = category?.incomeField ? toNumber(formData[category.incomeField]) : 0;
   const incomeAmount = categoryId === 'salary' && formData.bonus
     ? baseIncome + toNumber(formData.bonusAmount)
@@ -123,12 +131,20 @@ export function calcDutchPay(data = {}) {
 }
 
 export function calcInvestment(data = {}) {
-  const buyPrice = toNumber(data.buyPrice);
-  const quantity = toNumber(data.quantity);
-  const currentPrice = toNumber(data.currentPrice);
-  const buyTotal = buyPrice * quantity;
-  const currentTotal = currentPrice * quantity;
+  const legacyBuyTotal = toNumber(data.buyPrice) * toNumber(data.quantity);
+  const legacyCurrentTotal = toNumber(data.currentPrice) * toNumber(data.quantity);
+  const buyTotal = toNumber(data.buyAmount) || legacyBuyTotal;
+  const currentTotal = toNumber(data.currentAmount) || legacyCurrentTotal;
   const profit = currentTotal - buyTotal;
-  const rate = buyTotal > 0 && currentPrice > 0 ? (profit / buyTotal) * 100 : 0;
+  const rate = toNumber(data.profitLossRate) || (buyTotal > 0 && currentTotal > 0 ? (profit / buyTotal) * 100 : 0);
   return { buyTotal, currentTotal, profit, rate };
+}
+
+export function formatPeriod(data = {}) {
+  const start = data.startDate || data.date;
+  const end = data.endDate;
+  if (!start) return '';
+  const format = (value) => value.replaceAll('-', '.');
+  if (end && end !== start) return `${format(start)} ~ ${format(end)}`;
+  return format(start);
 }

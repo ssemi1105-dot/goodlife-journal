@@ -67,7 +67,7 @@ select:focus {
 }
 
 .screen {
-  padding: 22px;
+  padding: 18px;
 }
 
 .auth-page,
@@ -707,19 +707,23 @@ h3 {
 .field:has(.tag-input),
 .field:has(.tmdb-input),
 .field:has(.photo-input),
+.field:has(.photo-uploader),
+.field:has(.date-range-field),
 .field:has(.line-items) {
   grid-column: 1 / -1;
 }
 
 .choice-grid,
-.mood-choice-grid {
+.mood-choice-grid,
+.chip-group {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
 }
 
 .choice-grid button,
-.mood-choice-grid button {
+.mood-choice-grid button,
+.chip-group button {
   border: 1px solid #dbe3ef;
   border-radius: 8px;
   background: #f8fafc;
@@ -730,10 +734,27 @@ h3 {
 }
 
 .choice-grid .is-selected,
-.mood-choice-grid .is-selected {
+.mood-choice-grid .is-selected,
+.chip-group .is-selected {
   border-color: #2563eb;
   background: #eff6ff;
   color: #1d4ed8;
+}
+
+.compact-chip-group {
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  padding-bottom: 2px;
+  scrollbar-width: none;
+}
+
+.compact-chip-group::-webkit-scrollbar {
+  display: none;
+}
+
+.compact-chip-group button {
+  flex: 0 0 auto;
+  padding: 7px 10px;
 }
 
 .mood-choice-grid button {
@@ -895,9 +916,121 @@ h3 {
   background: #16a34a;
 }
 
+.compact-toggle {
+  width: max-content;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  border: 1px solid #d8d2c4;
+  border-radius: 999px;
+  background: #fffdfa;
+  color: #475569;
+  padding: 6px 9px;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.compact-toggle-track {
+  width: 30px;
+  height: 17px;
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  background: #cbd5e1;
+  padding: 2px;
+  transition: background 0.16s ease;
+}
+
+.compact-toggle-track i {
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  background: white;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.22);
+  transition: transform 0.16s ease;
+}
+
+.compact-toggle.is-on .compact-toggle-track {
+  background: #2563eb;
+}
+
+.compact-toggle.is-on .compact-toggle-track i {
+  transform: translateX(13px);
+}
+
+.compact-toggle strong {
+  font-size: 12px;
+}
+
+.wide-toggle {
+  width: 100%;
+  justify-content: center;
+}
+
 .photo-input {
   display: grid;
   gap: 10px;
+}
+
+.photo-uploader {
+  display: grid;
+  gap: 8px;
+}
+
+.photo-preview-grid,
+.detail-photo-grid {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+}
+
+.photo-preview-grid > div {
+  position: relative;
+  flex: 0 0 auto;
+}
+
+.photo-preview-grid img,
+.detail-photo-grid img {
+  width: 82px;
+  height: 82px;
+  object-fit: cover;
+  border-radius: 8px;
+}
+
+.photo-preview-grid button {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 24px;
+  height: 24px;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(23, 23, 23, 0.78);
+  color: white;
+  font-weight: 900;
+}
+
+.photo-preview-grid small {
+  display: block;
+  margin-top: 3px;
+  color: #64748b;
+  font-size: 10px;
+}
+
+.photo-add-button {
+  display: grid;
+  place-items: center;
+  min-height: 40px;
+  border: 1px dashed #94a3b8;
+  border-radius: 8px;
+  background: #f8fafc;
+  color: #475569;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.photo-add-button input {
+  display: none;
 }
 
 .line-items {
@@ -912,6 +1045,42 @@ h3 {
   border: 1px solid #e2e8f0;
   border-radius: 8px;
   background: #ffffff;
+}
+
+.date-range-field {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 8px;
+}
+
+.date-range-field label {
+  position: relative;
+  display: grid;
+}
+
+.date-range-field span {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+  color: #292524;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.date-range-field input {
+  height: 40px;
+  color: transparent;
+  caret-color: transparent;
+}
+
+.date-range-field input::-webkit-calendar-picker-indicator {
+  position: absolute;
+  inset: 0;
+  width: auto;
+  height: auto;
+  opacity: 0;
 }
 
 .line-item-row.has-rating {
@@ -1071,9 +1240,9 @@ h3 {
 
 .settings-panel {
   display: grid;
-  gap: 14px;
-  padding: 16px;
-  margin-bottom: 14px;
+  gap: 10px;
+  padding: 12px;
+  margin-bottom: 10px;
 }
 
 .settings-list {
@@ -1234,6 +1403,61 @@ h3 {
   color: rgba(255, 255, 255, 0.72);
 }
 
+.portfolio-panel.is-positive,
+.investment-mood.is-positive {
+  background: linear-gradient(135deg, #0f766e, #16a34a);
+}
+
+.portfolio-panel.is-negative,
+.investment-mood.is-negative {
+  background: linear-gradient(135deg, #334155, #1e3a8a);
+}
+
+.portfolio-panel.is-neutral,
+.investment-mood.is-neutral {
+  background: linear-gradient(135deg, #475569, #0f766e);
+}
+
+.investment-mood {
+  color: white;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .portfolio-panel.is-positive {
+    background-size: 160% 160%;
+    animation: soft-shine 8s ease infinite;
+  }
+}
+
+@keyframes soft-shine {
+  0%, 100% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+}
+
+.admin-user-list {
+  display: grid;
+  gap: 7px;
+}
+
+.admin-user-list article {
+  display: grid;
+  gap: 2px;
+  padding: 9px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #fffdfa;
+}
+
+.admin-user-list span,
+.admin-user-list small {
+  color: #64748b;
+  font-size: 12px;
+}
+
+.compact-section-title {
+  margin-bottom: 0;
+}
+
 .portfolio-total strong {
   display: block;
   margin: 4px 0;
@@ -1271,7 +1495,7 @@ h3 {
   }
 
   .screen {
-    padding: 14px;
+    padding: 12px;
   }
 
   .bottom-nav {
@@ -1325,7 +1549,7 @@ h3 {
   .detail-modal,
   .search-modal {
     max-height: 92vh;
-    padding: 16px;
+    padding: 12px;
   }
 
   .record-card {
@@ -1368,7 +1592,7 @@ h3 {
   }
 
   .category-setting-card {
-    padding: 10px;
+    padding: 9px;
   }
 
   .category-setting-head .tile-icon {

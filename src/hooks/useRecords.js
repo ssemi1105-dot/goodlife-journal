@@ -5,19 +5,36 @@ import { deriveRecordColumns } from '../utils/recordUtils';
 function cleanDataForSave(formData) {
   const data = { ...formData };
   delete data.photo;
+  delete data.photoPath;
   for (const [key, value] of Object.entries(data)) {
     if (Array.isArray(value)) {
       data[key] = value
         .map((item) => {
           if (!item || typeof item !== 'object') return item;
-          const { _clientId, ...rest } = item;
+          const { _clientId, file, previewUrl, signedUrl, url, tooLarge, ...rest } = item;
+          if ('amount' in rest || 'price' in rest) {
+            return {
+              ...rest,
+              amount: rest.amount ?? '',
+              price: rest.amount === '' || rest.amount === undefined ? rest.price ?? null : Number(String(rest.amount).replaceAll(',', '')),
+            };
+          }
           return rest;
         })
         .filter((item) => {
           if (!item || typeof item !== 'object') return Boolean(item);
-          return Boolean(item.name || item.amount || item.rating);
+          if (key === 'photos') return Boolean(item.path);
+          return Boolean(item.name || item.amount || item.price || item.rating);
         });
     }
+  }
+  const tmdb = data.title && typeof data.title === 'object' ? data.title : null;
+  if (tmdb) {
+    data.tmdbId = tmdb.id || tmdb.tmdbId || null;
+    data.tmdbTitle = tmdb.title || tmdb.tmdbTitle || '';
+    data.tmdbMediaType = tmdb.mediaType || tmdb.tmdbMediaType || '';
+    data.tmdbPosterPath = tmdb.posterPath || tmdb.tmdbPosterPath || '';
+    data.tmdbPosterUrl = tmdb.posterUrl || tmdb.poster || tmdb.tmdbPosterUrl || '';
   }
   return data;
 }
@@ -36,7 +53,16 @@ async function attachSignedPhotoUrls(records) {
     records.map(async (record) => {
       const photoPath = record.data?.photoPath;
       const photoUrl = await getSignedPhotoUrl(photoPath);
-      return { ...record, photoUrl };
+      const photoUrls = await Promise.all((record.data?.photos || []).map((photo) => getSignedPhotoUrl(photo.path)));
+      return {
+        ...record,
+        photoUrl: photoUrl || photoUrls.find(Boolean) || null,
+        photoUrls: photoUrls.filter(Boolean),
+        data: {
+          ...record.data,
+          photos: (record.data?.photos || []).map((photo, index) => ({ ...photo, signedUrl: photoUrls[index] || null })),
+        },
+      };
     }),
   );
 }
@@ -44,7 +70,16 @@ async function attachSignedPhotoUrls(records) {
 async function attachSignedPhotoUrl(record) {
   const photoPath = record.data?.photoPath;
   const photoUrl = await getSignedPhotoUrl(photoPath);
-  return { ...record, photoUrl };
+  const photoUrls = await Promise.all((record.data?.photos || []).map((photo) => getSignedPhotoUrl(photo.path)));
+  return {
+    ...record,
+    photoUrl: photoUrl || photoUrls.find(Boolean) || null,
+    photoUrls: photoUrls.filter(Boolean),
+    data: {
+      ...record.data,
+      photos: (record.data?.photos || []).map((photo, index) => ({ ...photo, signedUrl: photoUrls[index] || null })),
+    },
+  };
 }
 
 async function uploadPhoto(userId, recordId, file) {
@@ -56,6 +91,31 @@ async function uploadPhoto(userId, recordId, file) {
     .upload(path, file, { cacheControl: '3600', upsert: false });
   if (error) throw error;
   return path;
+}
+
+async function uploadPhotos(userId, recordId, photos = []) {
+  const uploaded = [];
+  for (const photo of photos.slice(0, 3)) {
+    if (photo.file instanceof File) {
+      const safeName = photo.file.name.replace(/[^a-zA-Z0-9_.-]/g, '_');
+      const path = `${userId}/${recordId}/${Date.now()}-${uploaded.length}-${safeName}`;
+      const { error } = await supabase.storage
+        .from('record-photos')
+        .upload(path, photo.file, { cacheControl: '3600', upsert: false, contentType: photo.type || photo.file.type });
+      if (error) throw error;
+      uploaded.push({
+        path,
+        width: photo.width || null,
+        height: photo.height || null,
+        size: photo.size || photo.file.size,
+        type: photo.type || photo.file.type || 'image/jpeg',
+      });
+    } else if (photo.path) {
+      const { signedUrl, url, previewUrl, file, ...persisted } = photo;
+      uploaded.push(persisted);
+    }
+  }
+  return uploaded;
 }
 
 function sortRecords(records) {
@@ -106,6 +166,7 @@ export function useRecords(userId) {
       } else {
         payloadData.photoPath = formData.photoPath || existingRecord.data?.photoPath || null;
       }
+      payloadData.photos = await uploadPhotos(userId, existingRecord.id, formData.photos || existingRecord.data?.photos || []);
 
       const { data, error } = await supabase
         .from('records')
@@ -116,6 +177,7 @@ export function useRecords(userId) {
           updated_at: new Date().toISOString(),
         })
         .eq('id', existingRecord.id)
+        .eq('user_id', userId)
         .select()
         .single();
       if (error) throw error;
@@ -147,6 +209,18 @@ export function useRecords(userId) {
         .eq('id', data.id);
       if (updateError) throw updateError;
     }
+    if (Array.isArray(formData.photos) && formData.photos.some((photo) => photo.file instanceof File)) {
+      payloadData = {
+        ...payloadData,
+        photos: await uploadPhotos(userId, data.id, formData.photos),
+      };
+      const { error: photosUpdateError } = await supabase
+        .from('records')
+        .update({ data: payloadData })
+        .eq('id', data.id)
+        .eq('user_id', userId);
+      if (photosUpdateError) throw photosUpdateError;
+    }
 
     const inserted = await attachSignedPhotoUrl({ ...data, data: payloadData });
     setRecords((current) => sortRecords([inserted, ...current]));
@@ -157,7 +231,12 @@ export function useRecords(userId) {
       await supabase.storage.from('record-photos').remove([record.data.photoPath]);
     }
 
-    const { error } = await supabase.from('records').delete().eq('id', record.id);
+    const photoPaths = (record.data?.photos || []).map((photo) => photo.path).filter(Boolean);
+    if (photoPaths.length > 0) {
+      await supabase.storage.from('record-photos').remove(photoPaths);
+    }
+
+    const { error } = await supabase.from('records').delete().eq('id', record.id).eq('user_id', userId);
     if (error) throw error;
     setRecords((current) => current.filter((item) => item.id !== record.id));
   }

@@ -7,10 +7,17 @@ create table if not exists public.profiles (
   id uuid primary key references auth.users(id) on delete cascade,
   display_name text not null default '사용자',
   avatar_color text not null default '#2563eb',
-  role text not null default 'member' check (role in ('owner', 'member')),
+  role text not null default 'member' check (role in ('owner', 'admin', 'member', 'user')),
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+
+alter table public.profiles
+  drop constraint if exists profiles_role_check;
+
+alter table public.profiles
+  add constraint profiles_role_check
+  check (role in ('owner', 'admin', 'member', 'user'));
 
 create table if not exists public.records (
   id uuid primary key default gen_random_uuid(),
@@ -77,7 +84,7 @@ stable
 as $$
   select exists (
     select 1 from public.profiles
-    where id = auth.uid() and role = 'owner'
+    where id = auth.uid() and role in ('owner', 'admin')
   );
 $$;
 

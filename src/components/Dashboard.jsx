@@ -65,7 +65,13 @@ export default function Dashboard({
           <span className="income-text">수입 {formatMoney(month.income)}</span>
         </div>
         <div>
-          <button type="button" className="stats-placeholder-button">통계</button>
+          <button
+            type="button"
+            className="stats-placeholder-button"
+            onClick={() => window.alert('통계 기능은 추후 업데이트 예정입니다.')}
+          >
+            통계
+          </button>
         </div>
       </section>
 

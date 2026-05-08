@@ -1,10 +1,13 @@
 import { CATEGORIES, CATEGORY_ICONS, FINANCE_MODES } from '../data/categoryDefinitions';
 import { useEffect, useState } from 'react';
+import AdminUserList from './AdminUserList';
+import CompactToggle from './ui/CompactToggle';
 
 export default function SettingsScreen({
   profile,
   settings,
   records = [],
+  isOwner = false,
   onSaveSettings,
   onUpdateProfile,
   onSignOut,
@@ -104,14 +107,12 @@ export default function SettingsScreen({
             <p className="muted">기록 수 기준 자동정렬을 켜면 많이 쓰는 카테고리가 홈에서 먼저 보입니다.</p>
           </div>
         </div>
-        <button
-          className={`toggle-button wide-toggle ${settings.sort_by_record_count ? 'is-on' : ''}`}
-          type="button"
-          onClick={toggleSortByRecordCount}
-        >
-          <span />
-          기록 많은 순 자동정렬 {settings.sort_by_record_count ? '켜짐' : '꺼짐'}
-        </button>
+        <CompactToggle
+          checked={Boolean(settings.sort_by_record_count)}
+          onChange={toggleSortByRecordCount}
+          label={`기록순 정렬 ${settings.sort_by_record_count ? '켜짐' : '꺼짐'}`}
+          className="wide-toggle"
+        />
 
         <div className="category-settings-list">
           {displayedCategoryOrder.map((categoryId) => {
@@ -138,6 +139,13 @@ export default function SettingsScreen({
           })}
         </div>
       </section>
+
+      <section className="settings-panel">
+        <h2>한국투자 API</h2>
+        <p className="muted">연동 준비중입니다. APP KEY와 APP SECRET은 브라우저에 저장하지 않고 Supabase Edge Function secret으로만 다루는 구조를 사용합니다.</p>
+      </section>
+
+      <AdminUserList enabled={isOwner} />
 
       <section className="settings-panel">
         <h2>공유 기능 준비</h2>

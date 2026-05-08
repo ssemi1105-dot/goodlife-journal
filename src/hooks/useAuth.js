@@ -101,7 +101,7 @@ export function useAuth() {
     session,
     userId: session?.user?.id || null,
     profile,
-    isOwner: profile?.role === 'owner',
+    isOwner: ['owner', 'admin'].includes(profile?.role),
     signIn,
     signUp,
     signOut,

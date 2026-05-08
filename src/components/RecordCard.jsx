@@ -1,35 +1,42 @@
 import { CATEGORY_ICONS, CATEGORY_MAP } from '../data/categoryDefinitions';
-import { calcInvestment, formatMoney, getRecordTitle, toNumber } from '../utils/recordUtils';
+import { calcInvestment, formatMoney, formatPeriod, getRecordTitle, toNumber } from '../utils/recordUtils';
+import RecordImagePreview from './ui/RecordImagePreview';
 
 export default function RecordCard({ record, onOpen, onEdit, onDelete }) {
   const category = CATEGORY_MAP[record.category_id];
   const data = record.data || {};
   const title = getRecordTitle(record.category_id, data);
   const investment = record.category_id === 'investment' ? calcInvestment(data) : null;
-  const imageUrl = record.photoUrl || data.title?.poster || '';
+  const period = formatPeriod(data) || record.occurred_on;
 
   return (
     <article className="record-card" role="button" tabIndex={0} onClick={() => onOpen?.(record)} onKeyDown={(event) => {
       if (event.key === 'Enter') onOpen?.(record);
     }}>
-      {imageUrl && <img className="record-photo" src={imageUrl} alt="" />}
+      <RecordImagePreview record={record} />
       <div className="record-body">
         <div className="record-topline">
           <span style={{ color: category?.color }}>{CATEGORY_ICONS[record.category_id]} {category?.label || record.category_id}</span>
-          <time>{record.occurred_on}</time>
+          <time>{period}</time>
         </div>
         <h3>{title}</h3>
-        {record.category_id === 'video' && data.title?.genres?.length > 0 && (
+        {record.category_id === 'video' && (data.detailGenres?.length > 0 || data.title?.genres?.length > 0) && (
           <div className="genre-pills compact-pills">
-            {data.title.genres.map((genre) => <em key={genre}>{genre}</em>)}
+            {(data.detailGenres || data.title?.genres || []).map((genre) => <em key={genre}>{genre}</em>)}
           </div>
         )}
         <div className="record-meta">
           {toNumber(record.amount) > 0 && <span>{formatMoney(record.amount)}</span>}
           {toNumber(record.income_amount) > 0 && <span className="income-text">수입 {formatMoney(record.income_amount)}</span>}
           {toNumber(record.rating) > 0 && <span>평점 {record.rating}</span>}
+          {data.withWhom && <span>{data.withWhom}</span>}
+          {data.payRelation && <span>{data.payRelation}</span>}
+          {data.deliveryPlatform && <span>{data.deliveryPlatform}</span>}
+          {data.ideaCategory && <span>{data.ideaCategory}</span>}
+          {data.ideaStatus && <span>{data.ideaStatus}</span>}
           {data.watchStatus && <span>{data.watchStatus}</span>}
           {data.episodeStart && data.episodeEnd && <span>{data.episodeStart}화~{data.episodeEnd}화</span>}
+          {record.category_id === 'hospital' && <span>실부담 {formatMoney(data.netMedicalCost || record.amount)}</span>}
         </div>
         {record.category_id === 'investment' && investment.buyTotal > 0 && (
           <p className={investment.profit >= 0 ? 'profit-plus' : 'profit-minus'}>

@@ -5,19 +5,48 @@ import { calcDutchPay, calcInvestment, formatMoney, toNumber, todayIso } from '.
 
 function buildInitialForm(category, record) {
   const base = Object.fromEntries(category.fields.map((field) => {
-    if (['tags', 'multiChoice', 'lineItems'].includes(field.type)) return [field.id, []];
+    if (['tags', 'multiChoice', 'lineItems', 'photos'].includes(field.type)) return [field.id, []];
     if (field.type === 'rating') return [field.id, 0];
     if (field.type === 'boolean') return [field.id, false];
+    if (field.type === 'dateRange') return [field.id, { start: '', end: '' }];
     return [field.id, ''];
   }));
   const data = record?.data || {};
-  return {
+  const initial = {
     ...base,
     ...data,
     date: record?.occurred_on || data.date || todayIso(),
     photo: record?.photoUrl || '',
     photoPath: data.photoPath || null,
   };
+  category.fields.forEach((field) => {
+    if (field.type === 'dateRange') {
+      initial[field.id] = {
+        start: data[field.startId] || data.startDate || data.date || initial.date || '',
+        end: data[field.endId] || data.endDate || '',
+      };
+    }
+  });
+  if (category.id === 'hospital') {
+    initial.hospitalName = data.hospitalName || data.hospital || '';
+    initial.medicalCost = data.medicalCost || data.amount || '';
+    initial.insuranceRefund = data.insuranceRefund || '';
+    initial.netMedicalCost = data.netMedicalCost || data.amount || '';
+  }
+  if (category.id === 'investment') {
+    initial.symbol = data.symbol || data.ticker || '';
+    initial.assetName = data.assetName || '';
+    initial.buyAmount = data.buyAmount || (toNumber(data.buyPrice) * toNumber(data.quantity) || '');
+    initial.currentAmount = data.currentAmount || (toNumber(data.currentPrice) * toNumber(data.quantity) || '');
+  }
+  if (category.id === 'shopping') {
+    initial.productItems = data.productItems?.length ? data.productItems : data.product ? [{ name: data.product, amount: data.amount || '' }] : data.items || [];
+  }
+  if (category.id === 'fishing') {
+    initial.catchCount = data.catchCount || data.count || '';
+    initial.targetFish = data.targetFish || data.fishTypes || [];
+  }
+  return initial;
 }
 
 export default function RecordModal({ categoryId, record, onClose, onSave }) {
@@ -35,6 +64,7 @@ export default function RecordModal({ categoryId, record, onClose, onSave }) {
 
   const dutchPay = categoryId === 'dining' ? calcDutchPay(form) : null;
   const investment = categoryId === 'investment' ? calcInvestment(form) : null;
+  const hospitalNet = categoryId === 'hospital' ? Math.max(0, toNumber(form.medicalCost) - toNumber(form.insuranceRefund)) : 0;
 
   function applyDerivedValues(next, fieldId) {
     if (categoryId === 'delivery' && (fieldId === 'menuItems' || fieldId === 'deliveryFee')) {
@@ -45,6 +75,13 @@ export default function RecordModal({ categoryId, record, onClose, onSave }) {
     }
     if (categoryId === 'overseasTravel' && ['airfare', 'lodgingCost', 'localExpenses'].includes(fieldId)) {
       next.krwAmount = String(toNumber(next.airfare) + toNumber(next.lodgingCost) + toNumber(next.localExpenses));
+    }
+    if (categoryId === 'hospital' && ['medicalCost', 'insuranceRefund'].includes(fieldId)) {
+      next.netMedicalCost = String(Math.max(0, toNumber(next.medicalCost) - toNumber(next.insuranceRefund)));
+    }
+    if (categoryId === 'investment' && ['buyAmount', 'currentAmount'].includes(fieldId)) {
+      next.profitLoss = String(toNumber(next.currentAmount) - toNumber(next.buyAmount));
+      next.profitLossRate = toNumber(next.buyAmount) > 0 ? String(((toNumber(next.currentAmount) - toNumber(next.buyAmount)) / toNumber(next.buyAmount)) * 100) : '';
     }
     return next;
   }
@@ -98,8 +135,16 @@ export default function RecordModal({ categoryId, record, onClose, onSave }) {
                 <span>{field.label}{field.required && <b> *</b>}</span>
                 <FieldInput
                   field={field}
-                  value={form[field.id]}
-                  onChange={(value) => setField(field.id, value)}
+                  value={field.type === 'dateRange' ? { start: form[field.startId] || form[field.id]?.start || '', end: form[field.endId] || form[field.id]?.end || '' } : form[field.id]}
+                  onChange={(value) => {
+                    if (field.type === 'dateRange') {
+                      setField(field.id, value);
+                      setField(field.startId, value.start || '');
+                      setField(field.endId, value.end || '');
+                      return;
+                    }
+                    setField(field.id, value);
+                  }}
                   onDraftChange={(value) => setFieldDraft(field.id, value)}
                 />
               </div>
@@ -115,11 +160,18 @@ export default function RecordModal({ categoryId, record, onClose, onSave }) {
         )}
 
         {categoryId === 'investment' && investment.buyTotal > 0 && (
-          <aside className="calc-box">
+          <aside className={`calc-box investment-mood ${investment.profit > 0 ? 'is-positive' : investment.profit < 0 ? 'is-negative' : 'is-neutral'}`}>
             <span>투자 계산</span>
             <strong className={investment.profit >= 0 ? 'profit-plus' : 'profit-minus'}>
               {investment.rate.toFixed(2)}% · {formatMoney(investment.profit)}
             </strong>
+          </aside>
+        )}
+
+        {categoryId === 'hospital' && toNumber(form.medicalCost) > 0 && (
+          <aside className="calc-box hospital-calc">
+            <span>실제 부담</span>
+            <strong>{formatMoney(hospitalNet)}</strong>
           </aside>
         )}
 

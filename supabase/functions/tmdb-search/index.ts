@@ -66,7 +66,8 @@ serve(async (req) => {
       title: item.title || item.name,
       mediaType: item.media_type,
       year: String(item.release_date || item.first_air_date || '').slice(0, 4),
-      poster: item.poster_path ? `https://image.tmdb.org/t/p/w342${item.poster_path}` : null,
+      posterPath: item.poster_path || null,
+      posterUrl: item.poster_path ? `https://image.tmdb.org/t/p/w342${item.poster_path}` : null,
       genres: (item.genre_ids || [])
         .map((id: number) => genreMap[item.media_type === 'movie' ? 'movie' : 'tv'][id])
         .filter(Boolean),

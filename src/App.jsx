@@ -122,6 +122,7 @@ export default function App() {
           profile={auth.profile}
           settings={normalizedSettings}
           records={records}
+          isOwner={auth.isOwner}
           onSaveSettings={saveSettings}
           onUpdateProfile={auth.updateProfile}
           onSignOut={auth.signOut}

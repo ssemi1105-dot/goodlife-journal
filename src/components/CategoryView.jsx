@@ -18,13 +18,13 @@ function InvestmentPortfolio({ records }) {
   const rate = summary.buyTotal > 0 ? (profit / summary.buyTotal) * 100 : 0;
 
   return (
-    <section className="portfolio-panel">
+    <section className={`portfolio-panel ${profit > 0 ? 'is-positive' : profit < 0 ? 'is-negative' : 'is-neutral'}`}>
       <div className="portfolio-header">
         <div>
           <p className="eyebrow">My Account</p>
           <h2>투자 계좌 요약</h2>
         </div>
-        <button className="secondary-button" type="button" title="주가 API 연결 후 자동 갱신됩니다.">
+        <button className="secondary-button" type="button" title="한국투자 API 프록시 연결 후 활성화됩니다." onClick={() => window.alert('한국투자 API 연동은 서버 함수 구조만 준비되어 있습니다.')}>
           주가 새로고침
         </button>
       </div>
