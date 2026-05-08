@@ -23,7 +23,13 @@ export function getRecordTitle(categoryId, data = {}) {
   if (!category) return data.title || '기록';
   const raw = data[category.titleField];
   if (typeof raw === 'object' && raw?.title) return raw.title;
-  if (Array.isArray(raw)) return raw.join(', ');
+  if (Array.isArray(raw)) {
+    const names = raw
+      .map((item) => (item && typeof item === 'object' ? item.name : item))
+      .filter(Boolean);
+    if (names.length > 0) return names.join(', ');
+  }
+  if (categoryId === 'shopping') return data.product || data.store || '쇼핑';
   return raw || category.label;
 }
 

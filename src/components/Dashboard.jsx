@@ -22,15 +22,17 @@ export default function Dashboard({
 
   const visibleCategories = useMemo(() => {
     const orderIndex = Object.fromEntries(settings.category_order.map((id, index) => [id, index]));
-    return settings.category_order
+    const mapped = settings.category_order
       .map((id) => CATEGORY_MAP[id])
       .filter(Boolean)
       .filter((category) => !settings.hidden_categories.includes(category.id))
       .map((category) => ({
         category,
         count: records.filter((record) => record.category_id === category.id).length,
-      }))
-      .sort((a, b) => b.count - a.count || orderIndex[a.category.id] - orderIndex[b.category.id]);
+      }));
+
+    if (!settings.sort_by_record_count) return mapped;
+    return mapped.sort((a, b) => b.count - a.count || orderIndex[a.category.id] - orderIndex[b.category.id]);
   }, [records, settings]);
 
   const hasSearch = Boolean(filters.query || filters.dateFrom || filters.dateTo || filters.minAmount || filters.maxAmount || filters.minRating);
@@ -39,8 +41,14 @@ export default function Dashboard({
     <main className="screen">
       <section className="topbar compact-topbar">
         <div>
-          <p className="eyebrow app-version-label">Goodlife Journal <span>v{APP_VERSION}</span></p>
-          <h1>{profile?.display_name || '사용자'}님의 기록</h1>
+          <p className="eyebrow app-version-label">
+            <span>GOODLIFE JOURNAL</span>
+            <strong>VERSION {APP_VERSION}</strong>
+          </p>
+          <h1>
+            {profile?.display_name || '사용자'}님의 기록
+            <small className="heading-version">v{APP_VERSION}</small>
+          </h1>
         </div>
         <button type="button" className={hasSearch ? 'search-icon-button is-active' : 'search-icon-button'} onClick={() => setShowSearch(true)} aria-label="검색">
           🔍
@@ -49,18 +57,15 @@ export default function Dashboard({
 
       <section className="summary-strip">
         <div>
-          <span>지출</span>
-          <strong>{formatMoney(month.expense)}</strong>
+          <span>이번달 기록</span>
+          <strong>{month.count}건</strong>
+        </div>
+        <div className="summary-money-cell">
+          <span className="expense-text">지출 {formatMoney(month.expense)}</span>
+          <span className="income-text">수입 {formatMoney(month.income)}</span>
         </div>
         <div>
-          <span>수입</span>
-          <strong className="income-text">{formatMoney(month.income)}</strong>
-        </div>
-        <div>
-          <span>순수입</span>
-          <strong className={month.income - month.expense >= 0 ? 'income-text' : 'expense-text'}>
-            {formatMoney(month.income - month.expense)}
-          </strong>
+          <button type="button" className="stats-placeholder-button">통계</button>
         </div>
       </section>
 

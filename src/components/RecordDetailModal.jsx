@@ -35,6 +35,7 @@ export default function RecordDetailModal({ record, onClose, onEdit, onDelete })
   const data = record.data || {};
   const title = getRecordTitle(record.category_id, data);
   const fields = category?.fields || [];
+  const imageUrl = record.photoUrl || data.title?.poster || '';
 
   return (
     <div className="modal-backdrop">
@@ -47,7 +48,7 @@ export default function RecordDetailModal({ record, onClose, onEdit, onDelete })
           <button type="button" className="icon-button" onClick={onClose} aria-label="닫기">×</button>
         </header>
 
-        {record.photoUrl && <img className="detail-photo" src={record.photoUrl} alt="" />}
+        {imageUrl && <img className="detail-photo" src={imageUrl} alt="" />}
 
         <div className="detail-meta-row">
           <span>{record.occurred_on}</span>

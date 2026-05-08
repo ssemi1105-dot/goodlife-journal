@@ -159,13 +159,30 @@ h3 {
 }
 
 .app-version-label span {
+  color: #64748b;
+}
+
+.app-version-label strong {
   border-radius: 999px;
-  background: #171717;
+  background: #2563eb;
   color: white;
   padding: 2px 7px;
   font-size: 10px;
   letter-spacing: 0;
   text-transform: none;
+}
+
+.heading-version {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 8px;
+  border-radius: 999px;
+  background: #171717;
+  color: white;
+  padding: 3px 8px;
+  font-size: 11px;
+  line-height: 1.2;
+  vertical-align: middle;
 }
 
 .muted,
@@ -217,6 +234,21 @@ h3 {
   font-weight: 800;
 }
 
+.summary-money-cell {
+  display: grid;
+  gap: 2px;
+  align-content: center;
+}
+
+.summary-money-cell span {
+  margin-bottom: 0;
+  overflow: hidden;
+  font-size: 11px;
+  font-weight: 900;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .summary-strip strong {
   display: block;
   overflow: hidden;
@@ -255,13 +287,24 @@ h3 {
 }
 
 .income-text {
-  color: #15803d;
+  color: #2563eb;
 }
 
 .expense-text,
 .form-error,
 .danger {
   color: #be123c;
+}
+
+.stats-placeholder-button {
+  width: 100%;
+  min-height: 36px;
+  border: 1px solid #dbe3ef;
+  border-radius: 8px;
+  background: #f8fafc;
+  color: #475569;
+  font-size: 12px;
+  font-weight: 900;
 }
 
 .search-panel {
@@ -833,6 +876,12 @@ h3 {
   border-radius: 8px;
   background: #fffdfa;
   padding: 8px 12px;
+}
+
+.wide-toggle {
+  width: 100%;
+  justify-content: center;
+  font-weight: 900;
 }
 
 .toggle-button span {

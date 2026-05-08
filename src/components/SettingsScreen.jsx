@@ -1,5 +1,5 @@
 import { CATEGORIES, CATEGORY_ICONS, FINANCE_MODES } from '../data/categoryDefinitions';
-import { useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 
 export default function SettingsScreen({
   profile,
@@ -11,26 +11,35 @@ export default function SettingsScreen({
   onBack,
 }) {
   const [selectedCategoryId, setSelectedCategoryId] = useState(null);
-  const dragRef = useRef({ index: null, startY: 0, lastY: 0 });
+  const [profileName, setProfileName] = useState(profile?.display_name || '');
+  const [profileSaving, setProfileSaving] = useState(false);
+
+  useEffect(() => {
+    setProfileName(profile?.display_name || '');
+  }, [profile?.display_name]);
 
   const countByCategory = Object.fromEntries(
     CATEGORIES.map((category) => [category.id, records.filter((record) => record.category_id === category.id).length]),
   );
 
-  function moveCategory(index, direction) {
-    const next = [...settings.category_order];
-    const target = index + direction;
-    if (target < 0 || target >= next.length) return;
-    [next[index], next[target]] = [next[target], next[index]];
-    onSaveSettings({ ...settings, category_order: next });
-  }
+  const displayedCategoryOrder = settings.sort_by_record_count
+    ? [...settings.category_order].sort((a, b) => {
+      const orderIndex = Object.fromEntries(settings.category_order.map((id, index) => [id, index]));
+      return (countByCategory[b] || 0) - (countByCategory[a] || 0) || orderIndex[a] - orderIndex[b];
+    })
+    : settings.category_order;
 
-  function sortByRecordCount() {
+  function toggleSortByRecordCount() {
     const orderIndex = Object.fromEntries(settings.category_order.map((id, index) => [id, index]));
-    const next = [...settings.category_order].sort((a, b) =>
+    const sortedOrder = [...settings.category_order].sort((a, b) =>
       (countByCategory[b] || 0) - (countByCategory[a] || 0) || orderIndex[a] - orderIndex[b],
     );
-    onSaveSettings({ ...settings, category_order: next });
+    const nextEnabled = !settings.sort_by_record_count;
+    onSaveSettings({
+      ...settings,
+      sort_by_record_count: nextEnabled,
+      category_order: nextEnabled ? sortedOrder : settings.category_order,
+    });
   }
 
   function toggleHidden(categoryId) {
@@ -47,36 +56,15 @@ export default function SettingsScreen({
     });
   }
 
-  function startDrag(event, index) {
-    event.preventDefault();
-    event.stopPropagation();
-    dragRef.current = { index, startY: event.clientY, lastY: event.clientY };
-    event.currentTarget.setPointerCapture?.(event.pointerId);
-  }
-
-  function dragMove(event) {
-    const drag = dragRef.current;
-    if (drag.index === null) return;
-    event.preventDefault();
-    event.stopPropagation();
-
-    const delta = event.clientY - drag.lastY;
-    if (Math.abs(delta) < 42) return;
-
-    const direction = delta > 0 ? 1 : -1;
-    const target = drag.index + direction;
-    if (target < 0 || target >= settings.category_order.length) return;
-
-    const next = [...settings.category_order];
-    [next[drag.index], next[target]] = [next[target], next[drag.index]];
-    dragRef.current = { ...drag, index: target, lastY: event.clientY };
-    onSaveSettings({ ...settings, category_order: next });
-  }
-
-  function endDrag(event) {
-    event.preventDefault();
-    event.stopPropagation();
-    dragRef.current = { index: null, startY: 0, lastY: 0 };
+  async function saveProfileName() {
+    const nextName = profileName.trim() || '사용자';
+    setProfileSaving(true);
+    try {
+      await onUpdateProfile({ display_name: nextName });
+      setProfileName(nextName);
+    } finally {
+      setProfileSaving(false);
+    }
   }
 
   const selectedCategory = CATEGORIES.find((category) => category.id === selectedCategoryId);
@@ -97,10 +85,15 @@ export default function SettingsScreen({
         <label className="field">
           <span>이름</span>
           <input
-            value={profile?.display_name || ''}
-            onChange={(event) => onUpdateProfile({ display_name: event.target.value })}
+            value={profileName}
+            onChange={(event) => setProfileName(event.target.value)}
+            onCompositionEnd={(event) => setProfileName(event.currentTarget.value)}
+            autoComplete="name"
           />
         </label>
+        <button className="primary-button compact" type="button" onClick={saveProfileName} disabled={profileSaving}>
+          {profileSaving ? '저장 중' : '이름 저장'}
+        </button>
         <button className="secondary-button" onClick={onSignOut}>로그아웃</button>
       </section>
 
@@ -108,13 +101,20 @@ export default function SettingsScreen({
         <div className="section-title">
           <div>
             <h2>카테고리 표시와 집계</h2>
-            <p className="muted">홈은 기본적으로 기록 수가 많은 카테고리부터 보여줍니다. 아래 순서는 같은 기록 수일 때의 기준이 됩니다.</p>
+            <p className="muted">기록 수 기준 자동정렬을 켜면 많이 쓰는 카테고리가 홈에서 먼저 보입니다.</p>
           </div>
         </div>
-        <button className="secondary-button" onClick={sortByRecordCount}>기록 많은 순으로 정렬</button>
+        <button
+          className={`toggle-button wide-toggle ${settings.sort_by_record_count ? 'is-on' : ''}`}
+          type="button"
+          onClick={toggleSortByRecordCount}
+        >
+          <span />
+          기록 많은 순 자동정렬 {settings.sort_by_record_count ? '켜짐' : '꺼짐'}
+        </button>
 
         <div className="category-settings-list">
-          {settings.category_order.map((categoryId, index) => {
+          {displayedCategoryOrder.map((categoryId) => {
             const category = CATEGORIES.find((item) => item.id === categoryId);
             if (!category) return null;
             const hidden = settings.hidden_categories.includes(category.id);
@@ -125,17 +125,6 @@ export default function SettingsScreen({
                 onClick={() => setSelectedCategoryId(category.id)}
               >
                 <div className="category-setting-head">
-                  <button
-                    type="button"
-                    className="drag-handle"
-                    aria-label={`${category.label} 순서 변경`}
-                    onPointerDown={(event) => startDrag(event, index)}
-                    onPointerMove={dragMove}
-                    onPointerUp={endDrag}
-                    onPointerCancel={endDrag}
-                  >
-                    ☰
-                  </button>
                   <span className="tile-icon" style={{ background: `${category.color}18`, color: category.color }}>{CATEGORY_ICONS[category.id]}</span>
                   <div>
                     <strong>{category.label}</strong>

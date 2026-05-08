@@ -6,6 +6,7 @@ const DEFAULT_SETTINGS = {
   category_order: getDefaultCategoryOrder(),
   hidden_categories: [],
   finance_modes: DEFAULT_FINANCE_MODES,
+  sort_by_record_count: true,
 };
 
 export function useAppSettings(userId) {
@@ -30,6 +31,7 @@ export function useAppSettings(userId) {
       category_order: data?.category_order?.length ? data.category_order : DEFAULT_SETTINGS.category_order,
       hidden_categories: data?.hidden_categories || [],
       finance_modes: { ...DEFAULT_FINANCE_MODES, ...(data?.finance_modes || {}) },
+      sort_by_record_count: data?.finance_modes?.__sort_by_record_count ?? DEFAULT_SETTINGS.sort_by_record_count,
     };
 
     setSettings(merged);
@@ -41,15 +43,23 @@ export function useAppSettings(userId) {
   }, [load]);
 
   async function saveSettings(next) {
+    const financeModes = {
+      ...DEFAULT_FINANCE_MODES,
+      ...(next.finance_modes || {}),
+      __sort_by_record_count: next.sort_by_record_count ?? DEFAULT_SETTINGS.sort_by_record_count,
+    };
     const normalized = {
       category_order: next.category_order || DEFAULT_SETTINGS.category_order,
       hidden_categories: next.hidden_categories || [],
-      finance_modes: { ...DEFAULT_FINANCE_MODES, ...(next.finance_modes || {}) },
+      finance_modes: financeModes,
+      sort_by_record_count: next.sort_by_record_count ?? DEFAULT_SETTINGS.sort_by_record_count,
     };
 
     const { error } = await supabase.from('app_settings').upsert({
       user_id: userId,
-      ...normalized,
+      category_order: normalized.category_order,
+      hidden_categories: normalized.hidden_categories,
+      finance_modes: normalized.finance_modes,
       updated_at: new Date().toISOString(),
     });
 

@@ -7,11 +7,16 @@ function cleanDataForSave(formData) {
   delete data.photo;
   for (const [key, value] of Object.entries(data)) {
     if (Array.isArray(value)) {
-      data[key] = value.map((item) => {
-        if (!item || typeof item !== 'object') return item;
-        const { _clientId, ...rest } = item;
-        return rest;
-      });
+      data[key] = value
+        .map((item) => {
+          if (!item || typeof item !== 'object') return item;
+          const { _clientId, ...rest } = item;
+          return rest;
+        })
+        .filter((item) => {
+          if (!item || typeof item !== 'object') return Boolean(item);
+          return Boolean(item.name || item.amount || item.rating);
+        });
     }
   }
   return data;

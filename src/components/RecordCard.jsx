@@ -6,12 +6,13 @@ export default function RecordCard({ record, onOpen, onEdit, onDelete }) {
   const data = record.data || {};
   const title = getRecordTitle(record.category_id, data);
   const investment = record.category_id === 'investment' ? calcInvestment(data) : null;
+  const imageUrl = record.photoUrl || data.title?.poster || '';
 
   return (
     <article className="record-card" role="button" tabIndex={0} onClick={() => onOpen?.(record)} onKeyDown={(event) => {
       if (event.key === 'Enter') onOpen?.(record);
     }}>
-      {record.photoUrl && <img className="record-photo" src={record.photoUrl} alt="" />}
+      {imageUrl && <img className="record-photo" src={imageUrl} alt="" />}
       <div className="record-body">
         <div className="record-topline">
           <span style={{ color: category?.color }}>{CATEGORY_ICONS[record.category_id]} {category?.label || record.category_id}</span>

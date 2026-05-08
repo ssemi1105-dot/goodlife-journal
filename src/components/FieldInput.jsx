@@ -13,6 +13,11 @@ function makeLineItem(fieldId, item = {}, index = 0) {
   };
 }
 
+function lineItemsWithDefault(fieldId, value) {
+  const normalized = normalizeArray(value).map((item, index) => makeLineItem(fieldId, item, index));
+  return normalized.length > 0 ? normalized : [makeLineItem(fieldId, { name: '', amount: '' }, 0)];
+}
+
 function ChoiceGroup({ field, value, onChange, multiple = false, mood = false }) {
   const selected = multiple ? normalizeArray(value) : [value].filter(Boolean);
 
@@ -109,10 +114,7 @@ function LineItemRow({ field, item, onUpdate, onRemove, onRatingChange }) {
 }
 
 function LineItems({ field, value, onChange, onDraftChange }) {
-  const [items, setItems] = useState(() => normalizeArray(value).map((item, index) => ({
-    _clientId: item._clientId || `line-${field.id}-${Date.now()}-${index}`,
-    ...item,
-  })));
+  const [items, setItems] = useState(() => lineItemsWithDefault(field.id, value));
   const [totalTick, setTotalTick] = useState(0);
   const itemsRef = useRef(items);
   const total = totalTick >= 0
@@ -120,7 +122,7 @@ function LineItems({ field, value, onChange, onDraftChange }) {
     : 0;
 
   useEffect(() => {
-    const nextItems = normalizeArray(value).map((item, index) => makeLineItem(field.id, item, index));
+    const nextItems = lineItemsWithDefault(field.id, value);
     itemsRef.current = nextItems;
     setItems(nextItems);
     setTotalTick((tick) => tick + 1);
