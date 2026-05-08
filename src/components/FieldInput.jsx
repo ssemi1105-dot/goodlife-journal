@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import { formatMoney, toNumber } from '../utils/recordUtils';
 
@@ -66,21 +66,53 @@ function StarRating({ value, onChange, compact = false }) {
 }
 
 function LineItems({ field, value, onChange }) {
-  const items = normalizeArray(value);
+  const [items, setItems] = useState(() => normalizeArray(value).map((item, index) => ({
+    _clientId: item._clientId || `item-${Date.now()}-${index}`,
+    ...item,
+  })));
+  const syncTimer = useRef(null);
   const total = items.reduce((sum, item) => sum + toNumber(item.amount), 0);
 
+  useEffect(() => {
+    setItems(normalizeArray(value).map((item, index) => ({
+      _clientId: item._clientId || `item-${Date.now()}-${index}`,
+      ...item,
+    })));
+  }, [field.id]);
+
+  function sync(nextItems) {
+    window.clearTimeout(syncTimer.current);
+    syncTimer.current = window.setTimeout(() => {
+      onChange(nextItems);
+    }, 120);
+  }
+
   function update(index, key, nextValue) {
-    onChange(items.map((item, itemIndex) => (itemIndex === index ? { ...item, [key]: nextValue } : item)));
+    const nextItems = items.map((item, itemIndex) => (itemIndex === index ? { ...item, [key]: nextValue } : item));
+    setItems(nextItems);
+    sync(nextItems);
+  }
+
+  function remove(index) {
+    const nextItems = items.filter((_, itemIndex) => itemIndex !== index);
+    setItems(nextItems);
+    onChange(nextItems);
+  }
+
+  function add() {
+    const nextItems = [...items, { _clientId: `item-${Date.now()}-${items.length}`, name: '', amount: '' }];
+    setItems(nextItems);
+    onChange(nextItems);
   }
 
   return (
     <div className="line-items">
       {items.map((item, index) => (
-        <div className={field.itemRating ? 'line-item-row has-rating' : 'line-item-row'} key={`line-item-${index}`}>
+        <div className={field.itemRating ? 'line-item-row has-rating' : 'line-item-row'} key={item._clientId}>
           <div className="line-item-main">
             <input value={item.name || ''} onChange={(event) => update(index, 'name', event.target.value)} placeholder={field.nameLabel || '항목'} />
             <input type="number" value={item.amount || ''} onChange={(event) => update(index, 'amount', event.target.value)} placeholder={field.amountLabel || '금액'} />
-            <button type="button" className="icon-button small-icon" onClick={() => onChange(items.filter((_, itemIndex) => itemIndex !== index))}>×</button>
+            <button type="button" className="icon-button small-icon" onClick={() => remove(index)}>×</button>
           </div>
           {field.itemRating && (
             <div className="line-item-rating">
@@ -90,7 +122,7 @@ function LineItems({ field, value, onChange }) {
           )}
         </div>
       ))}
-      <button type="button" className="secondary-button add-line-button" onClick={() => onChange([...items, { name: '', amount: '' }])}>
+      <button type="button" className="secondary-button add-line-button" onClick={add}>
         항목 추가
       </button>
       {total > 0 && (

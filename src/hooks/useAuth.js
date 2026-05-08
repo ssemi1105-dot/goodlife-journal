@@ -1,15 +1,6 @@
 import { useEffect, useState } from 'react';
 import { isSupabaseConfigured, supabase } from '../lib/supabaseClient';
 
-function withTimeout(promise, ms = 5000) {
-  return Promise.race([
-    promise,
-    new Promise((_, reject) => {
-      window.setTimeout(() => reject(new Error('Authentication check timed out.')), ms);
-    }),
-  ]);
-}
-
 export function useAuth() {
   const [session, setSession] = useState(null);
   const [profile, setProfile] = useState(null);
@@ -39,7 +30,7 @@ export function useAuth() {
 
     let mounted = true;
 
-    withTimeout(supabase.auth.getSession())
+    supabase.auth.getSession()
       .then(async ({ data }) => {
         if (!mounted) return;
         setSession(data.session);
@@ -48,7 +39,6 @@ export function useAuth() {
       .catch((error) => {
         console.error('[auth] session check failed:', error);
         if (mounted) {
-          setSession(null);
           setProfile(null);
         }
       })

@@ -5,6 +5,15 @@ import { deriveRecordColumns } from '../utils/recordUtils';
 function cleanDataForSave(formData) {
   const data = { ...formData };
   delete data.photo;
+  for (const [key, value] of Object.entries(data)) {
+    if (Array.isArray(value)) {
+      data[key] = value.map((item) => {
+        if (!item || typeof item !== 'object') return item;
+        const { _clientId, ...rest } = item;
+        return rest;
+      });
+    }
+  }
   return data;
 }
 
