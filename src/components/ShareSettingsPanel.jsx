@@ -1,7 +1,4 @@
 import { useState } from 'react';
-import { CATEGORIES } from '../data/categoryDefinitions';
-import { useSharing } from '../hooks/useSharing';
-import CompactToggle from './ui/CompactToggle';
 
 function FriendRow({ friend, onRespond }) {
   const isIncoming = friend.direction === 'incoming' && friend.status === 'pending';
@@ -25,22 +22,9 @@ function FriendRow({ friend, onRespond }) {
   );
 }
 
-export default function ShareSettingsPanel({ userId }) {
+export default function ShareSettingsPanel({ sharing }) {
   const [email, setEmail] = useState('');
-  const [savingCategory, setSavingCategory] = useState('');
   const [requesting, setRequesting] = useState(false);
-  const sharing = useSharing(userId, CATEGORIES);
-
-  async function toggleCategory(categoryId, checked) {
-    setSavingCategory(categoryId);
-    try {
-      await sharing.setCategoryShared(categoryId, checked);
-    } catch (error) {
-      window.alert(error.message || '공유 설정 저장에 실패했습니다. Supabase schema.sql 적용 여부를 확인해 주세요.');
-    } finally {
-      setSavingCategory('');
-    }
-  }
 
   async function submitFriendRequest(event) {
     event.preventDefault();
@@ -51,7 +35,7 @@ export default function ShareSettingsPanel({ userId }) {
       await sharing.sendFriendRequest(nextEmail);
       setEmail('');
     } catch {
-      // useSharing exposes a readable error message in the panel.
+      // useSharing exposes a readable error message in this panel.
     } finally {
       setRequesting(false);
     }
@@ -62,15 +46,15 @@ export default function ShareSettingsPanel({ userId }) {
       <div className="section-title compact-section-title">
         <div>
           <p className="eyebrow">Sharing</p>
-          <h2>공유 설정</h2>
+          <h2>친구/공유</h2>
         </div>
-        <span>{sharing.sharedCount}개 공유 중</span>
+        <span>{sharing.sharedCount}개 공유</span>
       </div>
 
-      <div className="settings-row strong-row">
+      <div className="settings-row strong-row compact-info-row">
         <div>
           <strong>친구 비교</strong>
-          <span>친구로 연결되고, 서로 공유를 켠 카테고리만 비교됩니다.</span>
+          <span>카테고리별 공유는 카테고리 관리에서 조정합니다.</span>
         </div>
       </div>
 
@@ -90,33 +74,12 @@ export default function ShareSettingsPanel({ userId }) {
       {sharing.friendError && <p className="form-error">{sharing.friendError}</p>}
 
       <div className="friend-list">
-        {sharing.friends.slice(0, 5).map((friend) => (
+        {sharing.friends.slice(0, 4).map((friend) => (
           <FriendRow key={friend.id} friend={friend} onRespond={sharing.respondToFriendship} />
         ))}
         {!sharing.loading && sharing.friends.length === 0 && (
           <p className="empty-text compact-empty">아직 연결된 친구가 없습니다.</p>
         )}
-      </div>
-
-      <div className="share-category-list">
-        {CATEGORIES.map((category) => {
-          const state = sharing.shareSettings[category.id] || {};
-          const isVideo = category.id === 'video';
-          return (
-            <div className="settings-row share-category-row" key={category.id}>
-              <div>
-                <strong>{category.label}</strong>
-                <span>{isVideo ? '같은 작품을 본 친구 반응 비교 가능' : '친구와 이 카테고리 기록 비교 준비'}</span>
-              </div>
-              <CompactToggle
-                checked={Boolean(state.is_shared)}
-                onChange={(checked) => toggleCategory(category.id, checked)}
-                disabled={savingCategory === category.id}
-                label={state.is_shared ? '공유' : '비공유'}
-              />
-            </div>
-          );
-        })}
       </div>
     </section>
   );

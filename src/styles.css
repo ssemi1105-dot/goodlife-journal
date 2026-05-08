@@ -2126,3 +2126,301 @@ select:focus {
     grid-template-columns: 1fr 58px;
   }
 }
+
+/* Settings density and fixed nav refinement */
+body {
+  overflow-x: hidden;
+}
+
+.app-shell {
+  overflow: visible;
+  transform: none;
+  padding-bottom: calc(58px + env(safe-area-inset-bottom));
+}
+
+.settings-screen {
+  gap: 8px;
+}
+
+.settings-screen .settings-panel {
+  padding: 10px 11px;
+  margin-bottom: 8px;
+  border-radius: 15px;
+}
+
+.settings-screen .section-title {
+  margin-bottom: 7px;
+}
+
+.settings-screen .section-title h2 {
+  font-size: 15px;
+}
+
+.settings-screen .eyebrow {
+  margin-bottom: 1px;
+  font-size: 10px;
+}
+
+.settings-screen .sub-header {
+  margin-bottom: 8px;
+}
+
+.settings-screen .field {
+  gap: 4px;
+  margin-bottom: 7px;
+}
+
+.settings-screen input {
+  min-height: 34px;
+  padding: 7px 9px;
+  border-radius: 10px;
+}
+
+.settings-actions-row {
+  gap: 6px;
+}
+
+.settings-row,
+.friend-row {
+  min-height: 42px;
+  padding: 7px 8px;
+  border-radius: 11px;
+}
+
+.compact-info-row {
+  min-height: auto;
+  padding: 7px 8px;
+}
+
+.friend-request-form {
+  grid-template-columns: 1fr 52px;
+  gap: 6px;
+  margin: 6px 0;
+}
+
+.friend-list {
+  display: grid;
+  gap: 6px;
+}
+
+.category-settings-list {
+  display: grid;
+  gap: 6px;
+}
+
+.category-setting-card {
+  min-height: 48px;
+  padding: 7px 8px;
+  border-radius: 12px;
+}
+
+.category-setting-head {
+  gap: 8px;
+}
+
+.category-setting-head .tile-icon {
+  width: 28px;
+  height: 28px;
+  border-radius: 9px;
+  font-size: 15px;
+}
+
+.category-setting-head strong {
+  font-size: 14px;
+}
+
+.category-setting-head small {
+  font-size: 11px;
+}
+
+.row-chevron {
+  font-size: 18px;
+}
+
+.compact-toggle {
+  min-height: 26px;
+}
+
+.compact-toggle-track {
+  width: 30px;
+  height: 18px;
+}
+
+.compact-toggle-track i {
+  width: 14px;
+  height: 14px;
+}
+
+.compact-toggle.is-on .compact-toggle-track i {
+  transform: translateX(12px);
+}
+
+.compact-toggle strong {
+  font-size: 11px;
+}
+
+.primary-button,
+.secondary-button,
+.ghost-button {
+  min-height: 34px;
+  border-radius: 10px;
+}
+
+.primary-button.compact,
+.secondary-button.compact,
+.secondary-button.tiny,
+.ghost-button.tiny {
+  min-height: 30px;
+  padding: 5px 9px;
+  font-size: 12px;
+}
+
+.share-category-list {
+  display: none;
+}
+
+.category-option-modal.bottom-sheet {
+  max-height: min(62vh, 430px);
+  padding: 10px 12px calc(12px + env(safe-area-inset-bottom));
+  border-radius: 18px 18px 0 0;
+}
+
+.category-option-modal .modal-header {
+  padding-bottom: 7px;
+  margin-bottom: 8px;
+}
+
+.category-option-modal .modal-header h2 {
+  font-size: 16px;
+}
+
+.category-option-modal .icon-button {
+  width: 30px;
+  height: 30px;
+  border-radius: 10px;
+}
+
+.category-option-group {
+  gap: 7px;
+  padding: 8px 0;
+}
+
+.option-segment-grid {
+  gap: 6px;
+}
+
+.option-segment-grid button {
+  min-height: 32px;
+  padding: 6px 8px;
+  border-radius: 10px;
+  font-size: 12px;
+}
+
+.compact-help {
+  margin: -2px 0 0;
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.bottom-nav {
+  right: max(0px, calc((100vw - 760px) / 2));
+  bottom: 0;
+  left: max(0px, calc((100vw - 760px) / 2));
+  height: calc(46px + env(safe-area-inset-bottom));
+  padding: 5px 14px calc(5px + env(safe-area-inset-bottom));
+  border-width: 1px 0 0;
+  border-radius: 0;
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 -6px 18px rgba(22, 34, 28, 0.08);
+  backdrop-filter: none;
+}
+
+.bottom-nav button {
+  min-height: 34px;
+  padding: 4px 8px;
+  border-radius: 12px;
+  font-size: 12px;
+}
+
+.bottom-nav .add-fab {
+  width: 36px;
+  height: 36px;
+  min-height: 36px;
+  margin-top: 0;
+  border: 0;
+  border-radius: 50%;
+  box-shadow: 0 6px 14px rgba(47, 125, 104, 0.22);
+  font-size: 20px;
+}
+
+.summary-strip > div {
+  min-height: 50px;
+  padding: 7px 8px;
+}
+
+.summary-strip strong {
+  font-size: 16px;
+}
+
+.summary-strip span {
+  font-size: 11px;
+}
+
+.section-block {
+  padding: 11px;
+  margin-bottom: 9px;
+  border-radius: 16px;
+}
+
+.section-block .section-title {
+  margin-bottom: 8px;
+}
+
+.category-tile {
+  min-height: 70px;
+  padding: 8px 6px;
+  border-radius: 12px;
+}
+
+.category-tile .tile-icon {
+  width: 28px;
+  height: 28px;
+  border-radius: 9px;
+  font-size: 15px;
+}
+
+.category-tile strong {
+  font-size: 12px;
+}
+
+.category-tile small {
+  font-size: 10px;
+}
+
+@media (max-width: 560px) {
+  .app-shell {
+    padding-bottom: calc(56px + env(safe-area-inset-bottom));
+  }
+
+  .screen {
+    padding: 10px;
+  }
+
+  .summary-strip {
+    gap: 5px;
+    margin-bottom: 9px;
+  }
+
+  .summary-strip > div {
+    min-height: 48px;
+    padding: 6px;
+  }
+
+  .category-grid {
+    gap: 6px;
+  }
+
+  .category-tile {
+    min-height: 68px;
+  }
+}

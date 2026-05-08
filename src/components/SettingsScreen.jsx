@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { CATEGORIES, CATEGORY_ICONS, FINANCE_MODES } from '../data/categoryDefinitions';
+import { useSharing } from '../hooks/useSharing';
 import AdminUserList from './AdminUserList';
 import ShareSettingsPanel from './ShareSettingsPanel';
 import CompactToggle from './ui/CompactToggle';
@@ -18,6 +19,8 @@ export default function SettingsScreen({
   const [selectedCategoryId, setSelectedCategoryId] = useState(null);
   const [profileName, setProfileName] = useState(profile?.display_name || '');
   const [profileSaving, setProfileSaving] = useState(false);
+  const [sharingSavingCategory, setSharingSavingCategory] = useState('');
+  const sharing = useSharing(userId, CATEGORIES);
 
   useEffect(() => {
     setProfileName(profile?.display_name || '');
@@ -61,6 +64,17 @@ export default function SettingsScreen({
     });
   }
 
+  async function setCategorySharing(categoryId, checked) {
+    setSharingSavingCategory(categoryId);
+    try {
+      await sharing.setCategoryShared(categoryId, checked);
+    } catch (error) {
+      window.alert(error.message || '공유 설정 저장에 실패했습니다. Supabase 설정을 확인해 주세요.');
+    } finally {
+      setSharingSavingCategory('');
+    }
+  }
+
   async function saveProfileName() {
     const nextName = profileName.trim() || '사용자';
     setProfileSaving(true);
@@ -74,6 +88,7 @@ export default function SettingsScreen({
 
   const selectedCategory = CATEGORIES.find((category) => category.id === selectedCategoryId);
   const selectedHidden = selectedCategory ? settings.hidden_categories.includes(selectedCategory.id) : false;
+  const selectedShared = selectedCategory ? Boolean(sharing.shareSettings[selectedCategory.id]?.is_shared) : false;
 
   return (
     <main className="screen settings-screen">
@@ -110,6 +125,8 @@ export default function SettingsScreen({
         </div>
       </section>
 
+      <ShareSettingsPanel sharing={sharing} />
+
       <section className="settings-panel">
         <div className="section-title compact-section-title">
           <div>
@@ -141,6 +158,7 @@ export default function SettingsScreen({
                     <strong>{category.label}</strong>
                     <small>
                       {countByCategory[category.id] || 0}개 · {hidden ? '숨김' : '표시'} · {FINANCE_MODES[settings.finance_modes[category.id] || 'excluded']}
+                      {sharing.shareSettings[category.id]?.is_shared ? ' · 공유' : ''}
                     </small>
                   </div>
                 </div>
@@ -150,8 +168,6 @@ export default function SettingsScreen({
           })}
         </div>
       </section>
-
-      <ShareSettingsPanel userId={userId} />
 
       <section className="settings-panel integration-panel">
         <div className="section-title compact-section-title">
@@ -208,6 +224,18 @@ export default function SettingsScreen({
                   </button>
                 ))}
               </div>
+            </div>
+
+            <div className="category-option-group">
+              <CompactToggle
+                checked={selectedShared}
+                onChange={(checked) => setCategorySharing(selectedCategory.id, checked)}
+                disabled={sharingSavingCategory === selectedCategory.id}
+                label={selectedShared ? '공유 ON' : '공유 OFF'}
+              />
+              <p className="muted compact-help">
+                친구 관계이고 서로 공유를 켠 경우에만 비교에 사용됩니다.
+              </p>
             </div>
           </section>
         </div>
