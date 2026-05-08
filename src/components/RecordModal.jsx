@@ -85,10 +85,10 @@ export default function RecordModal({ categoryId, record, onClose, onSave }) {
           {category.fields.map((field) => {
             if (categoryId === 'salary' && field.id === 'bonusAmount' && !form.bonus) return null;
             return (
-              <label className="field" key={field.id}>
+              <div className="field" key={field.id}>
                 <span>{field.label}{field.required && <b> *</b>}</span>
                 <FieldInput field={field} value={form[field.id]} onChange={(value) => setField(field.id, value)} />
-              </label>
+              </div>
             );
           })}
         </div>

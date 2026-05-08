@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import { formatMoney, toNumber } from '../utils/recordUtils';
 
@@ -70,7 +70,6 @@ function LineItems({ field, value, onChange }) {
     _clientId: item._clientId || `item-${Date.now()}-${index}`,
     ...item,
   })));
-  const syncTimer = useRef(null);
   const total = items.reduce((sum, item) => sum + toNumber(item.amount), 0);
 
   useEffect(() => {
@@ -80,17 +79,10 @@ function LineItems({ field, value, onChange }) {
     })));
   }, [field.id]);
 
-  function sync(nextItems) {
-    window.clearTimeout(syncTimer.current);
-    syncTimer.current = window.setTimeout(() => {
-      onChange(nextItems);
-    }, 120);
-  }
-
   function update(index, key, nextValue) {
     const nextItems = items.map((item, itemIndex) => (itemIndex === index ? { ...item, [key]: nextValue } : item));
     setItems(nextItems);
-    sync(nextItems);
+    onChange(nextItems);
   }
 
   function remove(index) {
