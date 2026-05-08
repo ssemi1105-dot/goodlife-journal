@@ -43,8 +43,8 @@ function CategoryPicker({ settings, onSelect, onClose }) {
 
 export default function App() {
   const auth = useAuth();
-  const { settings, saveSettings } = useAppSettings(auth.profile?.id);
-  const { records, loading: recordsLoading, saveRecord, deleteRecord } = useRecords(auth.profile?.id);
+  const { settings, saveSettings } = useAppSettings(auth.userId);
+  const { records, loading: recordsLoading, saveRecord, deleteRecord } = useRecords(auth.userId);
   const [view, setView] = useState('home');
   const [activeCategory, setActiveCategory] = useState(null);
   const [modalCategory, setModalCategory] = useState(null);

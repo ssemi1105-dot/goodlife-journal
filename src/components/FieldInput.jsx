@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import { formatMoney, toNumber } from '../utils/recordUtils';
 
@@ -70,31 +70,42 @@ function LineItems({ field, value, onChange }) {
     _clientId: item._clientId || `item-${Date.now()}-${index}`,
     ...item,
   })));
-  const total = items.reduce((sum, item) => sum + toNumber(item.amount), 0);
+  const [totalTick, setTotalTick] = useState(0);
+  const itemsRef = useRef(items);
+  const total = totalTick >= 0
+    ? itemsRef.current.reduce((sum, item) => sum + toNumber(item.amount), 0)
+    : 0;
 
   useEffect(() => {
-    setItems(normalizeArray(value).map((item, index) => ({
+    const nextItems = normalizeArray(value).map((item, index) => ({
       _clientId: item._clientId || `item-${Date.now()}-${index}`,
       ...item,
-    })));
+    }));
+    itemsRef.current = nextItems;
+    setItems(nextItems);
   }, [field.id]);
 
   function update(index, key, nextValue) {
-    const nextItems = items.map((item, itemIndex) => (itemIndex === index ? { ...item, [key]: nextValue } : item));
-    setItems(nextItems);
+    const nextItems = itemsRef.current.map((item, itemIndex) => (itemIndex === index ? { ...item, [key]: nextValue } : item));
+    itemsRef.current = nextItems;
     onChange(nextItems);
+    setTotalTick((tick) => tick + 1);
   }
 
   function remove(index) {
-    const nextItems = items.filter((_, itemIndex) => itemIndex !== index);
+    const nextItems = itemsRef.current.filter((_, itemIndex) => itemIndex !== index);
+    itemsRef.current = nextItems;
     setItems(nextItems);
     onChange(nextItems);
+    setTotalTick((tick) => tick + 1);
   }
 
   function add() {
-    const nextItems = [...items, { _clientId: `item-${Date.now()}-${items.length}`, name: '', amount: '' }];
+    const nextItems = [...itemsRef.current, { _clientId: `item-${Date.now()}-${itemsRef.current.length}`, name: '', amount: '' }];
+    itemsRef.current = nextItems;
     setItems(nextItems);
     onChange(nextItems);
+    setTotalTick((tick) => tick + 1);
   }
 
   return (
@@ -102,14 +113,17 @@ function LineItems({ field, value, onChange }) {
       {items.map((item, index) => (
         <div className={field.itemRating ? 'line-item-row has-rating' : 'line-item-row'} key={item._clientId}>
           <div className="line-item-main">
-            <input value={item.name || ''} onChange={(event) => update(index, 'name', event.target.value)} placeholder={field.nameLabel || '항목'} />
-            <input type="number" value={item.amount || ''} onChange={(event) => update(index, 'amount', event.target.value)} placeholder={field.amountLabel || '금액'} />
+            <input defaultValue={item.name || ''} onInput={(event) => update(index, 'name', event.currentTarget.value)} placeholder={field.nameLabel || '항목'} />
+            <input type="number" inputMode="numeric" defaultValue={item.amount || ''} onInput={(event) => update(index, 'amount', event.currentTarget.value)} placeholder={field.amountLabel || '금액'} />
             <button type="button" className="icon-button small-icon" onClick={() => remove(index)}>×</button>
           </div>
           {field.itemRating && (
             <div className="line-item-rating">
               <span>항목 평점</span>
-              <StarRating compact value={item.rating || 0} onChange={(nextRating) => update(index, 'rating', nextRating)} />
+              <StarRating compact value={itemsRef.current[index]?.rating || 0} onChange={(nextRating) => {
+                update(index, 'rating', nextRating);
+                setItems(itemsRef.current);
+              }} />
             </div>
           )}
         </div>

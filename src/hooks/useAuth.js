@@ -34,7 +34,8 @@ export function useAuth() {
       .then(async ({ data }) => {
         if (!mounted) return;
         setSession(data.session);
-        if (data.session) await loadProfile(data.session.user.id);
+        setLoading(false);
+        if (data.session) loadProfile(data.session.user.id);
       })
       .catch((error) => {
         console.error('[auth] session check failed:', error);
@@ -51,7 +52,8 @@ export function useAuth() {
     } = supabase.auth.onAuthStateChange(async (_event, nextSession) => {
       try {
         setSession(nextSession);
-        if (nextSession) await loadProfile(nextSession.user.id);
+        setLoading(false);
+        if (nextSession) loadProfile(nextSession.user.id);
         else setProfile(null);
       } finally {
         setLoading(false);
@@ -97,6 +99,7 @@ export function useAuth() {
     configured: isSupabaseConfigured,
     loading,
     session,
+    userId: session?.user?.id || null,
     profile,
     isOwner: profile?.role === 'owner',
     signIn,
