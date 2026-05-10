@@ -12,8 +12,8 @@ const PERIODS = [
   { key: 'year', label: '연간' },
 ];
 
-function FinanceSummaryModal({ period, summary, categoryTotals, onCycle, onClose }) {
-  const [showBreakdown, setShowBreakdown] = useState(false);
+function FinanceSummaryModal({ period, summary, categoryTotals, onClose }) {
+  const [showBreakdown, setShowBreakdown] = useState(true);
 
   return (
     <div className="modal-backdrop">
@@ -21,22 +21,22 @@ function FinanceSummaryModal({ period, summary, categoryTotals, onCycle, onClose
         <header className="modal-header">
           <div>
             <p className="eyebrow">Dashboard</p>
-            <h2>{period.label} 지출/수입</h2>
+            <h2>{period.label} 지출/수입 상세</h2>
           </div>
           <button type="button" className="icon-button" onClick={onClose} aria-label="닫기">×</button>
         </header>
 
-        <button type="button" className="finance-modal-total" onClick={onCycle}>
+        <div className="finance-modal-total">
           <span>{summary.range.start.replaceAll('-', '.')} ~ {summary.range.end.replaceAll('-', '.')}</span>
-          <strong>터치하면 다음 기간으로 전환</strong>
-        </button>
+          <strong>{summary.count}건 기록</strong>
+        </div>
 
         <div className="finance-modal-grid">
-          <button type="button" onClick={() => setShowBreakdown((value) => !value)}>
+          <button type="button" onClick={() => setShowBreakdown(true)}>
             <span>지출</span>
             <strong className="expense-text">{formatMoney(summary.expense)}</strong>
           </button>
-          <button type="button" onClick={() => setShowBreakdown((value) => !value)}>
+          <button type="button" onClick={() => setShowBreakdown(false)}>
             <span>수입</span>
             <strong className="income-text">{formatMoney(summary.income)}</strong>
           </button>
@@ -104,11 +104,6 @@ export default function Dashboard({
     setPeriodIndex((index) => (index + 1) % PERIODS.length);
   }
 
-  function openFinanceSummary() {
-    cyclePeriod();
-    setShowFinanceSummary(true);
-  }
-
   return (
     <main className="screen">
       <section className="topbar compact-topbar">
@@ -132,10 +127,28 @@ export default function Dashboard({
           <span>{activePeriod.label} 기록</span>
           <strong>{summary.count}건</strong>
         </div>
-        <button type="button" className="summary-money-cell summary-cycle-button" onClick={openFinanceSummary}>
+        <button type="button" className="summary-money-cell summary-cycle-button" onClick={cyclePeriod}>
           <small>{activePeriod.label}</small>
           <span className="expense-text">지출 {formatMoney(summary.expense)}</span>
           <span className="income-text">수입 {formatMoney(summary.income)}</span>
+          <span
+            role="button"
+            tabIndex={0}
+            className="summary-detail-button"
+            onClick={(event) => {
+              event.stopPropagation();
+              setShowFinanceSummary(true);
+            }}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault();
+                event.stopPropagation();
+                setShowFinanceSummary(true);
+              }
+            }}
+          >
+            상세
+          </span>
         </button>
         <div>
           <button
@@ -184,7 +197,6 @@ export default function Dashboard({
           period={activePeriod}
           summary={summary}
           categoryTotals={categoryTotals}
-          onCycle={cyclePeriod}
           onClose={() => setShowFinanceSummary(false)}
         />
       )}
