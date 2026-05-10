@@ -14,6 +14,13 @@ export function toNumber(value) {
   return Number.isFinite(number) ? number : 0;
 }
 
+export function calcLineItemAmount(item = {}) {
+  const quantity = toNumber(item.quantity) || 1;
+  const unitPrice = toNumber(item.unitPrice);
+  if (unitPrice > 0) return unitPrice * quantity;
+  return toNumber(item.amount ?? item.price);
+}
+
 export function formatMoney(value) {
   return `${Math.round(toNumber(value)).toLocaleString('ko-KR')}원`;
 }
@@ -49,6 +56,12 @@ export function deriveRecordColumns(categoryId, formData = {}) {
   const title = getRecordTitle(categoryId, formData);
   const occurredOn = formData.startDate || formData.date || todayIso();
   let amount = category?.amountField ? toNumber(formData[category.amountField]) : 0;
+  if (['dining', 'shopping', 'workMeal'].includes(categoryId)) {
+    amount = toNumber(formData.menuItems || formData.productItems);
+  }
+  if (categoryId === 'investment') {
+    amount = toNumber(formData.buyAmount) || toNumber(formData.avgBuyPrice) * toNumber(formData.quantity);
+  }
   if (categoryId === 'hospital') amount = toNumber(formData.netMedicalCost);
   const baseIncome = category?.incomeField ? toNumber(formData[category.incomeField]) : 0;
   const incomeAmount = categoryId === 'salary' && formData.bonus
@@ -87,6 +100,67 @@ export function summarizeMonth(records, financeModes, date = new Date()) {
     },
     { count: 0, expense: 0, income: 0 },
   );
+}
+
+export function getPeriodRange(period = 'month', date = new Date()) {
+  const start = new Date(date);
+  const end = new Date(date);
+  start.setHours(0, 0, 0, 0);
+  end.setHours(23, 59, 59, 999);
+
+  if (period === 'week') {
+    const day = start.getDay();
+    const mondayOffset = day === 0 ? -6 : 1 - day;
+    start.setDate(start.getDate() + mondayOffset);
+    end.setTime(start.getTime());
+    end.setDate(start.getDate() + 6);
+    end.setHours(23, 59, 59, 999);
+  } else if (period === 'month') {
+    start.setDate(1);
+    end.setMonth(start.getMonth() + 1, 0);
+  } else if (period === 'quarter') {
+    const quarterStart = Math.floor(start.getMonth() / 3) * 3;
+    start.setMonth(quarterStart, 1);
+    end.setFullYear(start.getFullYear(), quarterStart + 3, 0);
+  } else if (period === 'year') {
+    start.setMonth(0, 1);
+    end.setMonth(11, 31);
+  }
+
+  return {
+    start: start.toISOString().slice(0, 10),
+    end: end.toISOString().slice(0, 10),
+  };
+}
+
+export function summarizePeriod(records, financeModes, period = 'month', date = new Date()) {
+  const range = getPeriodRange(period, date);
+  return records.reduce(
+    (summary, record) => {
+      if (record.occurred_on < range.start || record.occurred_on > range.end) return summary;
+      const value = getRecordFinanceValue(record, financeModes);
+      summary.count += 1;
+      summary.expense += value.expense;
+      summary.income += value.income;
+      return summary;
+    },
+    { count: 0, expense: 0, income: 0, range },
+  );
+}
+
+export function summarizeCategoryTotals(records, financeModes, period = 'month', date = new Date()) {
+  const range = getPeriodRange(period, date);
+  const totals = new Map();
+  records.forEach((record) => {
+    if (record.occurred_on < range.start || record.occurred_on > range.end) return;
+    const value = getRecordFinanceValue(record, financeModes);
+    const current = totals.get(record.category_id) || { categoryId: record.category_id, expense: 0, income: 0, count: 0 };
+    current.expense += value.expense;
+    current.income += value.income;
+    current.count += 1;
+    totals.set(record.category_id, current);
+  });
+  return [...totals.values()].sort((a, b) => b.expense - a.expense || b.income - a.income);
 }
 
 export function flattenSearchText(record) {
@@ -131,13 +205,18 @@ export function calcDutchPay(data = {}) {
 }
 
 export function calcInvestment(data = {}) {
+  const quantity = toNumber(data.quantity);
+  const avgBuyPrice = toNumber(data.avgBuyPrice);
+  const currentPrice = toNumber(data.currentPrice);
+  const quantityBuyTotal = avgBuyPrice * quantity;
+  const quantityCurrentTotal = currentPrice * quantity;
   const legacyBuyTotal = toNumber(data.buyPrice) * toNumber(data.quantity);
   const legacyCurrentTotal = toNumber(data.currentPrice) * toNumber(data.quantity);
-  const buyTotal = toNumber(data.buyAmount) || legacyBuyTotal;
-  const currentTotal = toNumber(data.currentAmount) || legacyCurrentTotal;
+  const buyTotal = quantityBuyTotal || toNumber(data.buyAmount) || legacyBuyTotal;
+  const currentTotal = quantityCurrentTotal || toNumber(data.currentAmount) || legacyCurrentTotal;
   const profit = currentTotal - buyTotal;
   const rate = toNumber(data.profitLossRate) || (buyTotal > 0 && currentTotal > 0 ? (profit / buyTotal) * 100 : 0);
-  return { buyTotal, currentTotal, profit, rate };
+  return { buyTotal, currentTotal, profit, rate, quantity, avgBuyPrice, currentPrice };
 }
 
 export function formatPeriod(data = {}) {

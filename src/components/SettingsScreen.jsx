@@ -50,24 +50,27 @@ export default function SettingsScreen({
     });
   }
 
-  function toggleHidden(categoryId) {
+  async function toggleHidden(categoryId) {
     const hidden = settings.hidden_categories.includes(categoryId)
       ? settings.hidden_categories.filter((id) => id !== categoryId)
       : [...settings.hidden_categories, categoryId];
-    onSaveSettings({ ...settings, hidden_categories: hidden });
+    await onSaveSettings({ ...settings, hidden_categories: hidden });
+    setSelectedCategoryId(null);
   }
 
-  function setFinanceMode(categoryId, mode) {
-    onSaveSettings({
+  async function setFinanceMode(categoryId, mode) {
+    await onSaveSettings({
       ...settings,
       finance_modes: { ...settings.finance_modes, [categoryId]: mode },
     });
+    setSelectedCategoryId(null);
   }
 
   async function setCategorySharing(categoryId, checked) {
     setSharingSavingCategory(categoryId);
     try {
       await sharing.setCategoryShared(categoryId, checked);
+      setSelectedCategoryId(null);
     } catch (error) {
       window.alert(error.message || '공유 설정 저장에 실패했습니다. Supabase 설정을 확인해 주세요.');
     } finally {

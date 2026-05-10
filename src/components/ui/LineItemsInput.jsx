@@ -1,27 +1,45 @@
 import { useEffect, useRef, useState } from 'react';
-import { formatMoney, toNumber } from '../../utils/recordUtils';
+import { calcLineItemAmount, formatMoney } from '../../utils/recordUtils';
 import StarRating from './StarRating';
 
 function makeClientId(prefix, index) {
   return `${prefix}-${Date.now()}-${index}-${Math.random().toString(36).slice(2)}`;
 }
 
+function makeEmptyItem(field, index = 0) {
+  return {
+    _clientId: makeClientId(field.id, index),
+    name: '',
+    unitPrice: '',
+    quantity: field.quantityMode ? '1' : '',
+    amount: '',
+    rating: 0,
+  };
+}
+
 function normalizeItems(field, value) {
   const items = Array.isArray(value) ? value : [];
-  const normalized = items.map((item, index) => ({
-    _clientId: item._clientId || makeClientId(field.id, index),
-    name: item.name || '',
-    amount: item.amount ?? item.price ?? '',
-    rating: item.rating || 0,
-    quantity: item.quantity || '',
-  }));
-  return normalized.length > 0 ? normalized : [{ _clientId: makeClientId(field.id, 0), name: '', amount: '', rating: 0, quantity: '' }];
+  const normalized = items.map((item, index) => {
+    const next = {
+      _clientId: item._clientId || makeClientId(field.id, index),
+      name: item.name || '',
+      unitPrice: item.unitPrice ?? item.price ?? item.amount ?? '',
+      quantity: item.quantity || (field.quantityMode ? '1' : ''),
+      amount: item.amount ?? item.price ?? '',
+      rating: item.rating || 0,
+    };
+    if (field.quantityMode) next.amount = String(calcLineItemAmount(next) || '');
+    return next;
+  });
+  return normalized.length > 0 ? normalized : [makeEmptyItem(field, 0)];
 }
 
 function LineItemRow({ field, item, onDraft, onRemove, onRating }) {
+  const rowAmount = calcLineItemAmount(item);
+
   return (
     <div className={field.itemRating ? 'line-item-row has-rating' : 'line-item-row'}>
-      <div className="line-item-main">
+      <div className={field.quantityMode ? 'line-item-main quantity-line-item' : 'line-item-main'}>
         <input
           type="text"
           inputMode="text"
@@ -33,17 +51,44 @@ function LineItemRow({ field, item, onDraft, onRemove, onRating }) {
           spellCheck="false"
           placeholder={field.nameLabel || '항목명'}
         />
-        <input
-          type="number"
-          inputMode="numeric"
-          enterKeyHint="done"
-          defaultValue={item.amount || ''}
-          onChange={(event) => onDraft(item._clientId, 'amount', event.currentTarget.value)}
-          autoComplete="off"
-          placeholder={field.amountLabel || '가격'}
-        />
+
+        {field.quantityMode ? (
+          <>
+            <input
+              type="number"
+              inputMode="numeric"
+              enterKeyHint="next"
+              defaultValue={item.unitPrice || ''}
+              onChange={(event) => onDraft(item._clientId, 'unitPrice', event.currentTarget.value)}
+              autoComplete="off"
+              placeholder={field.unitPriceLabel || '단가'}
+            />
+            <input
+              type="number"
+              inputMode="numeric"
+              enterKeyHint="done"
+              defaultValue={item.quantity || '1'}
+              onChange={(event) => onDraft(item._clientId, 'quantity', event.currentTarget.value)}
+              autoComplete="off"
+              placeholder={field.quantityLabel || '수량'}
+            />
+            <output className="line-item-amount">{rowAmount > 0 ? formatMoney(rowAmount) : '총액'}</output>
+          </>
+        ) : (
+          <input
+            type="number"
+            inputMode="numeric"
+            enterKeyHint="done"
+            defaultValue={item.amount || ''}
+            onChange={(event) => onDraft(item._clientId, 'amount', event.currentTarget.value)}
+            autoComplete="off"
+            placeholder={field.amountLabel || '금액'}
+          />
+        )}
+
         <button type="button" className="icon-button small-icon" onClick={() => onRemove(item._clientId)}>×</button>
       </div>
+
       {field.itemRating && (
         <div className="line-item-rating">
           <span>항목 평점</span>
@@ -58,38 +103,43 @@ export default function LineItemsInput({ field, value, onChange, onDraftChange }
   const [items, setItems] = useState(() => normalizeItems(field, value));
   const [totalTick, setTotalTick] = useState(0);
   const itemsRef = useRef(items);
-  const total = totalTick >= 0 ? itemsRef.current.reduce((sum, item) => sum + toNumber(item.amount), 0) : 0;
+  const total = totalTick >= 0 ? itemsRef.current.reduce((sum, item) => sum + calcLineItemAmount(item), 0) : 0;
 
   useEffect(() => {
     const nextItems = normalizeItems(field, value);
     itemsRef.current = nextItems;
     setItems(nextItems);
     setTotalTick((tick) => tick + 1);
-  }, [field.id]);
+  }, [field.id, field.quantityMode]);
 
   function publishDraft(nextItems) {
     itemsRef.current = nextItems;
     onDraftChange?.(nextItems);
+    setTotalTick((tick) => tick + 1);
   }
 
   function draft(clientId, key, nextValue) {
-    publishDraft(itemsRef.current.map((item) => (item._clientId === clientId ? { ...item, [key]: nextValue } : item)));
+    publishDraft(itemsRef.current.map((item) => {
+      if (item._clientId !== clientId) return item;
+      const next = { ...item, [key]: nextValue };
+      if (field.quantityMode) next.amount = String(calcLineItemAmount(next) || '');
+      return next;
+    }));
   }
 
   function commit(nextItems) {
     publishDraft(nextItems);
     setItems(nextItems);
     onChange(nextItems);
-    setTotalTick((tick) => tick + 1);
   }
 
   function add() {
-    commit([...itemsRef.current, { _clientId: makeClientId(field.id, itemsRef.current.length), name: '', amount: '', rating: 0, quantity: '' }]);
+    commit([...itemsRef.current, makeEmptyItem(field, itemsRef.current.length)]);
   }
 
   function remove(clientId) {
     const nextItems = itemsRef.current.filter((item) => item._clientId !== clientId);
-    commit(nextItems.length > 0 ? nextItems : [{ _clientId: makeClientId(field.id, 0), name: '', amount: '', rating: 0, quantity: '' }]);
+    commit(nextItems.length > 0 ? nextItems : [makeEmptyItem(field, 0)]);
   }
 
   function rate(clientId, rating) {

@@ -29,6 +29,12 @@ export default function RecordCard({ record, onOpen, onEdit, onDelete }) {
           {toNumber(record.amount) > 0 && <span>{formatMoney(record.amount)}</span>}
           {toNumber(record.income_amount) > 0 && <span className="income-text">수입 {formatMoney(record.income_amount)}</span>}
           {toNumber(record.rating) > 0 && <span>평점 {record.rating}</span>}
+          {record.category_id === 'subscription' && (
+            <span className={data.active ? 'status-badge is-active' : 'status-badge is-paused'}>
+              {data.active ? '활성' : '비활성'}
+            </span>
+          )}
+          {data.diningType && <span>{data.diningType}</span>}
           {data.withWhom && <span>{data.withWhom}</span>}
           {data.payRelation && <span>{data.payRelation}</span>}
           {data.deliveryPlatform && <span>{data.deliveryPlatform}</span>}

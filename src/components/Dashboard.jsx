@@ -1,9 +1,68 @@
 import { useMemo, useState } from 'react';
 import { CATEGORY_ICONS, CATEGORY_MAP } from '../data/categoryDefinitions';
 import { APP_VERSION } from '../lib/appVersion';
-import { formatMoney, summarizeMonth } from '../utils/recordUtils';
+import { formatMoney, summarizeCategoryTotals, summarizePeriod } from '../utils/recordUtils';
 import RecordCard from './RecordCard';
 import SearchModal from './SearchModal';
+
+const PERIODS = [
+  { key: 'week', label: '주간' },
+  { key: 'month', label: '월간' },
+  { key: 'quarter', label: '분기별' },
+  { key: 'year', label: '연간' },
+];
+
+function FinanceSummaryModal({ period, summary, categoryTotals, onCycle, onClose }) {
+  const [showBreakdown, setShowBreakdown] = useState(false);
+
+  return (
+    <div className="modal-backdrop">
+      <section className="finance-summary-modal">
+        <header className="modal-header">
+          <div>
+            <p className="eyebrow">Dashboard</p>
+            <h2>{period.label} 지출/수입</h2>
+          </div>
+          <button type="button" className="icon-button" onClick={onClose} aria-label="닫기">×</button>
+        </header>
+
+        <button type="button" className="finance-modal-total" onClick={onCycle}>
+          <span>{summary.range.start.replaceAll('-', '.')} ~ {summary.range.end.replaceAll('-', '.')}</span>
+          <strong>터치하면 다음 기간으로 전환</strong>
+        </button>
+
+        <div className="finance-modal-grid">
+          <button type="button" onClick={() => setShowBreakdown((value) => !value)}>
+            <span>지출</span>
+            <strong className="expense-text">{formatMoney(summary.expense)}</strong>
+          </button>
+          <button type="button" onClick={() => setShowBreakdown((value) => !value)}>
+            <span>수입</span>
+            <strong className="income-text">{formatMoney(summary.income)}</strong>
+          </button>
+        </div>
+
+        {showBreakdown && (
+          <div className="finance-breakdown">
+            <h3>카테고리별 지출</h3>
+            {categoryTotals.filter((item) => item.expense > 0).map((item) => {
+              const category = CATEGORY_MAP[item.categoryId];
+              return (
+                <div key={item.categoryId}>
+                  <span>{CATEGORY_ICONS[item.categoryId]} {category?.label || item.categoryId}</span>
+                  <strong>{formatMoney(item.expense)}</strong>
+                </div>
+              );
+            })}
+            {categoryTotals.filter((item) => item.expense > 0).length === 0 && (
+              <p className="empty-text">이 기간의 지출 기록이 없습니다.</p>
+            )}
+          </div>
+        )}
+      </section>
+    </div>
+  );
+}
 
 export default function Dashboard({
   profile,
@@ -18,7 +77,11 @@ export default function Dashboard({
   onDelete,
 }) {
   const [showSearch, setShowSearch] = useState(false);
-  const month = summarizeMonth(records, settings.finance_modes);
+  const [periodIndex, setPeriodIndex] = useState(1);
+  const [showFinanceSummary, setShowFinanceSummary] = useState(false);
+  const activePeriod = PERIODS[periodIndex];
+  const summary = summarizePeriod(records, settings.finance_modes, activePeriod.key);
+  const categoryTotals = summarizeCategoryTotals(records, settings.finance_modes, activePeriod.key);
 
   const visibleCategories = useMemo(() => {
     const orderIndex = Object.fromEntries(settings.category_order.map((id, index) => [id, index]));
@@ -36,6 +99,15 @@ export default function Dashboard({
   }, [records, settings]);
 
   const hasSearch = Boolean(filters.query || filters.dateFrom || filters.dateTo || filters.minAmount || filters.maxAmount || filters.minRating);
+
+  function cyclePeriod() {
+    setPeriodIndex((index) => (index + 1) % PERIODS.length);
+  }
+
+  function openFinanceSummary() {
+    cyclePeriod();
+    setShowFinanceSummary(true);
+  }
 
   return (
     <main className="screen">
@@ -57,13 +129,14 @@ export default function Dashboard({
 
       <section className="summary-strip">
         <div>
-          <span>이번달 기록</span>
-          <strong>{month.count}건</strong>
+          <span>{activePeriod.label} 기록</span>
+          <strong>{summary.count}건</strong>
         </div>
-        <div className="summary-money-cell">
-          <span className="expense-text">지출 {formatMoney(month.expense)}</span>
-          <span className="income-text">수입 {formatMoney(month.income)}</span>
-        </div>
+        <button type="button" className="summary-money-cell summary-cycle-button" onClick={openFinanceSummary}>
+          <small>{activePeriod.label}</small>
+          <span className="expense-text">지출 {formatMoney(summary.expense)}</span>
+          <span className="income-text">수입 {formatMoney(summary.income)}</span>
+        </button>
         <div>
           <button
             type="button"
@@ -84,8 +157,10 @@ export default function Dashboard({
           {visibleCategories.map(({ category, count }) => (
             <button className="category-tile" key={category.id} onClick={() => onOpenCategory(category.id)}>
               <span className="tile-icon" style={{ background: `${category.color}18`, color: category.color }}>{CATEGORY_ICONS[category.id]}</span>
-              <strong>{category.label}</strong>
-              <small>{count}개 기록</small>
+              <span className="category-tile-copy">
+                <strong>{category.label}</strong>
+                <small>{count}개 기록</small>
+              </span>
             </button>
           ))}
         </div>
@@ -103,6 +178,16 @@ export default function Dashboard({
           {records.length === 0 && <p className="empty-text">아직 기록이 없습니다. 첫 기록을 추가해보세요.</p>}
         </div>
       </section>
+
+      {showFinanceSummary && (
+        <FinanceSummaryModal
+          period={activePeriod}
+          summary={summary}
+          categoryTotals={categoryTotals}
+          onCycle={cyclePeriod}
+          onClose={() => setShowFinanceSummary(false)}
+        />
+      )}
 
       {showSearch && (
         <SearchModal

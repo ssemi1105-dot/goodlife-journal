@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import AuthScreen from './components/AuthScreen';
 import CategoryView from './components/CategoryView';
 import Dashboard from './components/Dashboard';
@@ -70,6 +70,10 @@ export default function App() {
     setEditingRecord(record);
     setModalCategory(record.category_id);
   }
+
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+  }, [view, activeCategory]);
 
   async function confirmDelete(record) {
     if (!window.confirm('이 기록을 삭제할까요?')) return;

@@ -222,6 +222,8 @@ export default function FieldInput({ field, value, onChange, onDraftChange }) {
       value={value || ''}
       onChange={(event) => onChange(event.target.value)}
       placeholder={placeholder}
+      readOnly={Boolean(field.readOnly)}
+      aria-readonly={Boolean(field.readOnly)}
     />
   );
 }

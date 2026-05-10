@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '../lib/supabaseClient';
-import { deriveRecordColumns } from '../utils/recordUtils';
+import { calcLineItemAmount, deriveRecordColumns, toNumber } from '../utils/recordUtils';
 
 function cleanDataForSave(formData) {
   const data = { ...formData };
@@ -12,11 +12,14 @@ function cleanDataForSave(formData) {
         .map((item) => {
           if (!item || typeof item !== 'object') return item;
           const { _clientId, file, previewUrl, signedUrl, url, tooLarge, ...rest } = item;
-          if ('amount' in rest || 'price' in rest) {
+          if ('amount' in rest || 'price' in rest || 'unitPrice' in rest || 'quantity' in rest) {
+            const amount = calcLineItemAmount(rest);
             return {
               ...rest,
-              amount: rest.amount ?? '',
-              price: rest.amount === '' || rest.amount === undefined ? rest.price ?? null : Number(String(rest.amount).replaceAll(',', '')),
+              quantity: rest.quantity === '' || rest.quantity === undefined ? null : toNumber(rest.quantity),
+              unitPrice: rest.unitPrice === '' || rest.unitPrice === undefined ? null : toNumber(rest.unitPrice),
+              amount,
+              price: amount,
             };
           }
           return rest;
@@ -24,7 +27,7 @@ function cleanDataForSave(formData) {
         .filter((item) => {
           if (!item || typeof item !== 'object') return Boolean(item);
           if (key === 'photos') return Boolean(item.path);
-          return Boolean(item.name || item.amount || item.price || item.rating);
+          return Boolean(item.name || item.amount || item.price || item.unitPrice || item.quantity || item.rating);
         });
     }
   }

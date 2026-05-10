@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { CATEGORY_ICONS, CATEGORY_MAP } from '../data/categoryDefinitions';
-import { calcInvestment, formatMoney } from '../utils/recordUtils';
+import { calcInvestment, formatMoney, getRecordFinanceValue } from '../utils/recordUtils';
 import RecordCard from './RecordCard';
 import SearchModal from './SearchModal';
 
@@ -49,6 +49,33 @@ function InvestmentPortfolio({ records }) {
   );
 }
 
+function CategorySummary({ records }) {
+  const now = new Date();
+  const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  const totals = records.reduce(
+    (summary, record) => {
+      const value = getRecordFinanceValue(record, { [record.category_id]: 'expense' });
+      summary.total += value.expense;
+      if (record.occurred_on?.startsWith(currentMonth)) summary.month += value.expense;
+      return summary;
+    },
+    { total: 0, month: 0 },
+  );
+
+  return (
+    <section className="category-summary-strip">
+      <div>
+        <span>총 지출</span>
+        <strong>{formatMoney(totals.total)}</strong>
+      </div>
+      <div>
+        <span>이번 달 지출</span>
+        <strong>{formatMoney(totals.month)}</strong>
+      </div>
+    </section>
+  );
+}
+
 export default function CategoryView({ categoryId, records, onBack, onAdd, onOpenRecord, onEdit, onDelete }) {
   const category = CATEGORY_MAP[categoryId];
   const [showSearch, setShowSearch] = useState(false);
@@ -71,6 +98,7 @@ export default function CategoryView({ categoryId, records, onBack, onAdd, onOpe
       </header>
 
       {isInvestment && <InvestmentPortfolio records={categoryRecords} />}
+      {!isInvestment && <CategorySummary records={categoryRecords} />}
 
       <section className="record-list">
         {categoryRecords.map((record) => (

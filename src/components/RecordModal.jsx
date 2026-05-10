@@ -36,8 +36,11 @@ function buildInitialForm(category, record) {
   if (category.id === 'investment') {
     initial.symbol = data.symbol || data.ticker || '';
     initial.assetName = data.assetName || '';
-    initial.buyAmount = data.buyAmount || (toNumber(data.buyPrice) * toNumber(data.quantity) || '');
-    initial.currentAmount = data.currentAmount || (toNumber(data.currentPrice) * toNumber(data.quantity) || '');
+    initial.avgBuyPrice = data.avgBuyPrice || data.buyPrice || '';
+    initial.quantity = data.quantity || '';
+    initial.currentPrice = data.currentPrice || '';
+    initial.buyAmount = data.buyAmount || (toNumber(initial.avgBuyPrice) * toNumber(initial.quantity) || '');
+    initial.currentAmount = data.currentAmount || (toNumber(initial.currentPrice) * toNumber(initial.quantity) || '');
   }
   if (category.id === 'shopping') {
     initial.productItems = data.productItems?.length ? data.productItems : data.product ? [{ name: data.product, amount: data.amount || '' }] : data.items || [];
@@ -79,7 +82,11 @@ export default function RecordModal({ categoryId, record, onClose, onSave }) {
     if (categoryId === 'hospital' && ['medicalCost', 'insuranceRefund'].includes(fieldId)) {
       next.netMedicalCost = String(Math.max(0, toNumber(next.medicalCost) - toNumber(next.insuranceRefund)));
     }
-    if (categoryId === 'investment' && ['buyAmount', 'currentAmount'].includes(fieldId)) {
+    if (categoryId === 'investment' && ['avgBuyPrice', 'quantity', 'currentPrice', 'buyAmount', 'currentAmount'].includes(fieldId)) {
+      const buyAmount = toNumber(next.avgBuyPrice) * toNumber(next.quantity);
+      const currentAmount = toNumber(next.currentPrice) * toNumber(next.quantity);
+      next.buyAmount = buyAmount > 0 ? String(buyAmount) : next.buyAmount || '';
+      next.currentAmount = currentAmount > 0 ? String(currentAmount) : next.currentAmount || '';
       next.profitLoss = String(toNumber(next.currentAmount) - toNumber(next.buyAmount));
       next.profitLossRate = toNumber(next.buyAmount) > 0 ? String(((toNumber(next.currentAmount) - toNumber(next.buyAmount)) / toNumber(next.buyAmount)) * 100) : '';
     }
