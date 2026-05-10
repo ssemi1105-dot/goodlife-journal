@@ -3,6 +3,7 @@ import { CATEGORY_ICONS, CATEGORY_MAP } from '../data/categoryDefinitions';
 import { calcInvestment, formatMoney, getRecordFinanceValue } from '../utils/recordUtils';
 import RecordCard from './RecordCard';
 import SearchModal from './SearchModal';
+import InvestmentMoodImage from './ui/InvestmentMoodImage';
 
 function InvestmentPortfolio({ records }) {
   const summary = records.reduce(
@@ -29,6 +30,7 @@ function InvestmentPortfolio({ records }) {
         </button>
       </div>
       <div className="portfolio-total">
+        <InvestmentMoodImage rate={rate} />
         <span>총 평가금액</span>
         <strong>{formatMoney(summary.currentTotal)}</strong>
         <small className={profit >= 0 ? 'profit-plus' : 'profit-minus'}>

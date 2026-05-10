@@ -1,5 +1,6 @@
 import { CATEGORY_ICONS, CATEGORY_MAP } from '../data/categoryDefinitions';
 import { calcInvestment, formatMoney, formatPeriod, getRecordTitle, toNumber } from '../utils/recordUtils';
+import InvestmentMoodImage from './ui/InvestmentMoodImage';
 import RecordImagePreview from './ui/RecordImagePreview';
 
 export default function RecordCard({ record, onOpen, onEdit, onDelete }) {
@@ -45,9 +46,12 @@ export default function RecordCard({ record, onOpen, onEdit, onDelete }) {
           {record.category_id === 'hospital' && <span>실부담 {formatMoney(data.netMedicalCost || record.amount)}</span>}
         </div>
         {record.category_id === 'investment' && investment.buyTotal > 0 && (
-          <p className={investment.profit >= 0 ? 'profit-plus' : 'profit-minus'}>
-            수익률 {investment.rate.toFixed(2)}% · {formatMoney(investment.profit)}
-          </p>
+          <div className="investment-card-mood">
+            <InvestmentMoodImage rate={investment.rate} compact />
+            <p className={investment.profit >= 0 ? 'profit-plus' : 'profit-minus'}>
+              수익률 {investment.rate.toFixed(2)}% · {formatMoney(investment.profit)}
+            </p>
+          </div>
         )}
         {data.memo && <p className="record-memo">{data.memo}</p>}
       </div>

@@ -2803,6 +2803,153 @@ input[readonly] {
   color: var(--text-muted);
 }
 
+.investment-mood-image {
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+  margin: 0;
+}
+
+.investment-mood-art {
+  position: relative;
+  width: 116px;
+  height: 96px;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(225, 230, 222, 0.9);
+  border-radius: 22px;
+  background:
+    radial-gradient(circle at 30% 20%, rgba(255, 255, 255, 0.96), transparent 38%),
+    linear-gradient(145deg, #fff7ed, #fef3c7);
+  box-shadow: 0 10px 24px rgba(22, 34, 28, 0.1);
+  overflow: hidden;
+}
+
+.investment-mood-art::before {
+  content: '';
+  position: absolute;
+  width: 72px;
+  height: 62px;
+  border-radius: 46% 46% 42% 42%;
+  background: #c98742;
+  box-shadow: inset -8px -8px 0 rgba(107, 66, 28, 0.11);
+}
+
+.investment-mood-art::after {
+  content: '';
+  position: absolute;
+  top: 26px;
+  width: 54px;
+  height: 26px;
+  border-radius: 16px;
+  background: rgba(120, 74, 31, 0.34);
+}
+
+.mood-face,
+.mood-effect {
+  position: relative;
+  z-index: 1;
+}
+
+.mood-face {
+  font-size: 32px;
+}
+
+.mood-effect {
+  position: absolute;
+  top: 8px;
+  right: 12px;
+  font-size: 24px;
+}
+
+.investment-mood-image figcaption {
+  display: grid;
+  justify-items: center;
+  gap: 1px;
+}
+
+.investment-mood-image figcaption strong {
+  font-size: 14px;
+}
+
+.investment-mood-image figcaption span {
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.investment-mood-image.is-compact {
+  display: inline-grid;
+}
+
+.investment-mood-image.is-compact .investment-mood-art {
+  width: 42px;
+  height: 38px;
+  border-radius: 13px;
+  box-shadow: none;
+}
+
+.investment-mood-image.is-compact .investment-mood-art::before {
+  width: 28px;
+  height: 25px;
+}
+
+.investment-mood-image.is-compact .investment-mood-art::after {
+  display: none;
+}
+
+.investment-mood-image.is-compact .mood-face {
+  font-size: 17px;
+}
+
+.investment-mood-image.is-compact .mood-effect {
+  top: 2px;
+  right: 3px;
+  font-size: 13px;
+}
+
+.investment-card-mood {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.investment-card-mood p {
+  margin: 0;
+}
+
+.portfolio-total .investment-mood-image {
+  margin-bottom: 4px;
+}
+
+.mood-catastrophe .investment-mood-art {
+  background: linear-gradient(145deg, #fee2e2, #fecaca);
+}
+
+.mood-despair .investment-mood-art {
+  background: linear-gradient(145deg, #e5e7eb, #bfdbfe);
+}
+
+.mood-sad .investment-mood-art {
+  background: linear-gradient(145deg, #eff6ff, #dbeafe);
+}
+
+.mood-blue .investment-mood-art {
+  background: linear-gradient(145deg, #f3f4f6, #e5e7eb);
+}
+
+.mood-calm .investment-mood-art {
+  background: linear-gradient(145deg, #ecfdf5, #dcfce7);
+}
+
+.mood-happy .investment-mood-art {
+  background: linear-gradient(145deg, #fef9c3, #dcfce7);
+}
+
+.mood-party .investment-mood-art {
+  background: linear-gradient(145deg, #fef3c7, #fbcfe8);
+}
+
 @media (max-width: 560px) {
   .record-modal,
   .picker-panel,
