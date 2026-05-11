@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { CATEGORY_ICONS, CATEGORY_MAP } from '../data/categoryDefinitions';
 import { APP_VERSION } from '../lib/appVersion';
-import { formatMoney, summarizeCategoryTotals, summarizePeriod } from '../utils/recordUtils';
+import { formatMoney, summarizePeriod } from '../utils/recordUtils';
 import RecordCard from './RecordCard';
 import SearchModal from './SearchModal';
 
@@ -12,56 +12,33 @@ const PERIODS = [
   { key: 'year', label: '연간' },
 ];
 
-function FinanceSummaryModal({ period, summary, categoryTotals, onClose }) {
-  const [showBreakdown, setShowBreakdown] = useState(true);
-
+function MiniSparkline({ points, trend }) {
   return (
-    <div className="modal-backdrop">
-      <section className="finance-summary-modal">
-        <header className="modal-header">
-          <div>
-            <p className="eyebrow">Dashboard</p>
-            <h2>{period.label} 지출/수입 상세</h2>
-          </div>
-          <button type="button" className="icon-button" onClick={onClose} aria-label="닫기">×</button>
-        </header>
-
-        <div className="finance-modal-total">
-          <span>{summary.range.start.replaceAll('-', '.')} ~ {summary.range.end.replaceAll('-', '.')}</span>
-          <strong>{summary.count}건 기록</strong>
-        </div>
-
-        <div className="finance-modal-grid">
-          <button type="button" onClick={() => setShowBreakdown(true)}>
-            <span>지출</span>
-            <strong className="expense-text">{formatMoney(summary.expense)}</strong>
-          </button>
-          <button type="button" onClick={() => setShowBreakdown(false)}>
-            <span>수입</span>
-            <strong className="income-text">{formatMoney(summary.income)}</strong>
-          </button>
-        </div>
-
-        {showBreakdown && (
-          <div className="finance-breakdown">
-            <h3>카테고리별 지출</h3>
-            {categoryTotals.filter((item) => item.expense > 0).map((item) => {
-              const category = CATEGORY_MAP[item.categoryId];
-              return (
-                <div key={item.categoryId}>
-                  <span>{CATEGORY_ICONS[item.categoryId]} {category?.label || item.categoryId}</span>
-                  <strong>{formatMoney(item.expense)}</strong>
-                </div>
-              );
-            })}
-            {categoryTotals.filter((item) => item.expense > 0).length === 0 && (
-              <p className="empty-text">이 기간의 지출 기록이 없습니다.</p>
-            )}
-          </div>
-        )}
-      </section>
-    </div>
+    <svg className={`summary-sparkline ${trend}`} viewBox="0 0 120 36" aria-hidden="true">
+      <defs>
+        <linearGradient id="premiumSparkline" x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0%" stopColor="#D4AF37" />
+          <stop offset="100%" stopColor="#2C4A3B" />
+        </linearGradient>
+      </defs>
+      <polyline points={points} fill="none" stroke="url(#premiumSparkline)" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
   );
+}
+
+function getSparklinePoints(summary, periodIndex) {
+  const income = Math.max(0, summary.income || 0);
+  const expense = Math.max(0, summary.expense || 0);
+  const net = income - expense;
+  const base = net >= 0 ? 24 : 14;
+  const shift = Math.min(10, Math.abs(net) / Math.max(income + expense, 1) * 10);
+  const variants = [
+    `4,24 24,20 44,22 64,16 84,18 116,${base - shift}`,
+    `4,22 24,18 44,20 64,14 84,16 116,${base - shift}`,
+    `4,25 24,21 44,17 64,20 84,14 116,${base - shift}`,
+    `4,26 24,23 44,19 64,15 84,17 116,${base - shift}`,
+  ];
+  return variants[periodIndex] || variants[0];
 }
 
 export default function Dashboard({
@@ -78,10 +55,10 @@ export default function Dashboard({
 }) {
   const [showSearch, setShowSearch] = useState(false);
   const [periodIndex, setPeriodIndex] = useState(1);
-  const [showFinanceSummary, setShowFinanceSummary] = useState(false);
   const activePeriod = PERIODS[periodIndex];
   const summary = summarizePeriod(records, settings.finance_modes, activePeriod.key);
-  const categoryTotals = summarizeCategoryTotals(records, settings.finance_modes, activePeriod.key);
+  const netFlow = summary.income - summary.expense;
+  const trend = netFlow >= 0 ? 'is-up' : 'is-down';
 
   const visibleCategories = useMemo(() => {
     const orderIndex = Object.fromEntries(settings.category_order.map((id, index) => [id, index]));
@@ -99,6 +76,7 @@ export default function Dashboard({
   }, [records, settings]);
 
   const hasSearch = Boolean(filters.query || filters.dateFrom || filters.dateTo || filters.minAmount || filters.maxAmount || filters.minRating);
+  const sparklinePoints = getSparklinePoints(summary, periodIndex);
 
   function cyclePeriod() {
     setPeriodIndex((index) => (index + 1) % PERIODS.length);
@@ -117,40 +95,43 @@ export default function Dashboard({
             <small className="heading-version">v{APP_VERSION}</small>
           </h1>
         </div>
-        <button type="button" className={hasSearch ? 'search-icon-button is-active' : 'search-icon-button'} onClick={() => setShowSearch(true)} aria-label="검색">
+        <button
+          type="button"
+          className={hasSearch ? 'search-icon-button is-active' : 'search-icon-button'}
+          onClick={() => setShowSearch(true)}
+          aria-label="검색"
+        >
           🔍
         </button>
       </section>
 
-      <section className="summary-strip">
-        <div>
+      <section className="summary-strip premium-summary-strip">
+        <div className="summary-count-card">
           <span>{activePeriod.label} 기록</span>
           <strong>{summary.count}건</strong>
         </div>
-        <button type="button" className="summary-money-cell summary-cycle-button" onClick={cyclePeriod}>
-          <small>{activePeriod.label}</small>
-          <span className="expense-text">지출 {formatMoney(summary.expense)}</span>
-          <span className="income-text">수입 {formatMoney(summary.income)}</span>
-          <span
-            role="button"
-            tabIndex={0}
-            className="summary-detail-button"
-            onClick={(event) => {
-              event.stopPropagation();
-              setShowFinanceSummary(true);
-            }}
-            onKeyDown={(event) => {
-              if (event.key === 'Enter' || event.key === ' ') {
-                event.preventDefault();
-                event.stopPropagation();
-                setShowFinanceSummary(true);
-              }
-            }}
-          >
-            상세
+
+        <button
+          type="button"
+          className="summary-money-cell summary-cycle-button premium-summary-card"
+          onClick={cyclePeriod}
+          aria-label="기간 변경"
+        >
+          <span className="summary-card-head">
+            <small className="period-chip">{activePeriod.label}</small>
+            <em>터치해서 기간 변경</em>
           </span>
+          <span className="summary-amount-lines">
+            <span className="expense-text">지출 {formatMoney(summary.expense)}</span>
+            <span className="income-text">수입 {formatMoney(summary.income)}</span>
+          </span>
+          <span className={`trend-pill ${trend}`}>
+            {netFlow >= 0 ? '↗' : '↘'} 순흐름 {formatMoney(Math.abs(netFlow))}
+          </span>
+          <MiniSparkline points={sparklinePoints} trend={trend} />
         </button>
-        <div>
+
+        <div className="summary-stats-card">
           <button
             type="button"
             className="stats-placeholder-button"
@@ -191,15 +172,6 @@ export default function Dashboard({
           {records.length === 0 && <p className="empty-text">아직 기록이 없습니다. 첫 기록을 추가해보세요.</p>}
         </div>
       </section>
-
-      {showFinanceSummary && (
-        <FinanceSummaryModal
-          period={activePeriod}
-          summary={summary}
-          categoryTotals={categoryTotals}
-          onClose={() => setShowFinanceSummary(false)}
-        />
-      )}
 
       {showSearch && (
         <SearchModal
