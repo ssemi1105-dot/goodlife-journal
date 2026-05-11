@@ -1,5 +1,5 @@
 import { CATEGORY_ICONS, CATEGORY_MAP } from '../data/categoryDefinitions';
-import { calcInvestment, formatMoney, formatPeriod, getRecordTitle, toNumber } from '../utils/recordUtils';
+import { calcInvestment, calcLineItemAmount, formatMoney, formatPeriod, getRecordTitle, toNumber } from '../utils/recordUtils';
 import InvestmentMoodImage from './ui/InvestmentMoodImage';
 import RecordImagePreview from './ui/RecordImagePreview';
 
@@ -9,6 +9,10 @@ export default function RecordCard({ record, onOpen, onEdit, onDelete }) {
   const title = getRecordTitle(record.category_id, data);
   const investment = record.category_id === 'investment' ? calcInvestment(data) : null;
   const period = formatPeriod(data) || record.occurred_on;
+  const shoppingItems = record.category_id === 'shopping'
+    ? (Array.isArray(data.productItems) ? data.productItems : data.items || []).filter((item) => item?.name)
+    : [];
+  const visibleShoppingItems = shoppingItems.slice(0, 10);
 
   return (
     <article className={record.category_id === 'investment' ? 'record-card is-investment-record' : 'record-card'} role="button" tabIndex={0} onClick={() => onOpen?.(record)} onKeyDown={(event) => {
@@ -21,6 +25,25 @@ export default function RecordCard({ record, onOpen, onEdit, onDelete }) {
           <time>{period}</time>
         </div>
         <h3>{title}</h3>
+        {visibleShoppingItems.length > 0 && (
+          <ul className="shopping-item-preview" aria-label="쇼핑 구매 내역 미리보기">
+            {visibleShoppingItems.map((item, index) => {
+              const amount = calcLineItemAmount(item);
+              return (
+                <li key={`${item.name}-${index}`}>
+                  <span>{item.name}</span>
+                  {amount > 0 && <strong>{formatMoney(amount)}</strong>}
+                </li>
+              );
+            })}
+            {shoppingItems.length > visibleShoppingItems.length && (
+              <li className="is-more">
+                <span>...</span>
+                <strong>외 {shoppingItems.length - visibleShoppingItems.length}개</strong>
+              </li>
+            )}
+          </ul>
+        )}
         {record.category_id === 'video' && (data.detailGenres?.length > 0 || data.title?.genres?.length > 0) && (
           <div className="genre-pills compact-pills">
             {(data.detailGenres || data.title?.genres || []).map((genre) => <em key={genre}>{genre}</em>)}

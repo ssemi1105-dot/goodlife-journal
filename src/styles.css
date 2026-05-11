@@ -410,6 +410,44 @@ h3 {
   line-height: 1.55;
 }
 
+.shopping-item-preview {
+  display: grid;
+  gap: 4px;
+  margin: 2px 0 8px;
+  padding: 8px 9px;
+  border: 1px solid rgba(219, 39, 119, 0.1);
+  border-radius: 8px;
+  background: rgba(253, 242, 248, 0.54);
+  list-style: none;
+}
+
+.shopping-item-preview li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  color: #475569;
+  font-size: 12px;
+}
+
+.shopping-item-preview span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.shopping-item-preview strong {
+  color: #111827;
+  font-size: 12px;
+  font-weight: 850;
+  white-space: nowrap;
+}
+
+.shopping-item-preview .is-more {
+  color: #9f1239;
+}
+
 .record-actions {
   display: flex;
   gap: 6px;
