@@ -17,34 +17,51 @@ function InvestmentPortfolio({ records }) {
   );
   const profit = summary.currentTotal - summary.buyTotal;
   const rate = summary.buyTotal > 0 ? (profit / summary.buyTotal) * 100 : 0;
+  const profitClass = profit >= 0 ? 'profit-plus' : 'profit-minus';
 
   return (
-    <section className={`portfolio-panel ${profit > 0 ? 'is-positive' : profit < 0 ? 'is-negative' : 'is-neutral'}`}>
-      <div className="portfolio-header">
+    <section className={`portfolio-panel investment-account-card ${profit > 0 ? 'is-positive' : profit < 0 ? 'is-negative' : 'is-neutral'}`}>
+      <InvestmentMoodImage rate={rate} background />
+      <div className="investment-account-overlay" aria-hidden="true" />
+
+      <div className="portfolio-header investment-account-header">
         <div>
           <p className="eyebrow">My Account</p>
-          <h2>투자 계좌 요약</h2>
+          <h2>투자계좌 요약</h2>
         </div>
-        <button className="secondary-button" type="button" title="한국투자 API 프록시 연결 후 활성화됩니다." onClick={() => window.alert('한국투자 API 연동은 서버 함수 구조만 준비되어 있습니다.')}>
+        <button
+          className="secondary-button investment-refresh-button"
+          type="button"
+          title="한국투자 API 연동 후 사용할 예정입니다."
+          onClick={() => window.alert('한국투자 API 연동은 서버 함수 구조만 준비되어 있습니다.')}
+        >
           주가 새로고침
         </button>
       </div>
-      <div className="portfolio-total">
-        <InvestmentMoodImage rate={rate} />
-        <span>총 평가금액</span>
-        <strong>{formatMoney(summary.currentTotal)}</strong>
-        <small className={profit >= 0 ? 'profit-plus' : 'profit-minus'}>
-          {profit >= 0 ? '+' : ''}{formatMoney(profit)} · {rate.toFixed(2)}%
-        </small>
-      </div>
-      <div className="portfolio-grid">
-        <div>
-          <span>총 매수금액</span>
-          <strong>{formatMoney(summary.buyTotal)}</strong>
+
+      <div className="investment-account-content">
+        <div className="investment-main-value readable-value-panel">
+          <span>총평가금액</span>
+          <strong>{formatMoney(summary.currentTotal)}</strong>
         </div>
-        <div>
-          <span>보유 종목</span>
-          <strong>{records.length}개</strong>
+
+        <div className="investment-account-metrics">
+          <div className="readable-value-panel">
+            <span>매수금액</span>
+            <strong>{formatMoney(summary.buyTotal)}</strong>
+          </div>
+          <div className="readable-value-panel">
+            <span>수익금</span>
+            <strong className={profitClass}>{profit >= 0 ? '+' : ''}{formatMoney(profit)}</strong>
+          </div>
+          <div className="readable-value-panel">
+            <span>수익률</span>
+            <strong className={profitClass}>{profit >= 0 ? '+' : ''}{rate.toFixed(2)}%</strong>
+          </div>
+          <div className="readable-value-panel">
+            <span>보유종목</span>
+            <strong>{records.length}개</strong>
+          </div>
         </div>
       </div>
     </section>

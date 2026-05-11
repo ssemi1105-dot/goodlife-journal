@@ -16,7 +16,7 @@ const MOODS = [
     min: -30,
     max: -20,
     emoji: '🌧️',
-    face: '🥺',
+    face: '😢',
     label: '절망',
     range: '-20% ~ -30%',
     className: 'mood-despair',
@@ -26,7 +26,7 @@ const MOODS = [
     min: -20,
     max: -10,
     emoji: '💧',
-    face: '😢',
+    face: '😥',
     label: '슬픔',
     range: '-10% ~ -20%',
     className: 'mood-sad',
@@ -45,7 +45,7 @@ const MOODS = [
     key: 'calm',
     min: 0,
     max: 10,
-    emoji: '🌿',
+    emoji: '😊',
     face: '😊',
     label: '평온',
     range: '0% ~ +9%',
@@ -66,7 +66,7 @@ const MOODS = [
     min: 30,
     max: Infinity,
     emoji: '🎉',
-    face: '🤩',
+    face: '😆',
     label: '광란',
     range: '+30% 초과',
     className: 'mood-party',
@@ -83,10 +83,25 @@ export function getInvestmentMood(rate = 0) {
   return MOODS.find((mood) => safeRate < mood.max && safeRate >= mood.min) || MOODS[4];
 }
 
-export default function InvestmentMoodImage({ rate = 0, compact = false }) {
+export default function InvestmentMoodImage({ rate = 0, compact = false, background = false }) {
   const mood = getInvestmentMood(rate);
   const [imageError, setImageError] = useState(false);
   const imageSrc = getMoodImageSrc(mood.label);
+
+  if (background) {
+    return (
+      <div className={`investment-mood-backdrop ${mood.className}`} aria-hidden="true">
+        {imageError ? (
+          <>
+            <span className="mood-effect">{mood.emoji}</span>
+            <span className="mood-face">{mood.face}</span>
+          </>
+        ) : (
+          <img src={imageSrc} alt="" onError={() => setImageError(true)} />
+        )}
+      </div>
+    );
+  }
 
   return (
     <figure className={`investment-mood-image ${mood.className} ${compact ? 'is-compact' : ''}`}>
