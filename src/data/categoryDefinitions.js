@@ -159,7 +159,7 @@ export const CATEGORIES = [
     fields: [
       commonDate,
       { id: 'store', label: '구매처', type: 'text', placeholder: '예: 쿠팡, 무신사, 오프라인 매장' },
-      { id: 'productItems', label: '상품별 가격', type: 'lineItems', quantityMode: true, nameLabel: '상품명', unitPriceLabel: '단가', quantityLabel: '수량', addLabel: '상품 추가' },
+      { id: 'productItems', label: '상품별 가격', type: 'lineItems', quantityMode: true, discountMode: true, nameLabel: '상품명', unitPriceLabel: '단가', quantityLabel: '수량', discountLabel: '할인', addLabel: '상품 추가' },
       { id: 'purpose', label: '용도', type: 'text' },
       rating,
       photo,

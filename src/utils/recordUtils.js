@@ -6,7 +6,7 @@ export function todayIso() {
 
 export function toNumber(value) {
   if (Array.isArray(value)) {
-    return value.reduce((sum, item) => sum + toNumber(item?.amount ?? item?.price ?? item), 0);
+    return value.reduce((sum, item) => sum + (item && typeof item === 'object' ? calcLineItemAmount(item) : toNumber(item)), 0);
   }
   if (value && typeof value === 'object') return 0;
   if (value === null || value === undefined || value === '') return 0;
@@ -17,7 +17,8 @@ export function toNumber(value) {
 export function calcLineItemAmount(item = {}) {
   const quantity = toNumber(item.quantity) || 1;
   const unitPrice = toNumber(item.unitPrice);
-  if (unitPrice > 0) return unitPrice * quantity;
+  const discountAmount = toNumber(item.discountAmount);
+  if (unitPrice > 0) return Math.max(0, (unitPrice * quantity) - discountAmount);
   return toNumber(item.amount ?? item.price);
 }
 

@@ -3,6 +3,7 @@ import { CATEGORY_MAP } from '../data/categoryDefinitions';
 import FieldInput from './FieldInput';
 import { calcDutchPay, calcInvestment, formatMoney, toNumber, todayIso } from '../utils/recordUtils';
 import { searchKisSymbol } from '../services/kisApiClient';
+import { analyzeReceipt, toGoodlifeFormat } from '../services/receiptOcrClient';
 
 function buildInitialForm(category, record) {
   const base = Object.fromEntries(category.fields.map((field) => {
@@ -62,12 +63,18 @@ export default function RecordModal({ categoryId, record, onClose, onSave }) {
   const [symbolSearching, setSymbolSearching] = useState(false);
   const [symbolResults, setSymbolResults] = useState([]);
   const [symbolMessage, setSymbolMessage] = useState('');
+  const [formRevision, setFormRevision] = useState(0);
   const lastSymbolLookupRef = useRef('');
+  const receiptInputRef = useRef(null);
+  const [receiptLoading, setReceiptLoading] = useState(false);
+  const [receiptMessage, setReceiptMessage] = useState('');
 
   useEffect(() => {
     const nextForm = buildInitialForm(category, record);
     formRef.current = nextForm;
     setForm(nextForm);
+    setFormRevision((revision) => revision + 1);
+    setReceiptMessage('');
   }, [category, record]);
 
   const dutchPay = categoryId === 'dining' ? calcDutchPay(form) : null;
@@ -176,6 +183,35 @@ export default function RecordModal({ categoryId, record, onClose, onSave }) {
     }
   }
 
+  async function handleReceiptFiles(event) {
+    const files = Array.from(event.target.files || []).filter((file) => file.type?.startsWith('image/')).slice(0, 5);
+    if (files.length === 0) return;
+
+    setReceiptLoading(true);
+    setReceiptMessage('');
+    try {
+      const result = await analyzeReceipt(files);
+      const formatted = toGoodlifeFormat(result);
+      const currentMemo = formRef.current.memo || '';
+      mergeFormPatch({
+        store: formatted.store || formRef.current.store || '',
+        date: formatted.date || formRef.current.date || todayIso(),
+        productItems: formatted.productItems.length > 0 ? formatted.productItems : formRef.current.productItems,
+        discountAmount: formatted.discountAmount || 0,
+        paymentMethod: formatted.paymentMethod || formRef.current.paymentMethod || '',
+        memo: currentMemo ? currentMemo : formatted.memo,
+      });
+      setFormRevision((revision) => revision + 1);
+      setReceiptMessage(`${formatted.store || '영수증'} · ${formatted.productItems.length}개 상품 인식`);
+    } catch (err) {
+      setReceiptMessage('영수증 인식에 실패했습니다.');
+      window.alert(err.message || '영수증 인식에 실패했습니다.');
+    } finally {
+      setReceiptLoading(false);
+      event.target.value = '';
+    }
+  }
+
   async function submit(event) {
     event.preventDefault();
     setError('');
@@ -208,8 +244,9 @@ export default function RecordModal({ categoryId, record, onClose, onSave }) {
         <div className="field-grid">
           {category.fields.map((field) => {
             if (categoryId === 'salary' && field.id === 'bonusAmount' && !form.bonus) return null;
+            const fieldKey = categoryId === 'shopping' && field.id === 'productItems' ? `${field.id}-${formRevision}` : field.id;
             return (
-              <div className="field" key={field.id}>
+              <div className="field" key={fieldKey}>
                 <span>{field.label}{field.required && <b> *</b>}</span>
                 <FieldInput
                   field={field}
@@ -229,6 +266,32 @@ export default function RecordModal({ categoryId, record, onClose, onSave }) {
             );
           })}
         </div>
+
+        {categoryId === 'shopping' && (
+          <aside className="receipt-ocr-box">
+            <input
+              ref={receiptInputRef}
+              type="file"
+              accept="image/*"
+              multiple
+              hidden
+              onChange={handleReceiptFiles}
+            />
+            <div>
+              <strong>영수증 자동 인식</strong>
+              <span>영수증 사진이나 쇼핑 캡처를 읽어 상품명, 단가, 수량, 할인을 채웁니다.</span>
+              {receiptMessage && <p>{receiptMessage}</p>}
+            </div>
+            <button
+              type="button"
+              className="secondary-button compact"
+              onClick={() => receiptInputRef.current?.click()}
+              disabled={receiptLoading}
+            >
+              {receiptLoading ? '인식 중...' : '영수증 선택'}
+            </button>
+          </aside>
+        )}
 
         {categoryId === 'investment' && (
           <aside className="investment-symbol-helper">

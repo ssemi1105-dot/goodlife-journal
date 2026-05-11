@@ -2768,6 +2768,10 @@ body {
   grid-template-columns: minmax(92px, 1.25fr) minmax(66px, 0.9fr) 54px minmax(72px, 0.95fr) 32px;
 }
 
+.quantity-line-item.has-discount {
+  grid-template-columns: minmax(88px, 1.2fr) minmax(60px, 0.78fr) 48px minmax(56px, 0.72fr) minmax(66px, 0.86fr) 32px;
+}
+
 .line-item-amount {
   min-height: 34px;
   display: grid;
@@ -2987,6 +2991,10 @@ input[readonly] {
     gap: 5px;
   }
 
+  .quantity-line-item.has-discount {
+    grid-template-columns: minmax(0, 1fr) 64px 42px 54px 60px 28px;
+  }
+
   .line-item-amount {
     padding: 0 4px;
     font-size: 10px;
@@ -3126,6 +3134,35 @@ input[readonly] {
   border-radius: 10px;
   background: white;
   text-align: left;
+}
+
+.receipt-ocr-box {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  margin-top: -2px;
+  padding: 10px;
+  border: 1px solid rgba(219, 39, 119, 0.16);
+  border-radius: 14px;
+  background: #fdf2f8;
+}
+
+.receipt-ocr-box > div {
+  display: grid;
+  gap: 2px;
+}
+
+.receipt-ocr-box strong {
+  color: #be185d;
+  font-size: 13px;
+}
+
+.receipt-ocr-box span,
+.receipt-ocr-box p {
+  margin: 0;
+  color: #64748b;
+  font-size: 12px;
 }
 
 .investment-account-content {

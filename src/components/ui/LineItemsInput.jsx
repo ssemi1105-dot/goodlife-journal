@@ -7,7 +7,7 @@ function makeClientId(prefix, index) {
 }
 
 function makeEmptyItem(field, index = 0) {
-  return {
+  const item = {
     _clientId: makeClientId(field.id, index),
     name: '',
     unitPrice: '',
@@ -15,6 +15,8 @@ function makeEmptyItem(field, index = 0) {
     amount: '',
     rating: 0,
   };
+  if (field.discountMode) item.discountAmount = '';
+  return item;
 }
 
 function normalizeItems(field, value) {
@@ -25,6 +27,7 @@ function normalizeItems(field, value) {
       name: item.name || '',
       unitPrice: item.unitPrice ?? item.price ?? item.amount ?? '',
       quantity: item.quantity || (field.quantityMode ? '1' : ''),
+      discountAmount: item.discountAmount ?? '',
       amount: item.amount ?? item.price ?? '',
       rating: item.rating || 0,
     };
@@ -39,7 +42,7 @@ function LineItemRow({ field, item, onDraft, onRemove, onRating }) {
 
   return (
     <div className={field.itemRating ? 'line-item-row has-rating' : 'line-item-row'}>
-      <div className={field.quantityMode ? 'line-item-main quantity-line-item' : 'line-item-main'}>
+      <div className={field.quantityMode ? `line-item-main quantity-line-item${field.discountMode ? ' has-discount' : ''}` : 'line-item-main'}>
         <input
           type="text"
           inputMode="text"
@@ -72,6 +75,17 @@ function LineItemRow({ field, item, onDraft, onRemove, onRating }) {
               autoComplete="off"
               placeholder={field.quantityLabel || '수량'}
             />
+            {field.discountMode && (
+              <input
+                type="number"
+                inputMode="numeric"
+                enterKeyHint="next"
+                defaultValue={item.discountAmount || ''}
+                onChange={(event) => onDraft(item._clientId, 'discountAmount', event.currentTarget.value)}
+                autoComplete="off"
+                placeholder={field.discountLabel || '할인'}
+              />
+            )}
             <output className="line-item-amount">{rowAmount > 0 ? formatMoney(rowAmount) : '총액'}</output>
           </>
         ) : (

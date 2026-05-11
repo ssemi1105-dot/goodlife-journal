@@ -18,6 +18,7 @@ function cleanDataForSave(formData) {
               ...rest,
               quantity: rest.quantity === '' || rest.quantity === undefined ? null : toNumber(rest.quantity),
               unitPrice: rest.unitPrice === '' || rest.unitPrice === undefined ? null : toNumber(rest.unitPrice),
+              discountAmount: rest.discountAmount === '' || rest.discountAmount === undefined ? 0 : toNumber(rest.discountAmount),
               amount,
               price: amount,
             };
