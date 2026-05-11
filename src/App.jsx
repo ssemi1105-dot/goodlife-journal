@@ -71,6 +71,12 @@ export default function App() {
     setModalCategory(record.category_id);
   }
 
+  async function updateRecordData(id, data) {
+    const existingRecord = records.find((record) => record.id === id);
+    if (!existingRecord) throw new Error('업데이트할 기록을 찾을 수 없습니다.');
+    await saveRecord(existingRecord.category_id, data, existingRecord);
+  }
+
   useEffect(() => {
     window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
   }, [view, activeCategory]);
@@ -118,6 +124,7 @@ export default function App() {
           onOpenRecord={setViewingRecord}
           onEdit={openEdit}
           onDelete={confirmDelete}
+          onUpdateRecord={updateRecordData}
         />
       )}
 
