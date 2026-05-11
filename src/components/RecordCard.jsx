@@ -11,7 +11,7 @@ export default function RecordCard({ record, onOpen, onEdit, onDelete }) {
   const period = formatPeriod(data) || record.occurred_on;
 
   return (
-    <article className="record-card" role="button" tabIndex={0} onClick={() => onOpen?.(record)} onKeyDown={(event) => {
+    <article className={record.category_id === 'investment' ? 'record-card is-investment-record' : 'record-card'} role="button" tabIndex={0} onClick={() => onOpen?.(record)} onKeyDown={(event) => {
       if (event.key === 'Enter') onOpen?.(record);
     }}>
       <RecordImagePreview record={record} />

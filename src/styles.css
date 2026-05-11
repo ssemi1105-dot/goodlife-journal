@@ -2999,24 +2999,25 @@ input[readonly] {
   isolation: isolate;
   overflow: hidden;
   display: grid;
-  gap: 10px;
-  min-height: 158px;
+  gap: 9px;
+  min-height: 150px;
   margin-bottom: 12px;
   padding: 12px;
   border-radius: 18px;
+  background: linear-gradient(90deg, #133927 0%, #245a40 42%, #f6fbf5 66%, #ffffff 100%) !important;
   box-shadow: 0 14px 34px rgba(15, 23, 42, 0.18);
 }
 
 .investment-account-card .investment-mood-backdrop {
   position: absolute;
-  z-index: -1;
-  right: -16px;
-  bottom: -18px;
-  width: min(46%, 180px);
-  height: 138px;
+  z-index: 0;
+  right: -4px;
+  bottom: -12px;
+  width: min(58%, 238px);
+  height: 174px;
   display: grid;
   place-items: center;
-  opacity: 0.42;
+  opacity: 0.96;
   pointer-events: none;
 }
 
@@ -3034,10 +3035,11 @@ input[readonly] {
 .investment-account-overlay {
   position: absolute;
   inset: 0;
-  z-index: -2;
+  z-index: 1;
   background:
-    linear-gradient(90deg, rgba(4, 12, 8, 0.58), rgba(4, 12, 8, 0.24) 54%, rgba(4, 12, 8, 0.08)),
-    radial-gradient(circle at 82% 82%, rgba(255, 255, 255, 0.24), transparent 30%);
+    linear-gradient(90deg, rgba(4, 12, 8, 0.3), rgba(4, 12, 8, 0.14) 42%, rgba(255, 255, 255, 0.06) 58%, rgba(255, 255, 255, 0) 76%),
+    radial-gradient(circle at 78% 70%, rgba(255, 255, 255, 0.34), transparent 30%);
+  pointer-events: none;
 }
 
 .investment-account-header {
@@ -3067,17 +3069,17 @@ input[readonly] {
 
 .investment-account-content {
   position: relative;
-  z-index: 1;
+  z-index: 2;
   display: grid;
   gap: 8px;
-  max-width: 76%;
+  max-width: 66%;
 }
 
 .readable-value-panel {
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.48);
   border-radius: 12px;
-  background: rgba(7, 16, 12, 0.46);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.72);
+  box-shadow: 0 8px 18px rgba(4, 12, 8, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.28);
   backdrop-filter: blur(9px);
 }
 
@@ -3090,7 +3092,7 @@ input[readonly] {
 .investment-main-value span,
 .investment-account-metrics span {
   display: block;
-  color: rgba(255, 255, 255, 0.74);
+  color: rgba(20, 36, 28, 0.72);
   font-size: 10px;
   font-weight: 800;
   line-height: 1.1;
@@ -3099,7 +3101,7 @@ input[readonly] {
 .investment-main-value strong {
   display: block;
   margin-top: 3px;
-  color: #fff;
+  color: #14241c;
   font-size: clamp(22px, 5.8vw, 32px);
   line-height: 1;
 }
@@ -3119,7 +3121,7 @@ input[readonly] {
   display: block;
   margin-top: 3px;
   overflow: hidden;
-  color: #fff;
+  color: #14241c;
   font-size: 12px;
   line-height: 1.15;
   text-overflow: ellipsis;
@@ -3127,31 +3129,31 @@ input[readonly] {
 }
 
 .investment-account-metrics .profit-plus {
-  color: #bfdbfe;
+  color: #1d4ed8;
 }
 
 .investment-account-metrics .profit-minus {
-  color: #fecaca;
+  color: #dc2626;
 }
 
 @media (max-width: 560px) {
   .investment-account-card {
-    min-height: 144px;
+    min-height: 138px;
     padding: 10px;
-    gap: 8px;
+    gap: 7px;
     border-radius: 16px;
   }
 
   .investment-account-card .investment-mood-backdrop {
-    right: -22px;
-    bottom: -20px;
-    width: 50%;
-    height: 128px;
-    opacity: 0.38;
+    right: -10px;
+    bottom: -12px;
+    width: 61%;
+    height: 156px;
+    opacity: 0.98;
   }
 
   .investment-account-content {
-    max-width: 82%;
+    max-width: 70%;
   }
 
   .investment-account-metrics {
@@ -3160,6 +3162,98 @@ input[readonly] {
 
   .investment-account-metrics .readable-value-panel {
     padding: 6px 7px;
+  }
+}
+
+/* Investment record cards: reduce vertical height in stock category */
+.record-card.is-investment-record {
+  align-items: center;
+  gap: 8px;
+  padding: 8px 9px;
+}
+
+.record-card.is-investment-record .record-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas:
+    "top mood"
+    "title mood"
+    "meta mood";
+  gap: 2px 8px;
+  min-width: 0;
+}
+
+.record-card.is-investment-record .record-topline {
+  grid-area: top;
+  min-width: 0;
+}
+
+.record-card.is-investment-record h3 {
+  grid-area: title;
+  margin: 0;
+  overflow: hidden;
+  font-size: 14px;
+  line-height: 1.15;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.record-card.is-investment-record .record-meta {
+  grid-area: meta;
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 4px;
+  overflow: hidden;
+}
+
+.record-card.is-investment-record .record-meta span {
+  max-width: 120px;
+  overflow: hidden;
+  padding: 2px 6px;
+  font-size: 10.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.record-card.is-investment-record .investment-card-mood {
+  grid-area: mood;
+  align-self: center;
+  display: grid;
+  justify-items: end;
+  gap: 2px;
+  min-width: 82px;
+  margin: 0;
+}
+
+.record-card.is-investment-record .investment-card-mood p {
+  max-width: 92px;
+  overflow: hidden;
+  font-size: 10.5px;
+  font-weight: 900;
+  line-height: 1.2;
+  text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.record-card.is-investment-record .investment-mood-image.is-compact .investment-mood-art {
+  width: 36px;
+  height: 32px;
+  border-radius: 10px;
+}
+
+@media (max-width: 420px) {
+  .record-card.is-investment-record .record-body {
+    grid-template-columns: minmax(0, 1fr) 76px;
+    gap: 2px 6px;
+  }
+
+  .record-card.is-investment-record .investment-card-mood {
+    min-width: 76px;
+  }
+
+  .record-card.is-investment-record .investment-card-mood p {
+    max-width: 76px;
   }
 }
 
