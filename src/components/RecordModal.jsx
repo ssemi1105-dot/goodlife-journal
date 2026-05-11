@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { CATEGORY_MAP } from '../data/categoryDefinitions';
 import FieldInput from './FieldInput';
 import { calcDutchPay, calcInvestment, formatMoney, toNumber, todayIso } from '../utils/recordUtils';
+import { searchKisSymbol } from '../services/kisApiClient';
 
 function buildInitialForm(category, record) {
   const base = Object.fromEntries(category.fields.map((field) => {
@@ -58,6 +59,10 @@ export default function RecordModal({ categoryId, record, onClose, onSave }) {
   const formRef = useRef(form);
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
+  const [symbolSearching, setSymbolSearching] = useState(false);
+  const [symbolResults, setSymbolResults] = useState([]);
+  const [symbolMessage, setSymbolMessage] = useState('');
+  const lastSymbolLookupRef = useRef('');
 
   useEffect(() => {
     const nextForm = buildInitialForm(category, record);
@@ -68,6 +73,26 @@ export default function RecordModal({ categoryId, record, onClose, onSave }) {
   const dutchPay = categoryId === 'dining' ? calcDutchPay(form) : null;
   const investment = categoryId === 'investment' ? calcInvestment(form) : null;
   const hospitalNet = categoryId === 'hospital' ? Math.max(0, toNumber(form.medicalCost) - toNumber(form.insuranceRefund)) : 0;
+
+  useEffect(() => {
+    if (categoryId !== 'investment') return undefined;
+    const query = String(form.assetName || form.symbol || '').trim();
+    if (query.length < 2) {
+      setSymbolResults([]);
+      setSymbolMessage('');
+      return undefined;
+    }
+
+    const shouldSearchByName = Boolean(form.assetName && !form.symbol);
+    const shouldSearchBySymbol = Boolean(form.symbol && !form.assetName && String(form.symbol).trim().length >= 4);
+    if (!shouldSearchByName && !shouldSearchBySymbol) return undefined;
+
+    const timer = window.setTimeout(() => {
+      lookupInvestmentSymbol(query, { silent: true });
+    }, 650);
+
+    return () => window.clearTimeout(timer);
+  }, [categoryId, form.assetName, form.symbol]);
 
   function applyDerivedValues(next, fieldId) {
     if (categoryId === 'delivery' && (fieldId === 'menuItems' || fieldId === 'deliveryFee')) {
@@ -103,6 +128,52 @@ export default function RecordModal({ categoryId, record, onClose, onSave }) {
 
   function setFieldDraft(fieldId, value) {
     formRef.current = applyDerivedValues({ ...formRef.current, [fieldId]: value }, fieldId);
+  }
+
+  function mergeFormPatch(patch) {
+    setForm((current) => {
+      let next = { ...current, ...patch };
+      Object.keys(patch).forEach((fieldId) => {
+        next = applyDerivedValues(next, fieldId);
+      });
+      formRef.current = next;
+      return next;
+    });
+  }
+
+  function applySymbolResult(result) {
+    if (!result) return;
+    mergeFormPatch({
+      symbol: result.symbol || result.code || '',
+      assetName: result.name || result.assetName || '',
+    });
+    setSymbolResults([]);
+    setSymbolMessage(result.name && result.symbol ? `${result.name} (${result.symbol}) 적용됨` : '종목 정보가 적용되었습니다.');
+  }
+
+  async function lookupInvestmentSymbol(query, options = {}) {
+    const keyword = String(query || '').trim();
+    if (!keyword || symbolSearching) return;
+    if (options.silent && lastSymbolLookupRef.current === keyword) return;
+    lastSymbolLookupRef.current = keyword;
+
+    setSymbolSearching(true);
+    if (!options.silent) setSymbolMessage('');
+    try {
+      const results = await searchKisSymbol(keyword);
+      setSymbolResults(results);
+      if (results.length === 1) {
+        applySymbolResult(results[0]);
+      } else if (results.length > 1) {
+        setSymbolMessage('검색 결과를 선택해주세요.');
+      } else if (!options.silent) {
+        setSymbolMessage('검색 결과가 없습니다. 종목명 또는 종목코드를 확인해주세요.');
+      }
+    } catch (err) {
+      if (!options.silent) setSymbolMessage(err.message || '종목 검색에 실패했습니다.');
+    } finally {
+      setSymbolSearching(false);
+    }
   }
 
   async function submit(event) {
@@ -158,6 +229,38 @@ export default function RecordModal({ categoryId, record, onClose, onSave }) {
             );
           })}
         </div>
+
+        {categoryId === 'investment' && (
+          <aside className="investment-symbol-helper">
+            <div>
+              <strong>종목 자동검색</strong>
+              <span>종목명 또는 종목코드를 입력하면 자동으로 연결합니다.</span>
+            </div>
+            <button
+              type="button"
+              className="secondary-button compact"
+              onClick={() => lookupInvestmentSymbol(form.assetName || form.symbol)}
+              disabled={symbolSearching || !(form.assetName || form.symbol)}
+            >
+              {symbolSearching ? '검색 중...' : '종목 검색'}
+            </button>
+            {symbolMessage && <p>{symbolMessage}</p>}
+            {symbolResults.length > 1 && (
+              <div className="investment-symbol-results">
+                {symbolResults.slice(0, 5).map((item) => (
+                  <button
+                    type="button"
+                    key={`${item.symbol}-${item.name}`}
+                    onClick={() => applySymbolResult(item)}
+                  >
+                    <strong>{item.name || item.assetName}</strong>
+                    <span>{item.symbol || item.code}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </aside>
+        )}
 
         {categoryId === 'dining' && toNumber(form.menuItems) > 0 && (
           <aside className="calc-box">

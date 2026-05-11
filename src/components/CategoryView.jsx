@@ -68,9 +68,12 @@ function InvestmentPortfolio({ records, onPriceUpdate }) {
         }
       }
 
-      setLastUpdated(new Date().toLocaleTimeString('ko-KR'));
+      const updatedAt = new Date().toLocaleTimeString('ko-KR');
+      setLastUpdated(updatedAt);
       if (failedSymbols.length > 0) {
         window.alert(`${successCount}개 종목 업데이트 완료, ${failedSymbols.length}개 실패: ${failedSymbols.join(', ')}`);
+      } else {
+        window.alert(`${successCount}개 종목 현재가를 업데이트했습니다.`);
       }
     } finally {
       setLoading(false);

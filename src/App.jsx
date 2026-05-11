@@ -74,7 +74,15 @@ export default function App() {
   async function updateRecordData(id, data) {
     const existingRecord = records.find((record) => record.id === id);
     if (!existingRecord) throw new Error('업데이트할 기록을 찾을 수 없습니다.');
-    await saveRecord(existingRecord.category_id, data, existingRecord);
+    await saveRecord(
+      existingRecord.category_id,
+      {
+        ...existingRecord.data,
+        ...data,
+        date: data.date || existingRecord.data?.date || existingRecord.occurred_on,
+      },
+      existingRecord,
+    );
   }
 
   useEffect(() => {

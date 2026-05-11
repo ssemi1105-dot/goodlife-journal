@@ -3067,6 +3067,11 @@ input[readonly] {
   backdrop-filter: blur(8px);
 }
 
+.investment-refresh-button:not(:disabled) {
+  background: rgba(255, 255, 255, 0.86);
+  color: #123627;
+}
+
 .investment-refresh-group {
   display: flex;
   flex-direction: column;
@@ -3078,6 +3083,49 @@ input[readonly] {
   color: rgba(255, 255, 255, 0.72);
   font-size: 11px;
   font-weight: 700;
+}
+
+.investment-symbol-helper {
+  display: grid;
+  gap: 8px;
+  margin-top: -4px;
+  padding: 10px;
+  border: 1px solid rgba(15, 118, 110, 0.16);
+  border-radius: 14px;
+  background: #f0fdfa;
+}
+
+.investment-symbol-helper > div:first-child {
+  display: grid;
+  gap: 2px;
+}
+
+.investment-symbol-helper strong {
+  color: #0f766e;
+  font-size: 13px;
+}
+
+.investment-symbol-helper span,
+.investment-symbol-helper p {
+  margin: 0;
+  color: #64748b;
+  font-size: 12px;
+}
+
+.investment-symbol-results {
+  display: grid;
+  gap: 6px;
+}
+
+.investment-symbol-results button {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 9px;
+  border: 1px solid rgba(15, 118, 110, 0.16);
+  border-radius: 10px;
+  background: white;
+  text-align: left;
 }
 
 .investment-account-content {
