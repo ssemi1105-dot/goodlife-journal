@@ -1,3 +1,5 @@
+import { useState } from 'react';
+
 const MOODS = [
   {
     key: 'catastrophe',
@@ -71,6 +73,10 @@ const MOODS = [
   },
 ];
 
+function getMoodImageSrc(label) {
+  return `/investment-moods/${encodeURIComponent(label)}.png`;
+}
+
 export function getInvestmentMood(rate = 0) {
   const numericRate = Number(rate);
   const safeRate = Number.isFinite(numericRate) ? numericRate : 0;
@@ -79,12 +85,20 @@ export function getInvestmentMood(rate = 0) {
 
 export default function InvestmentMoodImage({ rate = 0, compact = false }) {
   const mood = getInvestmentMood(rate);
+  const [imageError, setImageError] = useState(false);
+  const imageSrc = getMoodImageSrc(mood.label);
 
   return (
     <figure className={`investment-mood-image ${mood.className} ${compact ? 'is-compact' : ''}`}>
-      <div className="investment-mood-art" aria-hidden="true">
-        <span className="mood-effect">{mood.emoji}</span>
-        <span className="mood-face">{mood.face}</span>
+      <div className={`investment-mood-art ${imageError ? '' : 'has-file-image'}`} aria-hidden="true">
+        {imageError ? (
+          <>
+            <span className="mood-effect">{mood.emoji}</span>
+            <span className="mood-face">{mood.face}</span>
+          </>
+        ) : (
+          <img src={imageSrc} alt="" onError={() => setImageError(true)} />
+        )}
       </div>
       {!compact && (
         <figcaption>

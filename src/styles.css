@@ -2845,6 +2845,26 @@ input[readonly] {
   background: rgba(120, 74, 31, 0.34);
 }
 
+.investment-mood-art.has-file-image {
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
+}
+
+.investment-mood-art.has-file-image::before,
+.investment-mood-art.has-file-image::after {
+  display: none;
+}
+
+.investment-mood-art img {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+}
+
 .mood-face,
 .mood-effect {
   position: relative;
