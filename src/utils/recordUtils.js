@@ -31,6 +31,11 @@ export function getRecordTitle(categoryId, data = {}) {
   if (!category) return data.title || '기록';
   if (categoryId === 'investment') return data.assetName || data.symbol || data.ticker || '투자';
   if (categoryId === 'hospital') return data.hospitalName || data.hospital || '병원진료';
+  if (categoryId === 'shopping') {
+    const items = data.productItems || data.items || [];
+    const first = Array.isArray(items) ? items.find((item) => item?.name) : null;
+    return data.store || data.storeName || data.product || first?.name || '쇼핑';
+  }
   const raw = data[category.titleField];
   if (typeof raw === 'object' && (raw?.title || raw?.tmdbTitle)) return raw.title || raw.tmdbTitle;
   if (Array.isArray(raw)) {
@@ -38,12 +43,6 @@ export function getRecordTitle(categoryId, data = {}) {
       .map((item) => (item && typeof item === 'object' ? item.name : item))
       .filter(Boolean);
     if (names.length > 0) return names.join(', ');
-  }
-  if (categoryId === 'shopping') {
-    const items = data.productItems || data.items || [];
-    const first = Array.isArray(items) ? items.find((item) => item?.name) : null;
-    if (first) return items.length > 1 ? `${first.name} 외 ${items.length - 1}개` : first.name;
-    return data.product || data.storeName || data.store || '쇼핑';
   }
   return raw || category.label;
 }
