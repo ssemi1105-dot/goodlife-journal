@@ -2779,6 +2779,64 @@ body {
   font-size: 16px;
 }
 
+.kpass-summary-strip {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.annual-leave-panel {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 10px;
+  padding: 14px;
+  border: 1px solid rgba(22, 163, 74, 0.16);
+  border-radius: 14px;
+  background: linear-gradient(135deg, #ecfdf5, #f7fee7);
+}
+
+.annual-leave-head {
+  display: grid;
+  gap: 4px;
+}
+
+.annual-leave-head span,
+.annual-leave-meta {
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.annual-leave-head strong {
+  color: #15803d;
+  font-size: 28px;
+  line-height: 1.05;
+}
+
+.annual-leave-meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.annual-leave-progress {
+  height: 9px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(22, 101, 52, 0.12);
+}
+
+.annual-leave-progress span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #16a34a, #65a30d);
+}
+
+@media (max-width: 560px) {
+  .kpass-summary-strip {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
 .category-grid .category-tile {
   min-height: 58px;
   display: grid;

@@ -219,6 +219,7 @@ export default function FieldInput({ field, value, onChange, onDraftChange }) {
       type={inputType}
       min={field.min}
       max={field.max}
+      step={field.step}
       value={value || ''}
       onChange={(event) => onChange(event.target.value)}
       placeholder={placeholder}

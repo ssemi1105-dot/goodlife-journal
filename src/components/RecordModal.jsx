@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { CATEGORY_MAP } from '../data/categoryDefinitions';
 import FieldInput from './FieldInput';
-import { calcDutchPay, calcInvestment, formatMoney, toNumber, todayIso } from '../utils/recordUtils';
+import { calcDutchPay, calcInvestment, calcKpass, formatMoney, toNumber, todayIso } from '../utils/recordUtils';
 import { searchKisSymbol } from '../services/kisApiClient';
 import { analyzeReceipt, toGoodlifeFormat } from '../services/receiptOcrClient';
 
@@ -46,6 +46,19 @@ function buildInitialForm(category, record) {
   }
   if (category.id === 'shopping') {
     initial.productItems = data.productItems?.length ? data.productItems : data.product ? [{ name: data.product, amount: data.amount || '' }] : data.items || [];
+  }
+  if (category.id === 'kpass') {
+    const currentMonth = todayIso().slice(0, 7);
+    const kpass = calcKpass(data);
+    initial.yearMonth = data.yearMonth || currentMonth;
+    initial.netCost = data.netCost ?? (kpass.chargeAmount > 0 || kpass.refundAmount > 0 ? String(kpass.netCost) : '');
+    initial.refundRate = data.refundRate ?? (kpass.chargeAmount > 0 ? String(kpass.refundRate) : '');
+  }
+  if (category.id === 'annual_leave') {
+    const currentYear = String(new Date().getFullYear());
+    initial.recordType = data.recordType || '';
+    initial.year = data.year || currentYear;
+    initial.date = data.date || record?.occurred_on || todayIso();
   }
   if (category.id === 'fishing') {
     initial.catchCount = data.catchCount || data.count || '';
@@ -122,7 +135,43 @@ export default function RecordModal({ categoryId, record, onClose, onSave }) {
       next.profitLoss = String(toNumber(next.currentAmount) - toNumber(next.buyAmount));
       next.profitLossRate = toNumber(next.buyAmount) > 0 ? String(((toNumber(next.currentAmount) - toNumber(next.buyAmount)) / toNumber(next.buyAmount)) * 100) : '';
     }
+    if (categoryId === 'kpass' && ['chargeAmount', 'refundAmount'].includes(fieldId)) {
+      const kpass = calcKpass(next);
+      next.netCost = String(kpass.netCost);
+      next.refundRate = String(kpass.refundRate);
+    }
     return next;
+  }
+
+  function isFieldVisible(field) {
+    if (categoryId !== 'annual_leave') return true;
+    if (field.id === 'recordType' || field.id === 'memo') return true;
+    if (!form.recordType) return false;
+    if (form.recordType === 'grant') return ['year', 'grantDays'].includes(field.id);
+    if (form.recordType === 'use') return ['date', 'days', 'reason'].includes(field.id);
+    return true;
+  }
+
+  function prepareFormForSave(currentForm) {
+    if (categoryId === 'kpass') {
+      const kpass = calcKpass(currentForm);
+      return {
+        ...currentForm,
+        netCost: String(kpass.netCost),
+        refundRate: String(kpass.refundRate),
+      };
+    }
+    if (categoryId === 'annual_leave') {
+      if (currentForm.recordType === 'grant') {
+        const { date, days, reason, ...grantData } = currentForm;
+        return grantData;
+      }
+      if (currentForm.recordType === 'use') {
+        const { year, grantDays, ...useData } = currentForm;
+        return useData;
+      }
+    }
+    return currentForm;
   }
 
   function setField(fieldId, value) {
@@ -215,7 +264,7 @@ export default function RecordModal({ categoryId, record, onClose, onSave }) {
   async function submit(event) {
     event.preventDefault();
     setError('');
-    const missing = category.fields.find((field) => field.required && !formRef.current[field.id]);
+    const missing = category.fields.find((field) => field.required && isFieldVisible(field) && !formRef.current[field.id]);
     if (missing) {
       setError(`${missing.label} 항목을 입력해주세요.`);
       return;
@@ -224,7 +273,7 @@ export default function RecordModal({ categoryId, record, onClose, onSave }) {
     setSaving(true);
     onClose();
     try {
-      await onSave(categoryId, formRef.current, record);
+      await onSave(categoryId, prepareFormForSave(formRef.current), record);
     } catch (err) {
       window.alert(err.message || '저장에 실패했습니다.');
     }
@@ -244,6 +293,7 @@ export default function RecordModal({ categoryId, record, onClose, onSave }) {
         <div className="field-grid">
           {category.fields.map((field) => {
             if (categoryId === 'salary' && field.id === 'bonusAmount' && !form.bonus) return null;
+            if (!isFieldVisible(field)) return null;
             const fieldKey = categoryId === 'shopping' && field.id === 'productItems' ? `${field.id}-${formRevision}` : field.id;
             return (
               <div className="field" key={fieldKey}>

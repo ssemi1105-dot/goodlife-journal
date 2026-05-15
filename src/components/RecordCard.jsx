@@ -1,5 +1,5 @@
 import { CATEGORY_ICONS, CATEGORY_MAP } from '../data/categoryDefinitions';
-import { calcInvestment, calcLineItemAmount, formatMoney, formatPeriod, getRecordTitle, toNumber } from '../utils/recordUtils';
+import { calcInvestment, calcKpass, calcLineItemAmount, formatMoney, formatPeriod, getRecordTitle, toNumber } from '../utils/recordUtils';
 import InvestmentMoodImage from './ui/InvestmentMoodImage';
 import RecordImagePreview from './ui/RecordImagePreview';
 
@@ -8,6 +8,7 @@ export default function RecordCard({ record, onOpen, onEdit, onDelete }) {
   const data = record.data || {};
   const title = getRecordTitle(record.category_id, data);
   const investment = record.category_id === 'investment' ? calcInvestment(data) : null;
+  const kpass = record.category_id === 'kpass' ? calcKpass(data) : null;
   const period = formatPeriod(data) || record.occurred_on;
   const shoppingItems = record.category_id === 'shopping'
     ? (Array.isArray(data.productItems) ? data.productItems : data.items || []).filter((item) => item?.name)
@@ -50,9 +51,19 @@ export default function RecordCard({ record, onOpen, onEdit, onDelete }) {
           </div>
         )}
         <div className="record-meta">
-          {toNumber(record.amount) > 0 && <span>{formatMoney(record.amount)}</span>}
+          {toNumber(record.amount) > 0 && record.category_id !== 'kpass' && <span>{formatMoney(record.amount)}</span>}
           {toNumber(record.income_amount) > 0 && <span className="income-text">수입 {formatMoney(record.income_amount)}</span>}
           {toNumber(record.rating) > 0 && <span>평점 {record.rating}</span>}
+          {record.category_id === 'kpass' && (
+            <>
+              <span>순비용 {formatMoney(kpass.netCost)}</span>
+              <span>충전 {formatMoney(kpass.chargeAmount)}</span>
+              <span>환급 {formatMoney(kpass.refundAmount)}</span>
+              <span>환급률 {kpass.refundRate}%</span>
+            </>
+          )}
+          {record.category_id === 'annual_leave' && data.recordType === 'grant' && <span>부여 {toNumber(data.grantDays)}일</span>}
+          {record.category_id === 'annual_leave' && data.recordType === 'use' && <span>사용 {toNumber(data.days)}일</span>}
           {record.category_id === 'subscription' && (
             <span className={data.active ? 'status-badge is-active' : 'status-badge is-paused'}>
               {data.active ? '활성' : '비활성'}

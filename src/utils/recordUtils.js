@@ -26,11 +26,49 @@ export function formatMoney(value) {
   return `${Math.round(toNumber(value)).toLocaleString('ko-KR')}원`;
 }
 
+export function calcKpass(data = {}) {
+  const chargeAmount = toNumber(data.chargeAmount);
+  const refundAmount = toNumber(data.refundAmount);
+  const netCost = Math.max(0, chargeAmount - refundAmount);
+  const refundRate = chargeAmount > 0
+    ? ((refundAmount / chargeAmount) * 100).toFixed(1)
+    : '0.0';
+  return { chargeAmount, refundAmount, netCost, refundRate };
+}
+
+export function calcAnnualLeave(records = [], year) {
+  const targetYear = year || new Date().getFullYear();
+  const yearStr = String(targetYear);
+
+  const grantRecord = records.find(
+    (record) => record.data?.recordType === 'grant' && String(record.data?.year) === yearStr,
+  );
+  const grantDays = toNumber(grantRecord?.data?.grantDays);
+
+  const usedDays = records
+    .filter((record) => record.data?.recordType === 'use' && record.data?.date?.startsWith(yearStr))
+    .reduce((sum, record) => sum + toNumber(record.data?.days), 0);
+
+  const remainDays = Math.max(0, grantDays - usedDays);
+  const usedRate = grantDays > 0 ? (usedDays / grantDays) * 100 : 0;
+
+  return { grantDays, usedDays, remainDays, usedRate };
+}
+
 export function getRecordTitle(categoryId, data = {}) {
   const category = CATEGORY_MAP[categoryId];
   if (!category) return data.title || '기록';
   if (categoryId === 'investment') return data.assetName || data.symbol || data.ticker || '투자';
   if (categoryId === 'hospital') return data.hospitalName || data.hospital || '병원진료';
+  if (categoryId === 'kpass') return data.yearMonth || 'K-pass';
+  if (categoryId === 'annual_leave') {
+    if (data.recordType === 'grant') return `📋 ${data.year || ''}년 연차 부여 — ${toNumber(data.grantDays)}일`;
+    if (data.recordType === 'use') {
+      const reason = data.reason ? ` (${data.reason})` : '';
+      return `✂️ ${data.date || ''} — ${toNumber(data.days)}일 사용${reason}`;
+    }
+    return '연차관리';
+  }
   if (categoryId === 'shopping') {
     const items = data.productItems || data.items || [];
     const first = Array.isArray(items) ? items.find((item) => item?.name) : null;
@@ -63,13 +101,22 @@ export function deriveRecordColumns(categoryId, formData = {}) {
     amount = toNumber(formData.buyAmount) || toNumber(formData.avgBuyPrice) * toNumber(formData.quantity);
   }
   if (categoryId === 'hospital') amount = toNumber(formData.netMedicalCost);
+  if (categoryId === 'kpass') amount = calcKpass(formData).netCost;
+  if (categoryId === 'annual_leave') amount = 0;
+  let occurred_on = occurredOn;
+  if (categoryId === 'kpass' && formData.yearMonth) occurred_on = `${formData.yearMonth}-01`;
+  if (categoryId === 'annual_leave') {
+    occurred_on = formData.recordType === 'grant'
+      ? `${formData.year || new Date().getFullYear()}-01-01`
+      : formData.date || todayIso();
+  }
   const baseIncome = category?.incomeField ? toNumber(formData[category.incomeField]) : 0;
   const incomeAmount = categoryId === 'salary' && formData.bonus
     ? baseIncome + toNumber(formData.bonusAmount)
     : baseIncome;
   const rating = getRecordRating(formData) || null;
 
-  return { title, occurred_on: occurredOn, amount, income_amount: incomeAmount, rating };
+  return { title, occurred_on, amount, income_amount: incomeAmount, rating };
 }
 
 export function getFinanceMode(categoryId, financeModes = {}) {

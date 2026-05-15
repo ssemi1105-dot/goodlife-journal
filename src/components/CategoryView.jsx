@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { CATEGORY_ICONS, CATEGORY_MAP } from '../data/categoryDefinitions';
-import { calcInvestment, formatMoney, getRecordFinanceValue, toNumber } from '../utils/recordUtils';
+import { calcAnnualLeave, calcInvestment, calcKpass, formatMoney, getRecordFinanceValue, toNumber } from '../utils/recordUtils';
 import { fetchKisPrice } from '../services/kisApiClient';
 import RecordCard from './RecordCard';
 import SearchModal from './SearchModal';
@@ -159,12 +159,82 @@ function CategorySummary({ records }) {
   );
 }
 
+function KpassSummary({ records }) {
+  const summary = records.reduce(
+    (total, record) => {
+      const kpass = calcKpass(record.data || {});
+      total.chargeAmount += kpass.chargeAmount;
+      total.refundAmount += kpass.refundAmount;
+      total.netCost += kpass.netCost;
+      return total;
+    },
+    { chargeAmount: 0, refundAmount: 0, netCost: 0 },
+  );
+  const averageRate = summary.chargeAmount > 0 ? ((summary.refundAmount / summary.chargeAmount) * 100).toFixed(1) : '0.0';
+
+  return (
+    <section className="category-summary-strip kpass-summary-strip">
+      <div>
+        <span>총 충전</span>
+        <strong>{formatMoney(summary.chargeAmount)}</strong>
+      </div>
+      <div>
+        <span>총 환급</span>
+        <strong>{formatMoney(summary.refundAmount)}</strong>
+      </div>
+      <div>
+        <span>총 순비용</span>
+        <strong>{formatMoney(summary.netCost)}</strong>
+      </div>
+      <div>
+        <span>평균 환급률</span>
+        <strong>{averageRate}%</strong>
+      </div>
+    </section>
+  );
+}
+
+function AnnualLeaveSummary({ records }) {
+  const year = new Date().getFullYear();
+  const leave = calcAnnualLeave(records, year);
+  const remainLabel = Number.isInteger(leave.remainDays) ? leave.remainDays : leave.remainDays.toFixed(1);
+  const grantLabel = Number.isInteger(leave.grantDays) ? leave.grantDays : leave.grantDays.toFixed(1);
+  const usedLabel = Number.isInteger(leave.usedDays) ? leave.usedDays : leave.usedDays.toFixed(1);
+  const remainingRate = leave.grantDays > 0 ? Math.max(0, Math.min(100, 100 - leave.usedRate)) : 0;
+
+  return (
+    <section className="annual-leave-panel">
+      <div className="annual-leave-head">
+        <span>{year}년 연차 현황</span>
+        <strong>잔여 {remainLabel}일</strong>
+      </div>
+      <div className="annual-leave-meta">
+        <span>부여 {grantLabel}일 / 사용 {usedLabel}일</span>
+        <span>{remainingRate.toFixed(0)}%</span>
+      </div>
+      <div className="annual-leave-progress" aria-label={`잔여 연차 ${remainingRate.toFixed(0)}%`}>
+        <span style={{ width: `${remainingRate}%` }} />
+      </div>
+    </section>
+  );
+}
+
 export default function CategoryView({ categoryId, records, onBack, onAdd, onOpenRecord, onEdit, onDelete, onUpdateRecord }) {
   const category = CATEGORY_MAP[categoryId];
   const [showSearch, setShowSearch] = useState(false);
   const [filters, setFilters] = useState({ query: '', dateFrom: '', dateTo: '', minAmount: '', maxAmount: '', minRating: '' });
   const categoryRecords = records.filter((record) => record.category_id === categoryId);
   const isInvestment = categoryId === 'investment';
+  const isKpass = categoryId === 'kpass';
+  const isAnnualLeave = categoryId === 'annual_leave';
+  const displayRecords = isAnnualLeave
+    ? [...categoryRecords].sort((a, b) => {
+      const aGrant = a.data?.recordType === 'grant' ? 1 : 0;
+      const bGrant = b.data?.recordType === 'grant' ? 1 : 0;
+      if (aGrant !== bGrant) return bGrant - aGrant;
+      return `${b.occurred_on}${b.created_at}`.localeCompare(`${a.occurred_on}${a.created_at}`);
+    })
+    : categoryRecords;
   const hasSearch = Boolean(filters.query || filters.dateFrom || filters.dateTo || filters.minAmount || filters.maxAmount || filters.minRating);
 
   return (
@@ -181,10 +251,12 @@ export default function CategoryView({ categoryId, records, onBack, onAdd, onOpe
       </header>
 
       {isInvestment && <InvestmentPortfolio records={categoryRecords} onPriceUpdate={onUpdateRecord} />}
-      {!isInvestment && <CategorySummary records={categoryRecords} />}
+      {isKpass && <KpassSummary records={categoryRecords} />}
+      {isAnnualLeave && <AnnualLeaveSummary records={categoryRecords} />}
+      {!isInvestment && !isKpass && !isAnnualLeave && <CategorySummary records={categoryRecords} />}
 
       <section className="record-list">
-        {categoryRecords.map((record) => (
+        {displayRecords.map((record) => (
           <RecordCard key={record.id} record={record} onOpen={onOpenRecord} onEdit={onEdit} onDelete={onDelete} />
         ))}
         {categoryRecords.length === 0 && <p className="empty-text">이 카테고리에 기록이 없습니다.</p>}
