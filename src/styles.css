@@ -404,6 +404,31 @@ h3 {
   gap: 8px;
 }
 
+.record-topline {
+  align-items: center;
+  justify-content: space-between;
+}
+
+.record-topline time {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  min-width: 0;
+  text-align: right;
+}
+
+.record-topline time em {
+  display: inline-flex;
+  max-width: 138px;
+  overflow: hidden;
+  color: #2563eb;
+  font-style: normal;
+  font-weight: 850;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .record-memo {
   margin-bottom: 0;
   color: #525252;

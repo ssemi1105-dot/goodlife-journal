@@ -23,7 +23,15 @@ export default function RecordCard({ record, onOpen, onEdit, onDelete }) {
       <div className="record-body">
         <div className="record-topline">
           <span style={{ color: category?.color }}>{CATEGORY_ICONS[record.category_id]} {category?.label || record.category_id}</span>
-          <time>{period}</time>
+          <time>
+            {period}
+            {record.weather_label && (
+              <em>
+                {record.weather_label}
+                {record.temperature_max !== null && record.temperature_max !== undefined ? ` · 최고 ${record.temperature_max}°C` : ''}
+              </em>
+            )}
+          </time>
         </div>
         <h3>{title}</h3>
         {visibleShoppingItems.length > 0 && (
@@ -54,12 +62,6 @@ export default function RecordCard({ record, onOpen, onEdit, onDelete }) {
           {toNumber(record.amount) > 0 && record.category_id !== 'kpass' && <span>{formatMoney(record.amount)}</span>}
           {toNumber(record.income_amount) > 0 && <span className="income-text">수입 {formatMoney(record.income_amount)}</span>}
           {toNumber(record.rating) > 0 && <span>평점 {record.rating}</span>}
-          {record.weather_label && (
-            <span>
-              {record.weather_label}
-              {record.temperature_max !== null && record.temperature_max !== undefined ? ` · 최고 ${record.temperature_max}°C` : ''}
-            </span>
-          )}
           {record.category_id === 'kpass' && (
             <>
               <span>순비용 {formatMoney(kpass.netCost)}</span>
