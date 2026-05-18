@@ -64,6 +64,28 @@ export function isWeatherEnabledCategory(categoryId) {
   return WEATHER_ENABLED_CATEGORIES.includes(categoryId);
 }
 
+export async function searchWeatherLocation(query) {
+  const keyword = String(query || '').trim();
+  if (keyword.length < 2) return [];
+
+  const params = new URLSearchParams({
+    name: keyword,
+    count: '5',
+    language: 'ko',
+    format: 'json',
+  });
+
+  const response = await fetch(`https://geocoding-api.open-meteo.com/v1/search?${params.toString()}`);
+  if (!response.ok) throw new Error('위치 검색에 실패했습니다.');
+
+  const json = await response.json();
+  return (json.results || []).map((item) => ({
+    name: [item.name, item.admin2, item.admin1, item.country].filter(Boolean).join(', '),
+    latitude: item.latitude,
+    longitude: item.longitude,
+  }));
+}
+
 export async function fetchWeatherForDate({
   date,
   latitude = DEFAULT_WEATHER_LOCATION.latitude,

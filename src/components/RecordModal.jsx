@@ -9,6 +9,7 @@ import {
   fetchWeatherForDate,
   getWeatherTargetDate,
   isWeatherEnabledCategory,
+  searchWeatherLocation,
 } from '../services/weatherClient';
 
 function buildInitialForm(category, record) {
@@ -101,6 +102,9 @@ export default function RecordModal({ categoryId, record, onClose, onSave }) {
   const [receiptMessage, setReceiptMessage] = useState('');
   const [weatherLoading, setWeatherLoading] = useState(false);
   const [weatherMessage, setWeatherMessage] = useState('');
+  const [locationSearching, setLocationSearching] = useState(false);
+  const [locationResults, setLocationResults] = useState([]);
+  const [locationMessage, setLocationMessage] = useState('');
   const weatherFetchKeyRef = useRef('');
 
   useEffect(() => {
@@ -110,6 +114,8 @@ export default function RecordModal({ categoryId, record, onClose, onSave }) {
     setFormRevision((revision) => revision + 1);
     setReceiptMessage('');
     setWeatherMessage('');
+    setLocationResults([]);
+    setLocationMessage('');
     weatherFetchKeyRef.current = '';
   }, [category, record]);
 
@@ -266,6 +272,46 @@ export default function RecordModal({ categoryId, record, onClose, onSave }) {
       } : {}),
       fetchedAt: null,
     };
+    weatherFetchKeyRef.current = '';
+    setField('weather', nextWeather);
+  }
+
+  async function searchLocation(query = formRef.current.weather?.locationName) {
+    const keyword = String(query || '').trim();
+    if (keyword.length < 2) {
+      setLocationResults([]);
+      setLocationMessage('두 글자 이상 입력해주세요.');
+      return;
+    }
+
+    setLocationSearching(true);
+    setLocationMessage('');
+    try {
+      const results = await searchWeatherLocation(keyword);
+      setLocationResults(results);
+      setLocationMessage(results.length > 0 ? '검색 결과를 선택하면 위도/경도가 자동으로 바뀝니다.' : '검색 결과가 없습니다.');
+    } catch (err) {
+      setLocationResults([]);
+      setLocationMessage(err.message || '위치 검색에 실패했습니다.');
+    } finally {
+      setLocationSearching(false);
+    }
+  }
+
+  function applyWeatherLocation(location) {
+    const nextWeather = {
+      ...(formRef.current.weather || {}),
+      locationName: location.name,
+      latitude: location.latitude,
+      longitude: location.longitude,
+      weatherCode: null,
+      weatherLabel: '',
+      temperatureMax: null,
+      temperatureMin: null,
+      fetchedAt: null,
+    };
+    setLocationResults([]);
+    setLocationMessage('위치가 적용되었습니다.');
     weatherFetchKeyRef.current = '';
     setField('weather', nextWeather);
   }
@@ -429,26 +475,53 @@ export default function RecordModal({ categoryId, record, onClose, onSave }) {
             <details>
               <summary>위치 수정</summary>
               <div className="weather-location-grid">
-                <input
-                  type="text"
-                  value={form.weather?.locationName || DEFAULT_WEATHER_LOCATION.name}
-                  onChange={(event) => setWeatherField('locationName', event.target.value)}
-                  placeholder="위치명"
-                />
-                <input
-                  type="number"
-                  step="0.0001"
-                  value={form.weather?.latitude ?? DEFAULT_WEATHER_LOCATION.latitude}
-                  onChange={(event) => setWeatherField('latitude', event.target.value)}
-                  placeholder="위도"
-                />
-                <input
-                  type="number"
-                  step="0.0001"
-                  value={form.weather?.longitude ?? DEFAULT_WEATHER_LOCATION.longitude}
-                  onChange={(event) => setWeatherField('longitude', event.target.value)}
-                  placeholder="경도"
-                />
+                <div className="weather-location-search">
+                  <input
+                    type="text"
+                    value={form.weather?.locationName ?? DEFAULT_WEATHER_LOCATION.name}
+                    onChange={(event) => setWeatherField('locationName', event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter') {
+                        event.preventDefault();
+                        searchLocation(event.currentTarget.value);
+                      }
+                    }}
+                    placeholder="예: 강릉 주문진"
+                  />
+                  <button type="button" className="secondary-button compact" onClick={() => searchLocation()} disabled={locationSearching}>
+                    {locationSearching ? '검색 중' : '검색'}
+                  </button>
+                </div>
+                {locationMessage && <p>{locationMessage}</p>}
+                {locationResults.length > 0 && (
+                  <div className="weather-location-results">
+                    {locationResults.map((item) => (
+                      <button type="button" key={`${item.name}-${item.latitude}-${item.longitude}`} onClick={() => applyWeatherLocation(item)}>
+                        <strong>{item.name}</strong>
+                        <span>{item.latitude.toFixed(4)}, {item.longitude.toFixed(4)}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+                <details className="weather-coordinate-details">
+                  <summary>위도/경도 직접 입력</summary>
+                  <div>
+                    <input
+                      type="number"
+                      step="0.0001"
+                      value={form.weather?.latitude ?? DEFAULT_WEATHER_LOCATION.latitude}
+                      onChange={(event) => setWeatherField('latitude', event.target.value)}
+                      placeholder="위도"
+                    />
+                    <input
+                      type="number"
+                      step="0.0001"
+                      value={form.weather?.longitude ?? DEFAULT_WEATHER_LOCATION.longitude}
+                      onChange={(event) => setWeatherField('longitude', event.target.value)}
+                      placeholder="경도"
+                    />
+                  </div>
+                </details>
               </div>
             </details>
           </aside>
