@@ -6,6 +6,7 @@ function cleanDataForSave(formData) {
   const data = { ...formData };
   delete data.photo;
   delete data.photoPath;
+  delete data.weather;
   for (const [key, value] of Object.entries(data)) {
     if (Array.isArray(value)) {
       data[key] = value
@@ -41,6 +42,26 @@ function cleanDataForSave(formData) {
     data.tmdbPosterUrl = tmdb.posterUrl || tmdb.poster || tmdb.tmdbPosterUrl || '';
   }
   return data;
+}
+
+function nullableNumber(value) {
+  if (value === null || value === undefined || value === '') return null;
+  const number = toNumber(value);
+  return Number.isFinite(number) ? number : null;
+}
+
+function deriveWeatherColumns(formData = {}) {
+  const weather = formData.weather || {};
+  return {
+    weather_code: weather.weatherCode === null || weather.weatherCode === undefined || weather.weatherCode === '' ? null : Number(weather.weatherCode),
+    weather_label: weather.weatherLabel || null,
+    temperature_max: nullableNumber(weather.temperatureMax),
+    temperature_min: nullableNumber(weather.temperatureMin),
+    weather_location: weather.locationName || null,
+    weather_latitude: nullableNumber(weather.latitude),
+    weather_longitude: nullableNumber(weather.longitude),
+    weather_fetched_at: weather.fetchedAt || null,
+  };
 }
 
 async function getSignedPhotoUrl(path) {
@@ -159,6 +180,7 @@ export function useRecords(userId) {
 
   async function saveRecord(categoryId, formData, existingRecord = null) {
     const columns = deriveRecordColumns(categoryId, formData);
+    const weatherColumns = deriveWeatherColumns(formData);
     let payloadData = cleanDataForSave(formData);
 
     if (existingRecord) {
@@ -177,6 +199,7 @@ export function useRecords(userId) {
         .update({
           category_id: categoryId,
           ...columns,
+          ...weatherColumns,
           data: payloadData,
           updated_at: new Date().toISOString(),
         })
@@ -196,6 +219,7 @@ export function useRecords(userId) {
         user_id: userId,
         category_id: categoryId,
         ...columns,
+        ...weatherColumns,
         data: payloadData,
       })
       .select()

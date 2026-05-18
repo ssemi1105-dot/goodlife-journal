@@ -4,6 +4,12 @@ import FieldInput from './FieldInput';
 import { calcDutchPay, calcInvestment, calcKpass, formatMoney, toNumber, todayIso } from '../utils/recordUtils';
 import { searchKisSymbol } from '../services/kisApiClient';
 import { analyzeReceipt, toGoodlifeFormat } from '../services/receiptOcrClient';
+import {
+  DEFAULT_WEATHER_LOCATION,
+  fetchWeatherForDate,
+  getWeatherTargetDate,
+  isWeatherEnabledCategory,
+} from '../services/weatherClient';
 
 function buildInitialForm(category, record) {
   const base = Object.fromEntries(category.fields.map((field) => {
@@ -21,6 +27,18 @@ function buildInitialForm(category, record) {
     photo: record?.photoUrl || '',
     photoPath: data.photoPath || null,
   };
+  if (data.weather || record?.weather_code !== null && record?.weather_code !== undefined) {
+    initial.weather = data.weather || {
+      weatherCode: record?.weather_code ?? null,
+      weatherLabel: record?.weather_label || '',
+      temperatureMax: record?.temperature_max ?? null,
+      temperatureMin: record?.temperature_min ?? null,
+      locationName: record?.weather_location || DEFAULT_WEATHER_LOCATION.name,
+      latitude: record?.weather_latitude ?? DEFAULT_WEATHER_LOCATION.latitude,
+      longitude: record?.weather_longitude ?? DEFAULT_WEATHER_LOCATION.longitude,
+      fetchedAt: record?.weather_fetched_at || null,
+    };
+  }
   category.fields.forEach((field) => {
     if (field.type === 'dateRange') {
       initial[field.id] = {
@@ -81,6 +99,9 @@ export default function RecordModal({ categoryId, record, onClose, onSave }) {
   const receiptInputRef = useRef(null);
   const [receiptLoading, setReceiptLoading] = useState(false);
   const [receiptMessage, setReceiptMessage] = useState('');
+  const [weatherLoading, setWeatherLoading] = useState(false);
+  const [weatherMessage, setWeatherMessage] = useState('');
+  const weatherFetchKeyRef = useRef('');
 
   useEffect(() => {
     const nextForm = buildInitialForm(category, record);
@@ -88,6 +109,8 @@ export default function RecordModal({ categoryId, record, onClose, onSave }) {
     setForm(nextForm);
     setFormRevision((revision) => revision + 1);
     setReceiptMessage('');
+    setWeatherMessage('');
+    weatherFetchKeyRef.current = '';
   }, [category, record]);
 
   const dutchPay = categoryId === 'dining' ? calcDutchPay(form) : null;
@@ -113,6 +136,59 @@ export default function RecordModal({ categoryId, record, onClose, onSave }) {
 
     return () => window.clearTimeout(timer);
   }, [categoryId, form.assetName, form.symbol]);
+
+  useEffect(() => {
+    if (!isWeatherEnabledCategory(categoryId)) return undefined;
+    const date = getWeatherTargetDate(categoryId, form);
+    if (!date) return undefined;
+
+    const weather = form.weather || {};
+    const latitude = weather.latitude ?? DEFAULT_WEATHER_LOCATION.latitude;
+    const longitude = weather.longitude ?? DEFAULT_WEATHER_LOCATION.longitude;
+    const locationName = weather.locationName || DEFAULT_WEATHER_LOCATION.name;
+    const fetchKey = `${categoryId}-${date}-${latitude}-${longitude}`;
+
+    if (weatherFetchKeyRef.current === fetchKey) return undefined;
+    if (
+      weather.fetchedAt
+      && weather.date === date
+      && Number(weather.latitude) === Number(latitude)
+      && Number(weather.longitude) === Number(longitude)
+    ) {
+      weatherFetchKeyRef.current = fetchKey;
+      return undefined;
+    }
+
+    let cancelled = false;
+    weatherFetchKeyRef.current = fetchKey;
+
+    async function loadWeather() {
+      setWeatherLoading(true);
+      setWeatherMessage('');
+      try {
+        const nextWeather = await fetchWeatherForDate({ date, latitude, longitude, locationName });
+        if (cancelled || !nextWeather) return;
+        mergeFormPatch({ weather: { ...nextWeather, date } });
+        setWeatherMessage(`${nextWeather.weatherLabel} · 최고 ${nextWeather.temperatureMax ?? '-'}°C`);
+      } catch {
+        if (!cancelled) setWeatherMessage('날씨를 불러오지 못했습니다.');
+      } finally {
+        if (!cancelled) setWeatherLoading(false);
+      }
+    }
+
+    loadWeather();
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    categoryId,
+    form.date,
+    form.startDate,
+    form.recordType,
+    form.weather?.latitude,
+    form.weather?.longitude,
+  ]);
 
   function applyDerivedValues(next, fieldId) {
     if (categoryId === 'delivery' && (fieldId === 'menuItems' || fieldId === 'deliveryFee')) {
@@ -172,6 +248,26 @@ export default function RecordModal({ categoryId, record, onClose, onSave }) {
       }
     }
     return currentForm;
+  }
+
+  function setWeatherField(fieldId, value) {
+    const isCoordinateChange = fieldId === 'latitude' || fieldId === 'longitude';
+    const nextWeather = {
+      ...(formRef.current.weather || {}),
+      locationName: formRef.current.weather?.locationName || DEFAULT_WEATHER_LOCATION.name,
+      latitude: formRef.current.weather?.latitude ?? DEFAULT_WEATHER_LOCATION.latitude,
+      longitude: formRef.current.weather?.longitude ?? DEFAULT_WEATHER_LOCATION.longitude,
+      [fieldId]: value,
+      ...(isCoordinateChange ? {
+        weatherCode: null,
+        weatherLabel: '',
+        temperatureMax: null,
+        temperatureMin: null,
+      } : {}),
+      fetchedAt: null,
+    };
+    weatherFetchKeyRef.current = '';
+    setField('weather', nextWeather);
   }
 
   function setField(fieldId, value) {
@@ -316,6 +412,47 @@ export default function RecordModal({ categoryId, record, onClose, onSave }) {
             );
           })}
         </div>
+
+        {isWeatherEnabledCategory(categoryId) && getWeatherTargetDate(categoryId, form) && (
+          <aside className="weather-box">
+            <div>
+              <strong>날씨 자동 기록</strong>
+              <span>
+                {weatherLoading
+                  ? '날씨 불러오는 중...'
+                  : form.weather
+                    ? `${form.weather.locationName || DEFAULT_WEATHER_LOCATION.name} · ${form.weather.weatherLabel || '날씨 정보'} · 최고 ${form.weather.temperatureMax ?? '-'}°C / 최저 ${form.weather.temperatureMin ?? '-'}°C`
+                    : weatherMessage || '경기도 구리시 인창동 기준으로 저장됩니다.'}
+              </span>
+              {weatherMessage && !weatherLoading && <p>{weatherMessage}</p>}
+            </div>
+            <details>
+              <summary>위치 수정</summary>
+              <div className="weather-location-grid">
+                <input
+                  type="text"
+                  value={form.weather?.locationName || DEFAULT_WEATHER_LOCATION.name}
+                  onChange={(event) => setWeatherField('locationName', event.target.value)}
+                  placeholder="위치명"
+                />
+                <input
+                  type="number"
+                  step="0.0001"
+                  value={form.weather?.latitude ?? DEFAULT_WEATHER_LOCATION.latitude}
+                  onChange={(event) => setWeatherField('latitude', event.target.value)}
+                  placeholder="위도"
+                />
+                <input
+                  type="number"
+                  step="0.0001"
+                  value={form.weather?.longitude ?? DEFAULT_WEATHER_LOCATION.longitude}
+                  onChange={(event) => setWeatherField('longitude', event.target.value)}
+                  placeholder="경도"
+                />
+              </div>
+            </details>
+          </aside>
+        )}
 
         {categoryId === 'shopping' && (
           <aside className="receipt-ocr-box">

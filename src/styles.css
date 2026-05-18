@@ -3261,6 +3261,46 @@ input[readonly] {
   font-size: 12px;
 }
 
+.weather-box {
+  display: grid;
+  gap: 8px;
+  margin-top: -2px;
+  padding: 10px;
+  border: 1px solid rgba(37, 99, 235, 0.16);
+  border-radius: 14px;
+  background: #eff6ff;
+}
+
+.weather-box > div {
+  display: grid;
+  gap: 2px;
+}
+
+.weather-box strong {
+  color: #1d4ed8;
+  font-size: 13px;
+}
+
+.weather-box span,
+.weather-box p,
+.weather-box summary {
+  margin: 0;
+  color: #64748b;
+  font-size: 12px;
+}
+
+.weather-box summary {
+  cursor: pointer;
+  font-weight: 800;
+}
+
+.weather-location-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 90px 90px;
+  gap: 6px;
+  margin-top: 8px;
+}
+
 .investment-account-content {
   position: relative;
   z-index: 2;

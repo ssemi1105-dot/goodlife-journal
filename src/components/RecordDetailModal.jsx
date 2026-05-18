@@ -62,6 +62,13 @@ export default function RecordDetailModal({ record, onClose, onEdit, onDelete })
           {toNumber(record.rating) > 0 && <span>평점 {Number(record.rating).toFixed(1)}</span>}
           {toNumber(record.amount) > 0 && <span>{formatMoney(record.amount)}</span>}
           {toNumber(record.income_amount) > 0 && <span className="income-text">수입 {formatMoney(record.income_amount)}</span>}
+          {record.weather_label && (
+            <span>
+              {record.weather_label}
+              {record.temperature_max !== null && record.temperature_max !== undefined ? ` · 최고 ${record.temperature_max}°C` : ''}
+              {record.temperature_min !== null && record.temperature_min !== undefined ? ` / 최저 ${record.temperature_min}°C` : ''}
+            </span>
+          )}
         </div>
 
         <div className="detail-fields">
