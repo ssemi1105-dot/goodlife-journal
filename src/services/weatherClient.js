@@ -9,7 +9,6 @@ export const WEATHER_ENABLED_CATEGORIES = [
   'dream',
   'idea',
   'recipe',
-  'investment',
   'hospital',
   'salary',
   'delivery',

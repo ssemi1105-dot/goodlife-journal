@@ -38,6 +38,7 @@ export default function RecordDetailModal({ record, onClose, onEdit, onDelete })
   const title = getRecordTitle(record.category_id, data);
   const fields = category?.fields || [];
   const extraPhotoUrls = Array.isArray(data.photos) ? data.photos.map((photo) => photo.signedUrl).filter(Boolean).slice(1) : [];
+  const showWeather = record.category_id !== 'investment' && record.category_id !== 'video';
 
   return (
     <div className="modal-backdrop">
@@ -62,7 +63,7 @@ export default function RecordDetailModal({ record, onClose, onEdit, onDelete })
           {toNumber(record.rating) > 0 && <span>평점 {Number(record.rating).toFixed(1)}</span>}
           {toNumber(record.amount) > 0 && <span>{formatMoney(record.amount)}</span>}
           {toNumber(record.income_amount) > 0 && <span className="income-text">수입 {formatMoney(record.income_amount)}</span>}
-          {record.weather_label && (
+          {showWeather && record.weather_label && (
             <span>
               {record.weather_label}
               {record.temperature_max !== null && record.temperature_max !== undefined ? ` · 최고 ${record.temperature_max}°C` : ''}

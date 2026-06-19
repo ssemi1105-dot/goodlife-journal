@@ -12,6 +12,7 @@ export default function RecordCard({ record, onOpen, onEdit, onDelete, onInvestm
   const soldInvestment = record.category_id === 'investment' ? calcSoldInvestment(data) : null;
   const kpass = record.category_id === 'kpass' ? calcKpass(data) : null;
   const period = formatPeriod(data) || record.occurred_on;
+  const showWeather = record.category_id !== 'investment' && record.category_id !== 'video';
   const shoppingItems = record.category_id === 'shopping'
     ? (Array.isArray(data.productItems) ? data.productItems : data.items || []).filter((item) => item?.name)
     : [];
@@ -27,7 +28,7 @@ export default function RecordCard({ record, onOpen, onEdit, onDelete, onInvestm
           <span style={{ color: category?.color }}>{CATEGORY_ICONS[record.category_id]} {category?.label || record.category_id}</span>
           <time>
             {period}
-            {record.weather_label && (
+            {showWeather && record.weather_label && (
               <em>
                 {record.weather_label}
                 {record.temperature_max !== null && record.temperature_max !== undefined ? ` · 최고 ${record.temperature_max}°C` : ''}

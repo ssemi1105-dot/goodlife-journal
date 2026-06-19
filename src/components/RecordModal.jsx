@@ -482,6 +482,7 @@ export default function RecordModal({ categoryId, record, initialData = null, on
     mergeFormPatch({
       symbol: result.symbol || result.code || '',
       assetName: result.name || result.assetName || '',
+      market: result.market || formRef.current.market || 'KR',
     });
     setSymbolResults([]);
     setSymbolMessage(result.name && result.symbol ? `${result.name} (${result.symbol}) 적용됨` : '종목 정보가 적용되었습니다.');
@@ -540,6 +541,7 @@ export default function RecordModal({ categoryId, record, initialData = null, on
           ...formRef.current,
           symbol: result.symbol || result.code || formRef.current.symbol || '',
           assetName: result.name || result.assetName || formRef.current.assetName || '',
+          market: result.market || formRef.current.market || 'KR',
         };
         formRef.current = applyDerivedValues(next, 'symbol');
         setForm(formRef.current);
