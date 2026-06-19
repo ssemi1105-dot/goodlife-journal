@@ -1,4 +1,26 @@
-export const WEATHER_ENABLED_CATEGORIES = ['dining', 'fishing', 'delivery', 'annual_leave', 'domesticTravel'];
+export const WEATHER_ENABLED_CATEGORIES = [
+  'fishing',
+  'dining',
+  'cooking',
+  'exercise',
+  'shopping',
+  'meeting',
+  'game',
+  'dream',
+  'idea',
+  'recipe',
+  'investment',
+  'hospital',
+  'salary',
+  'delivery',
+  'savings',
+  'subscription',
+  'annual_leave',
+  'workMeal',
+  'outing',
+  'domesticTravel',
+  'overseasTravel',
+];
 
 export const DEFAULT_WEATHER_LOCATION = {
   name: '경기도 구리시 인창동',
@@ -54,7 +76,7 @@ export function getWeatherTargetDate(categoryId, form = {}) {
     if (form.recordType !== 'use') return '';
     return form.date || '';
   }
-  if (categoryId === 'fishing' || categoryId === 'domesticTravel') {
+  if (categoryId === 'fishing' || categoryId === 'domesticTravel' || categoryId === 'overseasTravel') {
     return form.startDate || form.date || '';
   }
   return form.date || '';
