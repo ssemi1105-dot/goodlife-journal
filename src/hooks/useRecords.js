@@ -1,5 +1,11 @@
 import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '../lib/supabaseClient';
+import {
+  DEFAULT_WEATHER_LOCATION,
+  fetchWeatherForDate,
+  getWeatherTargetDate,
+  isWeatherEnabledCategory,
+} from '../services/weatherClient';
 import { calcLineItemAmount, deriveRecordColumns, toNumber } from '../utils/recordUtils';
 
 function cleanDataForSave(formData) {
@@ -147,6 +153,21 @@ function sortRecords(records) {
   return [...records].sort((a, b) => `${b.occurred_on}${b.created_at}`.localeCompare(`${a.occurred_on}${a.created_at}`));
 }
 
+function hasWeatherColumns(record) {
+  return Boolean(
+    record.weather_fetched_at
+    || record.weather_label
+    || record.weather_code !== null && record.weather_code !== undefined,
+  );
+}
+
+function getWeatherFormForRecord(record) {
+  return {
+    ...(record.data || {}),
+    date: record.data?.date || record.occurred_on,
+  };
+}
+
 export function useRecords(userId) {
   const [records, setRecords] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -269,5 +290,55 @@ export function useRecords(userId) {
     setRecords((current) => current.filter((item) => item.id !== record.id));
   }
 
-  return { records, loading, saveRecord, deleteRecord, reloadRecords: loadRecords };
+  async function backfillMissingWeather(onProgress) {
+    if (!userId) return { total: 0, updated: 0, failed: 0 };
+
+    const candidates = records.filter((record) => {
+      if (!isWeatherEnabledCategory(record.category_id)) return false;
+      if (hasWeatherColumns(record)) return false;
+      return Boolean(getWeatherTargetDate(record.category_id, getWeatherFormForRecord(record)));
+    });
+
+    let updated = 0;
+    let failed = 0;
+    onProgress?.({ total: candidates.length, done: 0, updated, failed });
+
+    for (const record of candidates) {
+      const form = getWeatherFormForRecord(record);
+      const date = getWeatherTargetDate(record.category_id, form);
+      const latitude = record.weather_latitude ?? DEFAULT_WEATHER_LOCATION.latitude;
+      const longitude = record.weather_longitude ?? DEFAULT_WEATHER_LOCATION.longitude;
+      const locationName = record.weather_location || DEFAULT_WEATHER_LOCATION.name;
+
+      try {
+        const weather = await fetchWeatherForDate({ date, latitude, longitude, locationName });
+        if (!weather) throw new Error('날씨 정보가 없습니다.');
+        const weatherColumns = deriveWeatherColumns({ weather: { ...weather, date } });
+        const { data, error } = await supabase
+          .from('records')
+          .update({
+            ...weatherColumns,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', record.id)
+          .eq('user_id', userId)
+          .select()
+          .single();
+        if (error) throw error;
+
+        const patched = await attachSignedPhotoUrl(data);
+        setRecords((current) => sortRecords(current.map((item) => (item.id === patched.id ? patched : item))));
+        updated += 1;
+      } catch (error) {
+        console.warn('[weather] backfill failed:', record.id, error);
+        failed += 1;
+      }
+
+      onProgress?.({ total: candidates.length, done: updated + failed, updated, failed });
+    }
+
+    return { total: candidates.length, updated, failed };
+  }
+
+  return { records, loading, saveRecord, deleteRecord, reloadRecords: loadRecords, backfillMissingWeather };
 }

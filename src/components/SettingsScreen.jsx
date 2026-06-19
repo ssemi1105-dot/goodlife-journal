@@ -15,11 +15,13 @@ export default function SettingsScreen({
   onUpdateProfile,
   onSignOut,
   onBack,
+  onBackfillWeather,
 }) {
   const [selectedCategoryId, setSelectedCategoryId] = useState(null);
   const [profileName, setProfileName] = useState(profile?.display_name || '');
   const [profileSaving, setProfileSaving] = useState(false);
   const [sharingSavingCategory, setSharingSavingCategory] = useState('');
+  const [weatherBackfill, setWeatherBackfill] = useState({ running: false, message: '' });
   const sharing = useSharing(userId, CATEGORIES);
 
   useEffect(() => {
@@ -86,6 +88,30 @@ export default function SettingsScreen({
       setProfileName(nextName);
     } finally {
       setProfileSaving(false);
+    }
+  }
+
+  async function handleBackfillWeather() {
+    if (!onBackfillWeather || weatherBackfill.running) return;
+    if (!window.confirm('날씨가 비어 있는 기존 기록에 날씨를 저장할까요?')) return;
+
+    setWeatherBackfill({ running: true, message: '누락된 날씨를 확인하는 중...' });
+    try {
+      const result = await onBackfillWeather((progress) => {
+        setWeatherBackfill({
+          running: true,
+          message: `날씨 저장 중 ${progress.done}/${progress.total}개 · 성공 ${progress.updated}개 · 실패 ${progress.failed}개`,
+        });
+      });
+      setWeatherBackfill({
+        running: false,
+        message: `완료: ${result.updated}개 저장, ${result.failed}개 실패`,
+      });
+    } catch (error) {
+      setWeatherBackfill({
+        running: false,
+        message: error.message || '날씨 저장에 실패했습니다.',
+      });
     }
   }
 
@@ -184,6 +210,21 @@ export default function SettingsScreen({
             <strong>한국투자 API</strong>
             <span>키와 토큰은 브라우저가 아니라 Supabase Edge Function secret으로만 다루도록 준비되어 있습니다.</span>
           </div>
+        </div>
+        <div className="settings-row">
+          <div>
+            <strong>누락된 날씨 채우기</strong>
+            <span>기존 기록 중 날씨가 없는 항목만 찾아서 저장합니다. 이미 저장된 날씨는 다시 불러오지 않습니다.</span>
+            {weatherBackfill.message && <small>{weatherBackfill.message}</small>}
+          </div>
+          <button
+            type="button"
+            className="secondary-button compact"
+            onClick={handleBackfillWeather}
+            disabled={weatherBackfill.running}
+          >
+            {weatherBackfill.running ? '실행 중' : '실행'}
+          </button>
         </div>
       </section>
 

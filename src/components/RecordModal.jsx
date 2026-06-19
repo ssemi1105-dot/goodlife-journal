@@ -38,6 +38,7 @@ function buildInitialForm(category, record) {
       latitude: record?.weather_latitude ?? DEFAULT_WEATHER_LOCATION.latitude,
       longitude: record?.weather_longitude ?? DEFAULT_WEATHER_LOCATION.longitude,
       fetchedAt: record?.weather_fetched_at || null,
+      date: data.weather?.date || record?.occurred_on || data.date || '',
     };
   }
   category.fields.forEach((field) => {
@@ -84,6 +85,28 @@ function buildInitialForm(category, record) {
     initial.targetFish = data.targetFish || data.fishTypes || [];
   }
   return initial;
+}
+
+function weatherMatchesForm(form, date) {
+  const weather = form.weather || {};
+  const latitude = weather.latitude ?? DEFAULT_WEATHER_LOCATION.latitude;
+  const longitude = weather.longitude ?? DEFAULT_WEATHER_LOCATION.longitude;
+  return Boolean(
+    weather.fetchedAt
+    && weather.weatherLabel
+    && weather.date === date
+    && Number(weather.latitude) === Number(latitude)
+    && Number(weather.longitude) === Number(longitude),
+  );
+}
+
+function withTimeout(promise, ms) {
+  return Promise.race([
+    promise,
+    new Promise((resolve) => {
+      window.setTimeout(() => resolve(null), ms);
+    }),
+  ]);
 }
 
 export default function RecordModal({ categoryId, record, onClose, onSave }) {
@@ -335,6 +358,35 @@ export default function RecordModal({ categoryId, record, onClose, onSave }) {
     setForm(next);
   }
 
+  async function ensureWeatherBeforeSave() {
+    if (!isWeatherEnabledCategory(categoryId)) return;
+    const date = getWeatherTargetDate(categoryId, formRef.current);
+    if (!date || weatherMatchesForm(formRef.current, date)) return;
+
+    const weather = formRef.current.weather || {};
+    const latitude = weather.latitude ?? DEFAULT_WEATHER_LOCATION.latitude;
+    const longitude = weather.longitude ?? DEFAULT_WEATHER_LOCATION.longitude;
+    const locationName = weather.locationName || DEFAULT_WEATHER_LOCATION.name;
+
+    setWeatherLoading(true);
+    try {
+      const nextWeather = await withTimeout(
+        fetchWeatherForDate({ date, latitude, longitude, locationName }),
+        1800,
+      );
+      if (!nextWeather) return;
+      formRef.current = {
+        ...formRef.current,
+        weather: { ...nextWeather, date },
+      };
+      setForm(formRef.current);
+    } catch {
+      // 날씨는 보조 정보라 실패해도 기록 저장은 계속 진행한다.
+    } finally {
+      setWeatherLoading(false);
+    }
+  }
+
   function applySymbolResult(result) {
     if (!result) return;
     mergeFormPatch({
@@ -409,11 +461,14 @@ export default function RecordModal({ categoryId, record, onClose, onSave }) {
     }
 
     setSaving(true);
-    onClose();
     try {
+      await ensureWeatherBeforeSave();
+      onClose();
       await onSave(categoryId, prepareFormForSave(formRef.current), record);
     } catch (err) {
       window.alert(err.message || '저장에 실패했습니다.');
+    } finally {
+      setSaving(false);
     }
   }
 
