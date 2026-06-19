@@ -58,7 +58,13 @@ export function calcAnnualLeave(records = [], year) {
 export function getRecordTitle(categoryId, data = {}) {
   const category = CATEGORY_MAP[categoryId];
   if (!category) return data.title || '기록';
-  if (categoryId === 'investment') return data.assetName || data.symbol || data.ticker || '투자';
+  if (categoryId === 'investment') {
+    const type = getInvestmentRecordType(data);
+    const name = data.assetName || data.symbol || data.ticker || '투자';
+    if (type === 'watch') return `${name} 관심`;
+    if (type === 'sold') return `${name} 매도`;
+    return name;
+  }
   if (categoryId === 'hospital') return data.hospitalName || data.hospital || '병원진료';
   if (categoryId === 'kpass') return data.yearMonth || 'K-pass';
   if (categoryId === 'annual_leave') {
@@ -98,12 +104,20 @@ export function deriveRecordColumns(categoryId, formData = {}) {
     amount = toNumber(formData.menuItems || formData.productItems);
   }
   if (categoryId === 'investment') {
-    amount = toNumber(formData.buyAmount) || toNumber(formData.avgBuyPrice) * toNumber(formData.quantity);
+    const type = getInvestmentRecordType(formData);
+    if (type === 'holding') {
+      amount = calcInvestment(formData).buyTotal;
+    } else {
+      amount = 0;
+    }
   }
   if (categoryId === 'hospital') amount = toNumber(formData.netMedicalCost);
   if (categoryId === 'kpass') amount = calcKpass(formData).netCost;
   if (categoryId === 'annual_leave') amount = 0;
   let occurred_on = occurredOn;
+  if (categoryId === 'investment' && getInvestmentRecordType(formData) === 'sold') {
+    occurred_on = formData.sellDate || occurredOn;
+  }
   if (categoryId === 'kpass' && formData.yearMonth) occurred_on = `${formData.yearMonth}-01`;
   if (categoryId === 'annual_leave') {
     occurred_on = formData.recordType === 'grant'
@@ -251,6 +265,13 @@ export function calcDutchPay(data = {}) {
   return Math.round(amount / people);
 }
 
+export function getInvestmentRecordType(data = {}) {
+  if (['holding', 'watch', 'sold'].includes(data.recordType)) return data.recordType;
+  if (data.sellDate || data.sellPrice || data.soldQuantity || data.realizedProfit) return 'sold';
+  if (data.targetPrice && !data.quantity && !data.avgBuyPrice) return 'watch';
+  return 'holding';
+}
+
 export function calcInvestment(data = {}) {
   const quantity = toNumber(data.quantity);
   const avgBuyPrice = toNumber(data.avgBuyPrice);
@@ -264,6 +285,18 @@ export function calcInvestment(data = {}) {
   const profit = currentTotal - buyTotal;
   const rate = toNumber(data.profitLossRate) || (buyTotal > 0 && currentTotal > 0 ? (profit / buyTotal) * 100 : 0);
   return { buyTotal, currentTotal, profit, rate, quantity, avgBuyPrice, currentPrice };
+}
+
+export function calcSoldInvestment(data = {}) {
+  const soldQuantity = toNumber(data.soldQuantity) || toNumber(data.quantity);
+  const avgBuyPrice = toNumber(data.avgBuyPrice);
+  const sellPrice = toNumber(data.sellPrice);
+  const feeTax = toNumber(data.feeTax);
+  const buyTotal = avgBuyPrice * soldQuantity;
+  const sellTotal = sellPrice * soldQuantity;
+  const profit = sellTotal - buyTotal - feeTax;
+  const rate = buyTotal > 0 ? (profit / buyTotal) * 100 : 0;
+  return { soldQuantity, avgBuyPrice, sellPrice, feeTax, buyTotal, sellTotal, profit, rate };
 }
 
 export function formatPeriod(data = {}) {

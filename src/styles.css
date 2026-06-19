@@ -3533,6 +3533,94 @@ input[readonly] {
   border-radius: 10px;
 }
 
+.investment-record-sections {
+  display: grid;
+  gap: 12px;
+}
+
+.investment-record-section {
+  display: grid;
+  gap: 8px;
+}
+
+.investment-record-section > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 2px;
+}
+
+.investment-record-section h2 {
+  margin: 0;
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 900;
+}
+
+.investment-record-section > header span {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.investment-record-list {
+  gap: 7px;
+}
+
+.compact-empty {
+  padding: 10px 12px;
+  border: 1px dashed rgba(15, 118, 110, 0.22);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.62);
+  font-size: 12px;
+}
+
+.investment-type-badge {
+  border-color: rgba(15, 118, 110, 0.18) !important;
+  background: rgba(15, 118, 110, 0.09) !important;
+  color: #0f766e !important;
+}
+
+.investment-type-badge.is-watch {
+  border-color: rgba(37, 99, 235, 0.18) !important;
+  background: rgba(37, 99, 235, 0.09) !important;
+  color: #1d4ed8 !important;
+}
+
+.investment-type-badge.is-sold {
+  border-color: rgba(217, 119, 6, 0.22) !important;
+  background: rgba(217, 119, 6, 0.1) !important;
+  color: #b45309 !important;
+}
+
+.investment-watch-row,
+.investment-sold-row {
+  grid-area: mood;
+  align-self: center;
+  display: grid;
+  justify-items: end;
+  min-width: 92px;
+  gap: 2px;
+  text-align: right;
+}
+
+.investment-watch-row span,
+.investment-sold-row span {
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.investment-watch-row strong,
+.investment-sold-row strong {
+  max-width: 96px;
+  overflow: hidden;
+  font-size: 11px;
+  font-weight: 900;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 @media (max-width: 420px) {
   .record-card.is-investment-record .record-body {
     grid-template-columns: minmax(0, 1fr) 76px;

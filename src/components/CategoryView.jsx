@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { CATEGORY_ICONS, CATEGORY_MAP } from '../data/categoryDefinitions';
-import { calcAnnualLeave, calcInvestment, calcKpass, formatMoney, getRecordFinanceValue, toNumber } from '../utils/recordUtils';
+import { calcAnnualLeave, calcInvestment, calcKpass, formatMoney, getInvestmentRecordType, getRecordFinanceValue, toNumber } from '../utils/recordUtils';
 import { fetchKisPrice } from '../services/kisApiClient';
 import RecordCard from './RecordCard';
 import SearchModal from './SearchModal';
@@ -19,7 +19,8 @@ function InvestmentPortfolio({ records, onPriceUpdate }) {
     onPriceUpdateRef.current = onPriceUpdate;
   }, [onPriceUpdate, records]);
 
-  const summary = records.reduce(
+  const holdingRecords = records.filter((record) => getInvestmentRecordType(record.data || {}) === 'holding');
+  const summary = holdingRecords.reduce(
     (total, record) => {
       const calc = calcInvestment(record.data || {});
       total.buyTotal += calc.buyTotal;
@@ -42,7 +43,7 @@ function InvestmentPortfolio({ records, onPriceUpdate }) {
       return;
     }
 
-    const investmentRecords = currentRecords.filter((record) => record.data?.symbol);
+    const investmentRecords = currentRecords.filter((record) => record.data?.symbol && getInvestmentRecordType(record.data || {}) !== 'sold');
     if (investmentRecords.length === 0) {
       setRefreshMessage('종목코드가 입력된 항목이 없습니다.');
       return;
@@ -57,14 +58,15 @@ function InvestmentPortfolio({ records, onPriceUpdate }) {
     try {
       for (const record of investmentRecords) {
         const { symbol, market, quantity, avgBuyPrice } = record.data;
+        const recordType = getInvestmentRecordType(record.data || {});
         try {
           const result = await fetchKisPrice({ symbol, market: market || 'KR' });
           const currentPrice = toNumber(result?.currentPrice);
           if (!currentPrice) throw new Error('현재가 응답이 비어 있습니다.');
 
           const safeQuantity = toNumber(quantity);
-          const buyAmount = toNumber(avgBuyPrice) * safeQuantity;
-          const currentAmount = currentPrice * safeQuantity;
+          const buyAmount = recordType === 'holding' ? toNumber(avgBuyPrice) * safeQuantity : 0;
+          const currentAmount = recordType === 'holding' ? currentPrice * safeQuantity : 0;
           const profitLoss = currentAmount - buyAmount;
           const profitLossRate = buyAmount > 0 ? (profitLoss / buyAmount) * 100 : 0;
 
@@ -73,9 +75,7 @@ function InvestmentPortfolio({ records, onPriceUpdate }) {
             await updatePrice(record.id, {
               ...record.data,
               currentPrice,
-              currentAmount,
-              profitLoss,
-              profitLossRate,
+              ...(recordType === 'holding' ? { currentAmount, profitLoss, profitLossRate } : {}),
               priceFetchedAt: result.fetchedAt || new Date().toISOString(),
             });
           }
@@ -155,10 +155,77 @@ function InvestmentPortfolio({ records, onPriceUpdate }) {
           </div>
           <div className="readable-value-panel">
             <span>보유종목</span>
-            <strong>{records.length}개</strong>
+            <strong>{holdingRecords.length}개</strong>
           </div>
         </div>
       </div>
+    </section>
+  );
+}
+
+function todayLocalIso() {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function InvestmentRecordSections({ records, onOpenRecord, onEdit, onDelete, onAdd }) {
+  const groups = [
+    { id: 'holding', title: '보유종목', empty: '보유 중인 종목이 없습니다.' },
+    { id: 'watch', title: '관심종목', empty: '추적 중인 관심종목이 없습니다.' },
+    { id: 'sold', title: '매도기록', empty: '매도 기록이 없습니다.' },
+  ];
+  const grouped = groups.reduce((result, group) => {
+    result[group.id] = records
+      .filter((record) => getInvestmentRecordType(record.data || {}) === group.id)
+      .sort((a, b) => `${b.occurred_on}${b.created_at}`.localeCompare(`${a.occurred_on}${a.created_at}`));
+    return result;
+  }, {});
+
+  function openSellRecord(record) {
+    const data = record.data || {};
+    const sellDate = todayLocalIso();
+    onAdd('investment', {
+      date: sellDate,
+      sellDate,
+      recordType: 'sold',
+      investmentType: data.investmentType || '국내주식',
+      market: data.market || 'KR',
+      assetName: data.assetName || '',
+      symbol: data.symbol || '',
+      avgBuyPrice: data.avgBuyPrice || '',
+      soldQuantity: data.quantity || '',
+      sellPrice: data.currentPrice || '',
+      feeTax: '',
+      memo: data.assetName ? `${data.assetName} 매도 기록` : '매도 기록',
+    });
+  }
+
+  return (
+    <section className="investment-record-sections">
+      {groups.map((group) => (
+        <div className="investment-record-section" key={group.id}>
+          <header>
+            <h2>{group.title}</h2>
+            <span>{grouped[group.id].length}개</span>
+          </header>
+          <div className="record-list investment-record-list">
+            {grouped[group.id].map((record) => (
+              <RecordCard
+                key={record.id}
+                record={record}
+                onOpen={onOpenRecord}
+                onEdit={onEdit}
+                onDelete={onDelete}
+                onInvestmentSell={group.id === 'holding' ? openSellRecord : undefined}
+              />
+            ))}
+            {grouped[group.id].length === 0 && <p className="empty-text compact-empty">{group.empty}</p>}
+          </div>
+        </div>
+      ))}
     </section>
   );
 }
@@ -286,12 +353,22 @@ export default function CategoryView({ categoryId, records, onBack, onAdd, onOpe
       {isAnnualLeave && <AnnualLeaveSummary records={categoryRecords} />}
       {!isInvestment && !isKpass && !isAnnualLeave && <CategorySummary records={categoryRecords} />}
 
-      <section className="record-list">
-        {displayRecords.map((record) => (
-          <RecordCard key={record.id} record={record} onOpen={onOpenRecord} onEdit={onEdit} onDelete={onDelete} />
-        ))}
-        {categoryRecords.length === 0 && <p className="empty-text">이 카테고리에 기록이 없습니다.</p>}
-      </section>
+      {isInvestment ? (
+        <InvestmentRecordSections
+          records={categoryRecords}
+          onOpenRecord={onOpenRecord}
+          onEdit={onEdit}
+          onDelete={onDelete}
+          onAdd={onAdd}
+        />
+      ) : (
+        <section className="record-list">
+          {displayRecords.map((record) => (
+            <RecordCard key={record.id} record={record} onOpen={onOpenRecord} onEdit={onEdit} onDelete={onDelete} />
+          ))}
+          {categoryRecords.length === 0 && <p className="empty-text">이 카테고리에 기록이 없습니다.</p>}
+        </section>
+      )}
 
       {showSearch && (
         <SearchModal

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { CATEGORY_MAP } from '../data/categoryDefinitions';
 import FieldInput from './FieldInput';
-import { calcDutchPay, calcInvestment, calcKpass, formatMoney, toNumber, todayIso } from '../utils/recordUtils';
+import { calcDutchPay, calcInvestment, calcKpass, calcSoldInvestment, formatMoney, getInvestmentRecordType, toNumber, todayIso } from '../utils/recordUtils';
 import { searchKisSymbol } from '../services/kisApiClient';
 import { analyzeReceipt, toGoodlifeFormat } from '../services/receiptOcrClient';
 import {
@@ -56,13 +56,24 @@ function buildInitialForm(category, record, initialData = null) {
     initial.netMedicalCost = data.netMedicalCost || data.amount || '';
   }
   if (category.id === 'investment') {
+    const recordType = getInvestmentRecordType(data);
+    initial.recordType = recordType;
     initial.symbol = data.symbol || data.ticker || '';
     initial.assetName = data.assetName || '';
+    initial.market = data.market || 'KR';
     initial.avgBuyPrice = data.avgBuyPrice || data.buyPrice || '';
     initial.quantity = data.quantity || '';
     initial.currentPrice = data.currentPrice || '';
+    initial.targetPrice = data.targetPrice || '';
+    initial.sellDate = data.sellDate || data.date || todayIso();
+    initial.soldQuantity = data.soldQuantity || '';
+    initial.sellPrice = data.sellPrice || '';
+    initial.feeTax = data.feeTax || '';
     initial.buyAmount = data.buyAmount || (toNumber(initial.avgBuyPrice) * toNumber(initial.quantity) || '');
     initial.currentAmount = data.currentAmount || (toNumber(initial.currentPrice) * toNumber(initial.quantity) || '');
+    initial.sellAmount = data.sellAmount || (toNumber(initial.sellPrice) * toNumber(initial.soldQuantity) || '');
+    initial.realizedProfit = data.realizedProfit || '';
+    initial.realizedProfitRate = data.realizedProfitRate || '';
   }
   if (category.id === 'shopping') {
     initial.productItems = data.productItems?.length ? data.productItems : data.product ? [{ name: data.product, amount: data.amount || '' }] : data.items || [];
@@ -144,6 +155,8 @@ export default function RecordModal({ categoryId, record, initialData = null, on
 
   const dutchPay = categoryId === 'dining' ? calcDutchPay(form) : null;
   const investment = categoryId === 'investment' ? calcInvestment(form) : null;
+  const investmentRecordType = categoryId === 'investment' ? getInvestmentRecordType(form) : '';
+  const soldInvestment = categoryId === 'investment' ? calcSoldInvestment(form) : null;
   const hospitalNet = categoryId === 'hospital' ? Math.max(0, toNumber(form.medicalCost) - toNumber(form.insuranceRefund)) : 0;
 
   useEffect(() => {
@@ -232,13 +245,23 @@ export default function RecordModal({ categoryId, record, initialData = null, on
     if (categoryId === 'hospital' && ['medicalCost', 'insuranceRefund'].includes(fieldId)) {
       next.netMedicalCost = String(Math.max(0, toNumber(next.medicalCost) - toNumber(next.insuranceRefund)));
     }
-    if (categoryId === 'investment' && ['avgBuyPrice', 'quantity', 'currentPrice', 'buyAmount', 'currentAmount'].includes(fieldId)) {
-      const buyAmount = toNumber(next.avgBuyPrice) * toNumber(next.quantity);
-      const currentAmount = toNumber(next.currentPrice) * toNumber(next.quantity);
-      next.buyAmount = buyAmount > 0 ? String(buyAmount) : next.buyAmount || '';
-      next.currentAmount = currentAmount > 0 ? String(currentAmount) : next.currentAmount || '';
-      next.profitLoss = String(toNumber(next.currentAmount) - toNumber(next.buyAmount));
-      next.profitLossRate = toNumber(next.buyAmount) > 0 ? String(((toNumber(next.currentAmount) - toNumber(next.buyAmount)) / toNumber(next.buyAmount)) * 100) : '';
+    if (categoryId === 'investment' && ['recordType', 'avgBuyPrice', 'quantity', 'currentPrice', 'buyAmount', 'currentAmount', 'soldQuantity', 'sellPrice', 'feeTax'].includes(fieldId)) {
+      const type = getInvestmentRecordType(next);
+      if (type === 'holding') {
+        const buyAmount = toNumber(next.avgBuyPrice) * toNumber(next.quantity);
+        const currentAmount = toNumber(next.currentPrice) * toNumber(next.quantity);
+        next.buyAmount = buyAmount > 0 ? String(buyAmount) : next.buyAmount || '';
+        next.currentAmount = currentAmount > 0 ? String(currentAmount) : next.currentAmount || '';
+        next.profitLoss = String(toNumber(next.currentAmount) - toNumber(next.buyAmount));
+        next.profitLossRate = toNumber(next.buyAmount) > 0 ? String(((toNumber(next.currentAmount) - toNumber(next.buyAmount)) / toNumber(next.buyAmount)) * 100) : '';
+      }
+      if (type === 'sold') {
+        const sold = calcSoldInvestment(next);
+        next.buyAmount = sold.buyTotal > 0 ? String(sold.buyTotal) : next.buyAmount || '';
+        next.sellAmount = sold.sellTotal > 0 ? String(sold.sellTotal) : next.sellAmount || '';
+        next.realizedProfit = sold.buyTotal > 0 || sold.sellTotal > 0 ? String(sold.profit) : next.realizedProfit || '';
+        next.realizedProfitRate = sold.buyTotal > 0 ? String(sold.rate) : '';
+      }
     }
     if (categoryId === 'kpass' && ['chargeAmount', 'refundAmount'].includes(fieldId)) {
       const kpass = calcKpass(next);
@@ -249,6 +272,20 @@ export default function RecordModal({ categoryId, record, initialData = null, on
   }
 
   function isFieldVisible(field) {
+    if (categoryId === 'investment') {
+      const always = ['date', 'recordType', 'investmentType', 'market', 'assetName', 'symbol', 'rating', 'memo'];
+      if (always.includes(field.id)) return true;
+      const type = getInvestmentRecordType(form);
+      if (type === 'holding') {
+        return ['avgBuyPrice', 'quantity', 'currentPrice', 'buyAmount', 'currentAmount', 'profitLoss', 'profitLossRate'].includes(field.id);
+      }
+      if (type === 'watch') {
+        return ['currentPrice', 'targetPrice'].includes(field.id);
+      }
+      if (type === 'sold') {
+        return ['sellDate', 'avgBuyPrice', 'soldQuantity', 'sellPrice', 'feeTax', 'buyAmount', 'sellAmount', 'realizedProfit', 'realizedProfitRate'].includes(field.id);
+      }
+    }
     if (categoryId !== 'annual_leave') return true;
     if (field.id === 'recordType' || field.id === 'memo') return true;
     if (!form.recordType) return false;
@@ -258,6 +295,59 @@ export default function RecordModal({ categoryId, record, initialData = null, on
   }
 
   function prepareFormForSave(currentForm) {
+    if (categoryId === 'investment') {
+      const type = getInvestmentRecordType(currentForm);
+      const next = {
+        ...currentForm,
+        recordType: type,
+        market: currentForm.market || 'KR',
+      };
+      if (type === 'holding') {
+        const investmentCalc = calcInvestment(next);
+        next.buyAmount = String(investmentCalc.buyTotal || '');
+        next.currentAmount = String(investmentCalc.currentTotal || '');
+        next.profitLoss = String(investmentCalc.profit || 0);
+        next.profitLossRate = investmentCalc.buyTotal > 0 ? String(investmentCalc.rate) : '';
+        delete next.targetPrice;
+        delete next.sellDate;
+        delete next.soldQuantity;
+        delete next.sellPrice;
+        delete next.sellAmount;
+        delete next.feeTax;
+        delete next.realizedProfit;
+        delete next.realizedProfitRate;
+      }
+      if (type === 'watch') {
+        delete next.avgBuyPrice;
+        delete next.quantity;
+        delete next.buyAmount;
+        delete next.currentAmount;
+        delete next.profitLoss;
+        delete next.profitLossRate;
+        delete next.sellDate;
+        delete next.soldQuantity;
+        delete next.sellPrice;
+        delete next.sellAmount;
+        delete next.feeTax;
+        delete next.realizedProfit;
+        delete next.realizedProfitRate;
+      }
+      if (type === 'sold') {
+        const sold = calcSoldInvestment(next);
+        next.sellAmount = String(sold.sellTotal || '');
+        next.buyAmount = String(sold.buyTotal || '');
+        next.realizedProfit = String(sold.profit || 0);
+        next.realizedProfitRate = sold.buyTotal > 0 ? String(sold.rate) : '';
+        next.date = next.sellDate || next.date;
+        delete next.quantity;
+        delete next.currentPrice;
+        delete next.currentAmount;
+        delete next.targetPrice;
+        delete next.profitLoss;
+        delete next.profitLossRate;
+      }
+      return next;
+    }
     if (categoryId === 'kpass') {
       const kpass = calcKpass(currentForm);
       return {
@@ -422,6 +512,61 @@ export default function RecordModal({ categoryId, record, initialData = null, on
     }
   }
 
+  async function ensureInvestmentSymbolBeforeSave() {
+    if (categoryId !== 'investment') return true;
+    const current = formRef.current;
+    const type = getInvestmentRecordType(current);
+    const assetName = String(current.assetName || '').trim();
+    const symbol = String(current.symbol || '').trim();
+
+    if (!assetName && !symbol) {
+      setError('종목명이나 종목코드 중 하나는 입력해주세요.');
+      return false;
+    }
+
+    if (symbol && assetName) return true;
+    if (type === 'sold' && symbol) return true;
+    if (type === 'sold' && assetName && !symbol) return true;
+
+    const keyword = assetName || symbol;
+    setSymbolSearching(true);
+    setSymbolMessage('');
+    try {
+      const results = await searchKisSymbol(keyword);
+      setSymbolResults(results);
+      if (results.length === 1) {
+        const result = results[0];
+        const next = {
+          ...formRef.current,
+          symbol: result.symbol || result.code || formRef.current.symbol || '',
+          assetName: result.name || result.assetName || formRef.current.assetName || '',
+        };
+        formRef.current = applyDerivedValues(next, 'symbol');
+        setForm(formRef.current);
+        setSymbolResults([]);
+        setSymbolMessage(`${formRef.current.assetName || formRef.current.symbol} 종목 정보가 적용되었습니다.`);
+        return true;
+      }
+      if (symbol && !assetName) {
+        return true;
+      }
+      if (results.length > 1) {
+        setError('검색 결과가 여러 개입니다. 아래 결과에서 종목을 먼저 선택해주세요.');
+        setSymbolMessage('검색 결과를 선택해주세요.');
+        return false;
+      }
+      setError('종목 정보를 찾지 못했습니다. 종목명이나 종목코드를 확인해주세요.');
+      setSymbolMessage('검색 결과가 없습니다.');
+      return false;
+    } catch (err) {
+      if (symbol && !assetName) return true;
+      setError(err.message || '종목 검색에 실패했습니다.');
+      return false;
+    } finally {
+      setSymbolSearching(false);
+    }
+  }
+
   async function handleReceiptFiles(event) {
     const files = Array.from(event.target.files || []).filter((file) => file.type?.startsWith('image/')).slice(0, 5);
     if (files.length === 0) return;
@@ -462,6 +607,11 @@ export default function RecordModal({ categoryId, record, initialData = null, on
 
     setSaving(true);
     try {
+      const investmentReady = await ensureInvestmentSymbolBeforeSave();
+      if (!investmentReady) {
+        setSaving(false);
+        return;
+      }
       await ensureWeatherBeforeSave();
       onClose();
       await onSave(categoryId, prepareFormForSave(formRef.current), record);
@@ -643,11 +793,20 @@ export default function RecordModal({ categoryId, record, initialData = null, on
           </aside>
         )}
 
-        {categoryId === 'investment' && investment.buyTotal > 0 && (
+        {categoryId === 'investment' && investmentRecordType === 'holding' && investment.buyTotal > 0 && (
           <aside className={`calc-box investment-mood ${investment.profit > 0 ? 'is-positive' : investment.profit < 0 ? 'is-negative' : 'is-neutral'}`}>
             <span>투자 계산</span>
             <strong className={investment.profit >= 0 ? 'profit-plus' : 'profit-minus'}>
               {investment.rate.toFixed(2)}% · {formatMoney(investment.profit)}
+            </strong>
+          </aside>
+        )}
+
+        {categoryId === 'investment' && investmentRecordType === 'sold' && (soldInvestment.buyTotal > 0 || soldInvestment.sellTotal > 0) && (
+          <aside className={`calc-box investment-mood ${soldInvestment.profit > 0 ? 'is-positive' : soldInvestment.profit < 0 ? 'is-negative' : 'is-neutral'}`}>
+            <span>매도 계산</span>
+            <strong className={soldInvestment.profit >= 0 ? 'profit-plus' : 'profit-minus'}>
+              {soldInvestment.rate.toFixed(2)}% · {formatMoney(soldInvestment.profit)}
             </strong>
           </aside>
         )}

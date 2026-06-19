@@ -1,13 +1,15 @@
 import { CATEGORY_ICONS, CATEGORY_MAP } from '../data/categoryDefinitions';
-import { calcInvestment, calcKpass, calcLineItemAmount, formatMoney, formatPeriod, getRecordTitle, toNumber } from '../utils/recordUtils';
+import { calcInvestment, calcKpass, calcLineItemAmount, calcSoldInvestment, formatMoney, formatPeriod, getInvestmentRecordType, getRecordTitle, toNumber } from '../utils/recordUtils';
 import InvestmentMoodImage from './ui/InvestmentMoodImage';
 import RecordImagePreview from './ui/RecordImagePreview';
 
-export default function RecordCard({ record, onOpen, onEdit, onDelete }) {
+export default function RecordCard({ record, onOpen, onEdit, onDelete, onInvestmentSell }) {
   const category = CATEGORY_MAP[record.category_id];
   const data = record.data || {};
   const title = getRecordTitle(record.category_id, data);
+  const investmentType = record.category_id === 'investment' ? getInvestmentRecordType(data) : '';
   const investment = record.category_id === 'investment' ? calcInvestment(data) : null;
+  const soldInvestment = record.category_id === 'investment' ? calcSoldInvestment(data) : null;
   const kpass = record.category_id === 'kpass' ? calcKpass(data) : null;
   const period = formatPeriod(data) || record.occurred_on;
   const shoppingItems = record.category_id === 'shopping'
@@ -86,13 +88,39 @@ export default function RecordCard({ record, onOpen, onEdit, onDelete }) {
           {data.watchStatus && <span>{data.watchStatus}</span>}
           {data.episodeStart && data.episodeEnd && <span>{data.episodeStart}화~{data.episodeEnd}화</span>}
           {record.category_id === 'hospital' && <span>실부담 {formatMoney(data.netMedicalCost || record.amount)}</span>}
+          {record.category_id === 'investment' && (
+            <>
+              <span className={`investment-type-badge is-${investmentType}`}>
+                {investmentType === 'watch' ? '관심' : investmentType === 'sold' ? '매도' : '보유'}
+              </span>
+              {data.symbol && <span>{data.symbol}</span>}
+              {investmentType === 'watch' && toNumber(data.currentPrice) > 0 && <span>현재가 {formatMoney(data.currentPrice)}</span>}
+              {investmentType === 'watch' && toNumber(data.targetPrice) > 0 && <span>목표가 {formatMoney(data.targetPrice)}</span>}
+              {investmentType === 'sold' && toNumber(data.sellPrice) > 0 && <span>매도가 {formatMoney(data.sellPrice)}</span>}
+              {investmentType === 'sold' && toNumber(data.soldQuantity) > 0 && <span>{toNumber(data.soldQuantity)}주</span>}
+            </>
+          )}
         </div>
-        {record.category_id === 'investment' && investment.buyTotal > 0 && (
+        {record.category_id === 'investment' && investmentType === 'holding' && investment.buyTotal > 0 && (
           <div className="investment-card-mood">
             <InvestmentMoodImage rate={investment.rate} compact />
             <p className={investment.profit >= 0 ? 'profit-plus' : 'profit-minus'}>
               수익률 {investment.rate.toFixed(2)}% · {formatMoney(investment.profit)}
             </p>
+          </div>
+        )}
+        {record.category_id === 'investment' && investmentType === 'watch' && (
+          <div className="investment-watch-row">
+            <span>관심가 추적</span>
+            <strong>{toNumber(data.currentPrice) > 0 ? formatMoney(data.currentPrice) : '현재가 대기'}</strong>
+          </div>
+        )}
+        {record.category_id === 'investment' && investmentType === 'sold' && (soldInvestment.buyTotal > 0 || soldInvestment.sellTotal > 0) && (
+          <div className="investment-sold-row">
+            <span>실현손익</span>
+            <strong className={soldInvestment.profit >= 0 ? 'profit-plus' : 'profit-minus'}>
+              {soldInvestment.rate.toFixed(2)}% · {formatMoney(soldInvestment.profit)}
+            </strong>
           </div>
         )}
         {data.memo && <p className="record-memo">{data.memo}</p>}
@@ -101,6 +129,9 @@ export default function RecordCard({ record, onOpen, onEdit, onDelete }) {
         <details className="record-menu" onClick={(event) => event.stopPropagation()}>
           <summary aria-label="기록 메뉴">...</summary>
           <div>
+            {record.category_id === 'investment' && investmentType === 'holding' && onInvestmentSell && (
+              <button type="button" onClick={() => onInvestmentSell(record)}>매도 기록</button>
+            )}
             <button type="button" onClick={() => onEdit(record)}>수정</button>
             <button type="button" className="danger" onClick={() => onDelete(record)}>삭제</button>
           </div>
