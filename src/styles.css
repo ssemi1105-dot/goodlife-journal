@@ -3635,3 +3635,96 @@ input[readonly] {
   }
 }
 
+.settings-screen .collapsible-settings-section {
+  overflow: hidden;
+  padding: 0;
+}
+
+.settings-section-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 50px;
+  padding: 8px 10px;
+}
+
+.settings-section-toggle {
+  display: grid;
+  flex: 1;
+  grid-template-columns: 18px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+}
+
+.settings-section-toggle h2 {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.2;
+}
+
+.settings-section-toggle .eyebrow {
+  margin-bottom: 1px;
+}
+
+.settings-section-toggle small {
+  color: var(--muted);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.settings-section-chevron {
+  display: grid;
+  width: 18px;
+  height: 18px;
+  place-items: center;
+  color: var(--muted);
+  font-size: 17px;
+  line-height: 1;
+}
+
+.settings-section-action {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+}
+
+.settings-section-body {
+  display: grid;
+  gap: 8px;
+  padding: 0 10px 10px;
+}
+
+.settings-section-body > .settings-row:first-child,
+.settings-section-body > .category-settings-list:first-child,
+.embedded-settings-content > .settings-row:first-child {
+  border-top: 1px solid var(--line);
+}
+
+.embedded-settings-content {
+  display: grid;
+  gap: 8px;
+}
+
+.collapsible-settings-section.is-collapsed .settings-section-header {
+  min-height: 46px;
+}
+
+@media (max-width: 520px) {
+  .settings-section-toggle {
+    grid-template-columns: 16px minmax(0, 1fr) auto;
+    gap: 7px;
+  }
+
+  .settings-section-toggle small {
+    max-width: 92px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+}
+

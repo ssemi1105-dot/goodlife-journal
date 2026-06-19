@@ -5,6 +5,51 @@ import AdminUserList from './AdminUserList';
 import ShareSettingsPanel from './ShareSettingsPanel';
 import CompactToggle from './ui/CompactToggle';
 
+const DEFAULT_SECTION_OPEN = {
+  profile: true,
+  sharing: false,
+  categories: false,
+  integrations: false,
+  admin: false,
+};
+
+function getSectionStorageKey(userId) {
+  return `goodlife-settings-sections-${userId || 'guest'}`;
+}
+
+function loadSectionState(userId) {
+  if (typeof window === 'undefined') return DEFAULT_SECTION_OPEN;
+  try {
+    const saved = JSON.parse(window.localStorage.getItem(getSectionStorageKey(userId)) || '{}');
+    return { ...DEFAULT_SECTION_OPEN, ...saved };
+  } catch {
+    return DEFAULT_SECTION_OPEN;
+  }
+}
+
+function SettingsSection({ sectionId, eyebrow, title, summary, open, onToggle, action, className = '', children }) {
+  return (
+    <section className={`settings-panel collapsible-settings-section ${className} ${open ? 'is-open' : 'is-collapsed'}`}>
+      <div className="settings-section-header">
+        <button type="button" className="settings-section-toggle" onClick={() => onToggle(sectionId)} aria-expanded={open}>
+          <span className="settings-section-chevron" aria-hidden="true">{open ? '⌄' : '›'}</span>
+          <div>
+            <p className="eyebrow">{eyebrow}</p>
+            <h2>{title}</h2>
+          </div>
+          {summary && <small>{summary}</small>}
+        </button>
+        {action && (
+          <div className="settings-section-action" onClick={(event) => event.stopPropagation()}>
+            {action}
+          </div>
+        )}
+      </div>
+      {open && <div className="settings-section-body">{children}</div>}
+    </section>
+  );
+}
+
 export default function SettingsScreen({
   userId,
   profile,
@@ -22,11 +67,16 @@ export default function SettingsScreen({
   const [profileSaving, setProfileSaving] = useState(false);
   const [sharingSavingCategory, setSharingSavingCategory] = useState('');
   const [weatherBackfill, setWeatherBackfill] = useState({ running: false, message: '' });
+  const [openSections, setOpenSections] = useState(() => loadSectionState(userId));
   const sharing = useSharing(userId, CATEGORIES);
 
   useEffect(() => {
     setProfileName(profile?.display_name || '');
   }, [profile?.display_name]);
+
+  useEffect(() => {
+    setOpenSections(loadSectionState(userId));
+  }, [userId]);
 
   const countByCategory = Object.fromEntries(
     CATEGORIES.map((category) => [category.id, records.filter((record) => record.category_id === category.id).length]),
@@ -129,6 +179,14 @@ export default function SettingsScreen({
     });
   }
 
+  function toggleSettingsSection(sectionId) {
+    setOpenSections((current) => {
+      const next = { ...current, [sectionId]: !current[sectionId] };
+      window.localStorage.setItem(getSectionStorageKey(userId), JSON.stringify(next));
+      return next;
+    });
+  }
+
   const selectedCategory = CATEGORIES.find((category) => category.id === selectedCategoryId);
   const selectedHidden = selectedCategory ? settings.hidden_categories.includes(selectedCategory.id) : false;
   const selectedShared = selectedCategory ? Boolean(sharing.shareSettings[selectedCategory.id]?.is_shared) : false;
@@ -143,14 +201,15 @@ export default function SettingsScreen({
         </div>
       </header>
 
-      <section className="settings-panel profile-panel">
-        <div className="section-title compact-section-title">
-          <div>
-            <p className="eyebrow">Profile</p>
-            <h2>내 프로필</h2>
-          </div>
-          <span>{profile?.role || 'member'}</span>
-        </div>
+      <SettingsSection
+        sectionId="profile"
+        eyebrow="Profile"
+        title="내 프로필"
+        summary={profile?.role || 'member'}
+        open={Boolean(openSections.profile)}
+        onToggle={toggleSettingsSection}
+        className="profile-panel"
+      >
         <label className="field compact-field">
           <span>이름</span>
           <input
@@ -166,22 +225,35 @@ export default function SettingsScreen({
           </button>
           <button className="secondary-button compact" type="button" onClick={onSignOut}>로그아웃</button>
         </div>
-      </section>
+      </SettingsSection>
 
-      <ShareSettingsPanel sharing={sharing} />
+      <SettingsSection
+        sectionId="sharing"
+        eyebrow="Sharing"
+        title="친구/공유"
+        summary={`${sharing.sharedCount}개 공유`}
+        open={Boolean(openSections.sharing)}
+        onToggle={toggleSettingsSection}
+        className="share-settings-panel"
+      >
+        <ShareSettingsPanel sharing={sharing} embedded />
+      </SettingsSection>
 
-      <section className="settings-panel">
-        <div className="section-title compact-section-title">
-          <div>
-            <p className="eyebrow">Categories</p>
-            <h2>카테고리 설정</h2>
-          </div>
+      <SettingsSection
+        sectionId="categories"
+        eyebrow="Categories"
+        title="카테고리 설정"
+        summary={`${CATEGORIES.length}개 카테고리`}
+        open={Boolean(openSections.categories)}
+        onToggle={toggleSettingsSection}
+        action={(
           <CompactToggle
             checked={Boolean(settings.sort_by_record_count)}
             onChange={toggleSortByRecordCount}
             label="기록순"
           />
-        </div>
+        )}
+      >
 
         <div className="category-settings-list compact-category-list">
           {displayedCategoryOrder.map((categoryId) => {
@@ -210,15 +282,17 @@ export default function SettingsScreen({
             );
           })}
         </div>
-      </section>
+      </SettingsSection>
 
-      <section className="settings-panel integration-panel">
-        <div className="section-title compact-section-title">
-          <div>
-            <p className="eyebrow">Integrations</p>
-            <h2>데이터/연동</h2>
-          </div>
-        </div>
+      <SettingsSection
+        sectionId="integrations"
+        eyebrow="Integrations"
+        title="데이터/연동"
+        summary="알림 · 날씨 · API"
+        open={Boolean(openSections.integrations)}
+        onToggle={toggleSettingsSection}
+        className="integration-panel"
+      >
         <div className="settings-row reminder-setting-row">
           <div>
             <strong>월급 등록 알림</strong>
@@ -309,9 +383,21 @@ export default function SettingsScreen({
             {weatherBackfill.running ? '실행 중' : '실행'}
           </button>
         </div>
-      </section>
+      </SettingsSection>
 
-      <AdminUserList enabled={isOwner} />
+      {isOwner && (
+        <SettingsSection
+          sectionId="admin"
+          eyebrow="Admin"
+          title="회원관리"
+          summary="관리자 전용"
+          open={Boolean(openSections.admin)}
+          onToggle={toggleSettingsSection}
+          className="admin-panel"
+        >
+          <AdminUserList enabled={isOwner} embedded />
+        </SettingsSection>
+      )}
 
       {selectedCategory && (
         <div className="modal-backdrop">

@@ -62,7 +62,7 @@ async function fetchAdminUsers(signal) {
   return payload?.users || [];
 }
 
-export default function AdminUserList({ enabled }) {
+export default function AdminUserList({ enabled, embedded = false }) {
   const [users, setUsers] = useState([]);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -91,16 +91,8 @@ export default function AdminUserList({ enabled }) {
 
   if (!enabled) return null;
 
-  return (
-    <section className="settings-panel admin-panel">
-      <div className="section-title compact-section-title">
-        <div>
-          <p className="eyebrow">Admin</p>
-          <h2>회원관리</h2>
-        </div>
-        <span>{users.length}명</span>
-      </div>
-
+  const content = (
+    <>
       {loading && <p className="muted">회원 목록을 확인하는 중입니다.</p>}
       {error && <p className="form-error">{error}</p>}
 
@@ -119,6 +111,21 @@ export default function AdminUserList({ enabled }) {
           </article>
         ))}
       </div>
+    </>
+  );
+
+  if (embedded) return <div className="admin-panel embedded-settings-content">{content}</div>;
+
+  return (
+    <section className="settings-panel admin-panel">
+      <div className="section-title compact-section-title">
+        <div>
+          <p className="eyebrow">Admin</p>
+          <h2>회원관리</h2>
+        </div>
+        <span>{users.length}명</span>
+      </div>
+      {content}
     </section>
   );
 }

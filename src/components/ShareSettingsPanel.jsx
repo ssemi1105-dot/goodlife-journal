@@ -22,7 +22,7 @@ function FriendRow({ friend, onRespond }) {
   );
 }
 
-export default function ShareSettingsPanel({ sharing }) {
+export default function ShareSettingsPanel({ sharing, embedded = false }) {
   const [email, setEmail] = useState('');
   const [requesting, setRequesting] = useState(false);
 
@@ -41,16 +41,8 @@ export default function ShareSettingsPanel({ sharing }) {
     }
   }
 
-  return (
-    <section className="settings-panel share-settings-panel">
-      <div className="section-title compact-section-title">
-        <div>
-          <p className="eyebrow">Sharing</p>
-          <h2>친구/공유</h2>
-        </div>
-        <span>{sharing.sharedCount}개 공유</span>
-      </div>
-
+  const content = (
+    <>
       <div className="settings-row strong-row compact-info-row">
         <div>
           <strong>친구 비교</strong>
@@ -81,6 +73,21 @@ export default function ShareSettingsPanel({ sharing }) {
           <p className="empty-text compact-empty">아직 연결된 친구가 없습니다.</p>
         )}
       </div>
+    </>
+  );
+
+  if (embedded) return <div className="share-settings-panel embedded-settings-content">{content}</div>;
+
+  return (
+    <section className="settings-panel share-settings-panel">
+      <div className="section-title compact-section-title">
+        <div>
+          <p className="eyebrow">Sharing</p>
+          <h2>친구/공유</h2>
+        </div>
+        <span>{sharing.sharedCount}개 공유</span>
+      </div>
+      {content}
     </section>
   );
 }
