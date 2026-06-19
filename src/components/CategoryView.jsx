@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { CATEGORY_ICONS, CATEGORY_MAP } from '../data/categoryDefinitions';
 import { calcAnnualLeave, calcInvestment, calcKpass, formatMoney, getRecordFinanceValue, toNumber } from '../utils/recordUtils';
 import { fetchKisPrice } from '../services/kisApiClient';
@@ -9,6 +9,15 @@ import InvestmentMoodImage from './ui/InvestmentMoodImage';
 function InvestmentPortfolio({ records, onPriceUpdate }) {
   const [loading, setLoading] = useState(false);
   const [lastUpdated, setLastUpdated] = useState(null);
+  const [refreshMessage, setRefreshMessage] = useState('자동 갱신 대기 중');
+  const refreshRunningRef = useRef(false);
+  const recordsRef = useRef(records);
+  const onPriceUpdateRef = useRef(onPriceUpdate);
+
+  useEffect(() => {
+    recordsRef.current = records;
+    onPriceUpdateRef.current = onPriceUpdate;
+  }, [onPriceUpdate, records]);
 
   const summary = records.reduce(
     (total, record) => {
@@ -23,19 +32,25 @@ function InvestmentPortfolio({ records, onPriceUpdate }) {
   const rate = summary.buyTotal > 0 ? (profit / summary.buyTotal) * 100 : 0;
   const profitClass = profit >= 0 ? 'profit-plus' : 'profit-minus';
 
-  async function handleRefresh() {
-    if (!onPriceUpdate) {
-      window.alert('현재가를 저장할 업데이트 함수가 연결되지 않았습니다.');
+  const handleRefresh = useCallback(async ({ silent = false } = {}) => {
+    if (refreshRunningRef.current) return;
+    const updatePrice = onPriceUpdateRef.current;
+    const currentRecords = recordsRef.current;
+
+    if (!updatePrice) {
+      setRefreshMessage('현재가 저장 함수가 연결되지 않았습니다.');
       return;
     }
 
-    const investmentRecords = records.filter((record) => record.data?.symbol);
+    const investmentRecords = currentRecords.filter((record) => record.data?.symbol);
     if (investmentRecords.length === 0) {
-      window.alert('종목코드가 입력된 항목이 없습니다.');
+      setRefreshMessage('종목코드가 입력된 항목이 없습니다.');
       return;
     }
 
+    refreshRunningRef.current = true;
     setLoading(true);
+    if (!silent) setRefreshMessage('현재가 조회 중...');
     let successCount = 0;
     const failedSymbols = [];
 
@@ -53,14 +68,17 @@ function InvestmentPortfolio({ records, onPriceUpdate }) {
           const profitLoss = currentAmount - buyAmount;
           const profitLossRate = buyAmount > 0 ? (profitLoss / buyAmount) * 100 : 0;
 
-          await onPriceUpdate(record.id, {
-            ...record.data,
-            currentPrice,
-            currentAmount,
-            profitLoss,
-            profitLossRate,
-            priceFetchedAt: result.fetchedAt || new Date().toISOString(),
-          });
+          const previousPrice = toNumber(record.data?.currentPrice);
+          if (previousPrice !== currentPrice || toNumber(record.data?.currentAmount) !== currentAmount) {
+            await updatePrice(record.id, {
+              ...record.data,
+              currentPrice,
+              currentAmount,
+              profitLoss,
+              profitLossRate,
+              priceFetchedAt: result.fetchedAt || new Date().toISOString(),
+            });
+          }
           successCount += 1;
         } catch (err) {
           console.error(`${symbol} 조회 실패:`, err);
@@ -71,14 +89,26 @@ function InvestmentPortfolio({ records, onPriceUpdate }) {
       const updatedAt = new Date().toLocaleTimeString('ko-KR');
       setLastUpdated(updatedAt);
       if (failedSymbols.length > 0) {
-        window.alert(`${successCount}개 종목 업데이트 완료, ${failedSymbols.length}개 실패: ${failedSymbols.join(', ')}`);
+        setRefreshMessage(`${successCount}개 확인, ${failedSymbols.length}개 실패`);
       } else {
-        window.alert(`${successCount}개 종목 현재가를 업데이트했습니다.`);
+        setRefreshMessage(`${successCount}개 종목 자동 갱신 완료`);
       }
     } finally {
       setLoading(false);
+      refreshRunningRef.current = false;
     }
-  }
+  }, []);
+
+  useEffect(() => {
+    handleRefresh({ silent: true });
+    const timer = window.setInterval(() => {
+      handleRefresh({ silent: true });
+    }, 5000);
+
+    return () => {
+      window.clearInterval(timer);
+    };
+  }, [handleRefresh]);
 
   return (
     <section className={`portfolio-panel investment-account-card ${profit > 0 ? 'is-positive' : profit < 0 ? 'is-negative' : 'is-neutral'}`}>
@@ -94,12 +124,13 @@ function InvestmentPortfolio({ records, onPriceUpdate }) {
           <button
             className="secondary-button investment-refresh-button"
             type="button"
-            onClick={handleRefresh}
+            onClick={() => handleRefresh()}
             disabled={loading}
           >
-            {loading ? '조회 중...' : '주가 새로고침'}
+            {loading ? '조회 중...' : '수동 갱신'}
           </button>
           {lastUpdated && <span>마지막 업데이트: {lastUpdated}</span>}
+          <span>{refreshMessage}</span>
         </div>
       </div>
 
