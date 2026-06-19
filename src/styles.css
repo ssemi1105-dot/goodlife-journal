@@ -3621,6 +3621,31 @@ input[readonly] {
   white-space: nowrap;
 }
 
+.investment-watch-row small {
+  max-width: 96px;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 9.5px;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.investment-watch-row.is-up strong,
+.investment-watch-row.is-up span {
+  color: #2563eb;
+}
+
+.investment-watch-row.is-down strong,
+.investment-watch-row.is-down span {
+  color: #dc2626;
+}
+
+.investment-watch-row.is-flat strong,
+.investment-watch-row.is-flat span {
+  color: #475569;
+}
+
 @media (max-width: 420px) {
   .record-card.is-investment-record .record-body {
     grid-template-columns: minmax(0, 1fr) 76px;

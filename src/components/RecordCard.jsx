@@ -10,6 +10,11 @@ export default function RecordCard({ record, onOpen, onEdit, onDelete, onInvestm
   const investmentType = record.category_id === 'investment' ? getInvestmentRecordType(data) : '';
   const investment = record.category_id === 'investment' ? calcInvestment(data) : null;
   const soldInvestment = record.category_id === 'investment' ? calcSoldInvestment(data) : null;
+  const hasDailyChangeRate = data.priceChangeRate !== null && data.priceChangeRate !== undefined && data.priceChangeRate !== '';
+  const hasDailyChange = data.priceChange !== null && data.priceChange !== undefined && data.priceChange !== '';
+  const dailyChangeRate = toNumber(data.priceChangeRate);
+  const dailyChange = toNumber(data.priceChange);
+  const dailyChangeClass = dailyChangeRate > 0 || dailyChange > 0 ? 'is-up' : dailyChangeRate < 0 || dailyChange < 0 ? 'is-down' : 'is-flat';
   const kpass = record.category_id === 'kpass' ? calcKpass(data) : null;
   const period = formatPeriod(data) || record.occurred_on;
   const showWeather = record.category_id !== 'investment' && record.category_id !== 'video';
@@ -111,9 +116,18 @@ export default function RecordCard({ record, onOpen, onEdit, onDelete, onInvestm
           </div>
         )}
         {record.category_id === 'investment' && investmentType === 'watch' && (
-          <div className="investment-watch-row">
-            <span>관심가 추적</span>
-            <strong>{toNumber(data.currentPrice) > 0 ? formatMoney(data.currentPrice) : '현재가 대기'}</strong>
+          <div className={`investment-watch-row ${dailyChangeClass}`}>
+            <span>
+              {hasDailyChangeRate
+                ? `전일대비 ${dailyChangeRate >= 0 ? '+' : ''}${dailyChangeRate.toFixed(2)}%`
+                : '등락률 대기'}
+            </span>
+            <strong>
+              {hasDailyChange
+                ? `${dailyChange >= 0 ? '+' : ''}${formatMoney(dailyChange)}`
+                : toNumber(data.currentPrice) > 0 ? formatMoney(data.currentPrice) : '현재가 대기'}
+            </strong>
+            {toNumber(data.currentPrice) > 0 && <small>현재가 {formatMoney(data.currentPrice)}</small>}
           </div>
         )}
         {record.category_id === 'investment' && investmentType === 'sold' && (soldInvestment.buyTotal > 0 || soldInvestment.sellTotal > 0) && (

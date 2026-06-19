@@ -32,6 +32,7 @@ function InvestmentPortfolio({ records, onPriceUpdate }) {
   const profit = summary.currentTotal - summary.buyTotal;
   const rate = summary.buyTotal > 0 ? (profit / summary.buyTotal) * 100 : 0;
   const profitClass = profit >= 0 ? 'profit-plus' : 'profit-minus';
+  const hasQuoteValue = (value) => value !== null && value !== undefined && value !== '';
 
   const handleRefresh = useCallback(async ({ silent = false } = {}) => {
     if (refreshRunningRef.current) return;
@@ -63,6 +64,13 @@ function InvestmentPortfolio({ records, onPriceUpdate }) {
           const result = await fetchKisPrice({ symbol, market: market || 'KR' });
           const currentPrice = toNumber(result?.currentPrice);
           if (!currentPrice) throw new Error('현재가 응답이 비어 있습니다.');
+          const quotePatch = {
+            currentPrice,
+            ...(hasQuoteValue(result?.previousClose) ? { previousClose: toNumber(result.previousClose) } : {}),
+            ...(hasQuoteValue(result?.priceChange) ? { priceChange: toNumber(result.priceChange) } : {}),
+            ...(hasQuoteValue(result?.priceChangeRate) ? { priceChangeRate: toNumber(result.priceChangeRate) } : {}),
+            priceFetchedAt: result.fetchedAt || new Date().toISOString(),
+          };
 
           const safeQuantity = toNumber(quantity);
           const buyAmount = recordType === 'holding' ? toNumber(avgBuyPrice) * safeQuantity : 0;
@@ -71,12 +79,14 @@ function InvestmentPortfolio({ records, onPriceUpdate }) {
           const profitLossRate = buyAmount > 0 ? (profitLoss / buyAmount) * 100 : 0;
 
           const previousPrice = toNumber(record.data?.currentPrice);
-          if (previousPrice !== currentPrice || toNumber(record.data?.currentAmount) !== currentAmount) {
+          const quoteChanged = Object.entries(quotePatch)
+            .filter(([key]) => key !== 'priceFetchedAt')
+            .some(([key, value]) => record.data?.[key] !== value);
+          if (previousPrice !== currentPrice || toNumber(record.data?.currentAmount) !== currentAmount || quoteChanged) {
             await updatePrice(record.id, {
               ...record.data,
-              currentPrice,
+              ...quotePatch,
               ...(recordType === 'holding' ? { currentAmount, profitLoss, profitLossRate } : {}),
-              priceFetchedAt: result.fetchedAt || new Date().toISOString(),
             });
           }
           successCount += 1;

@@ -54,6 +54,52 @@ function mergeSymbolResults(primary = [], fallback = []) {
   });
 }
 
+function parseQuoteNumber(value) {
+  if (value === null || value === undefined || value === '') return null;
+  const parsed = Number(String(value).replaceAll(',', '').replace('%', '').trim());
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function pickQuoteField(source, keys) {
+  const candidates = {
+    ...(source || {}),
+    ...(source?.output || {}),
+    ...(source?.result || {}),
+    ...(source?.data || {}),
+    ...(source?.quote || {}),
+  };
+  return keys.map((key) => candidates[key]).find((value) => value !== null && value !== undefined && value !== '');
+}
+
+function applyKisSign(value, sign) {
+  if (value === null || value === undefined) return value;
+  const signValue = String(sign || '').trim();
+  if (['4', '5', '-'].includes(signValue)) return -Math.abs(value);
+  if (['1', '2', '+'].includes(signValue)) return Math.abs(value);
+  return value;
+}
+
+function normalizeKisQuote(data = {}) {
+  const sign = pickQuoteField(data, ['changeSign', 'priceChangeSign', 'prdy_vrss_sign', 'sign']);
+  const currentPrice = parseQuoteNumber(pickQuoteField(data, ['currentPrice', 'price', 'stck_prpr', 'last', 'close']));
+  const previousClose = parseQuoteNumber(pickQuoteField(data, ['previousClose', 'prevClose', 'prdy_clpr', 'stck_sdpr']));
+  const rawPriceChange = parseQuoteNumber(pickQuoteField(data, ['priceChange', 'changePrice', 'dayChange', 'prdy_vrss', 'diff']));
+  const rawPriceChangeRate = parseQuoteNumber(pickQuoteField(data, ['priceChangeRate', 'changeRate', 'dayChangeRate', 'prdy_ctrt', 'rate']));
+  const computedChange = currentPrice !== null && previousClose !== null ? currentPrice - previousClose : null;
+  const priceChange = applyKisSign(rawPriceChange ?? computedChange, sign);
+  const computedRate = previousClose > 0 && priceChange !== null ? (priceChange / previousClose) * 100 : null;
+  const priceChangeRate = applyKisSign(rawPriceChangeRate ?? computedRate, sign);
+
+  return {
+    ...data,
+    currentPrice: currentPrice ?? data.currentPrice,
+    previousClose: previousClose ?? data.previousClose,
+    priceChange: priceChange ?? data.priceChange,
+    priceChangeRate: priceChangeRate ?? data.priceChangeRate,
+    fetchedAt: data.fetchedAt || new Date().toISOString(),
+  };
+}
+
 /**
  * 현재가 조회. 계좌 연동 없이 시세만 조회한다.
  */
@@ -63,7 +109,7 @@ export async function fetchKisPrice({ symbol, market = 'KR' }) {
     body: { action: 'quote', symbol, market },
   });
   if (error) throw new Error(`fetchKisPrice failed: ${error.message}`);
-  return data;
+  return normalizeKisQuote(data);
 }
 
 /**
