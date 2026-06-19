@@ -115,6 +115,20 @@ export default function SettingsScreen({
     }
   }
 
+  async function updateReminderSetting(key, patch) {
+    const current = settings.reminder_settings || {};
+    await onSaveSettings({
+      ...settings,
+      reminder_settings: {
+        ...current,
+        [key]: {
+          ...(current[key] || {}),
+          ...patch,
+        },
+      },
+    });
+  }
+
   const selectedCategory = CATEGORIES.find((category) => category.id === selectedCategoryId);
   const selectedHidden = selectedCategory ? settings.hidden_categories.includes(selectedCategory.id) : false;
   const selectedShared = selectedCategory ? Boolean(sharing.shareSettings[selectedCategory.id]?.is_shared) : false;
@@ -203,6 +217,75 @@ export default function SettingsScreen({
           <div>
             <p className="eyebrow">Integrations</p>
             <h2>데이터/연동</h2>
+          </div>
+        </div>
+        <div className="settings-row reminder-setting-row">
+          <div>
+            <strong>월급 등록 알림</strong>
+            <span>지정한 날짜에 앱을 켜면 월급 기록을 바로 등록할 수 있게 알려줍니다.</span>
+          </div>
+          <div className="reminder-controls">
+            <input
+              type="number"
+              min="1"
+              max="31"
+              inputMode="numeric"
+              value={settings.reminder_settings?.salary?.day || ''}
+              onChange={(event) => updateReminderSetting('salary', { day: event.target.value })}
+              placeholder="일"
+              aria-label="월급일"
+            />
+            <CompactToggle
+              checked={Boolean(settings.reminder_settings?.salary?.enabled)}
+              onChange={(checked) => updateReminderSetting('salary', { enabled: checked })}
+              label={settings.reminder_settings?.salary?.enabled ? 'ON' : 'OFF'}
+            />
+          </div>
+        </div>
+        <div className="settings-row reminder-setting-row">
+          <div>
+            <strong>적금 등록 알림</strong>
+            <span>지정한 날짜에 적금 납입 기록을 빠르게 추가할 수 있게 알려줍니다.</span>
+          </div>
+          <div className="reminder-controls">
+            <input
+              type="number"
+              min="1"
+              max="31"
+              inputMode="numeric"
+              value={settings.reminder_settings?.savings?.day || ''}
+              onChange={(event) => updateReminderSetting('savings', { day: event.target.value })}
+              placeholder="일"
+              aria-label="적금일"
+            />
+            <CompactToggle
+              checked={Boolean(settings.reminder_settings?.savings?.enabled)}
+              onChange={(checked) => updateReminderSetting('savings', { enabled: checked })}
+              label={settings.reminder_settings?.savings?.enabled ? 'ON' : 'OFF'}
+            />
+          </div>
+        </div>
+        <div className="settings-row reminder-setting-row">
+          <div>
+            <strong>구독료 등록 알림</strong>
+            <span>지정한 날짜에 구독료 기록을 빠르게 추가할 수 있게 알려줍니다.</span>
+          </div>
+          <div className="reminder-controls">
+            <input
+              type="number"
+              min="1"
+              max="31"
+              inputMode="numeric"
+              value={settings.reminder_settings?.subscription?.day || ''}
+              onChange={(event) => updateReminderSetting('subscription', { day: event.target.value })}
+              placeholder="일"
+              aria-label="구독료일"
+            />
+            <CompactToggle
+              checked={Boolean(settings.reminder_settings?.subscription?.enabled)}
+              onChange={(checked) => updateReminderSetting('subscription', { enabled: checked })}
+              label={settings.reminder_settings?.subscription?.enabled ? 'ON' : 'OFF'}
+            />
           </div>
         </div>
         <div className="settings-row">

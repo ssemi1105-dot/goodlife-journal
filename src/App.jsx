@@ -12,6 +12,67 @@ import { useRecords } from './hooks/useRecords';
 
 const EMPTY_FILTERS = { query: '', dateFrom: '', dateTo: '', minAmount: '', maxAmount: '', minRating: '' };
 
+const REMINDER_DEFINITIONS = [
+  {
+    id: 'salary',
+    categoryId: 'salary',
+    icon: '💰',
+    title: '오늘은 월급날이에요',
+    body: '월급 기록을 등록하시겠습니까?',
+    actionLabel: '월급 등록',
+    makeInitialData: (today) => ({ date: today, salaryBasis: '세후' }),
+  },
+  {
+    id: 'savings',
+    categoryId: 'savings',
+    icon: '🏦',
+    title: '오늘은 적금 납입일이에요',
+    body: '적금 기록을 등록하시겠습니까?',
+    actionLabel: '적금 등록',
+    makeInitialData: (today) => ({ date: today }),
+  },
+  {
+    id: 'subscription',
+    categoryId: 'subscription',
+    icon: '🔁',
+    title: '오늘은 구독료 확인일이에요',
+    body: '구독료 기록을 등록하시겠습니까?',
+    actionLabel: '구독료 등록',
+    makeInitialData: (today, day) => ({ date: today, billingDay: String(day), active: true }),
+  },
+];
+
+function todayLocalIso() {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function reminderDismissKey(reminderId, date) {
+  return `${reminderId}-${date}`;
+}
+
+function ReminderPrompt({ reminder, onRegister, onDismiss }) {
+  if (!reminder) return null;
+  return (
+    <section className="daily-reminder-banner">
+      <div>
+        <span>{reminder.icon}</span>
+        <div>
+          <strong>{reminder.title}</strong>
+          <p>{reminder.body}</p>
+        </div>
+      </div>
+      <div className="daily-reminder-actions">
+        <button type="button" className="primary-button compact" onClick={onRegister}>{reminder.actionLabel}</button>
+        <button type="button" className="secondary-button compact" onClick={onDismiss}>오늘은 안 보기</button>
+      </div>
+    </section>
+  );
+}
+
 function CategoryPicker({ settings, onSelect, onClose }) {
   const categories = settings.category_order
     .map((id) => CATEGORY_MAP[id])
@@ -49,9 +110,12 @@ export default function App() {
   const [activeCategory, setActiveCategory] = useState(null);
   const [modalCategory, setModalCategory] = useState(null);
   const [editingRecord, setEditingRecord] = useState(null);
+  const [modalInitialData, setModalInitialData] = useState(null);
   const [viewingRecord, setViewingRecord] = useState(null);
   const [showPicker, setShowPicker] = useState(false);
   const [filters, setFilters] = useState(EMPTY_FILTERS);
+  const today = todayLocalIso();
+  const todayDay = Number(today.slice(-2));
 
   const normalizedSettings = useMemo(() => {
     const allIds = CATEGORIES.map((category) => category.id);
@@ -59,16 +123,51 @@ export default function App() {
     return { ...settings, category_order: ordered };
   }, [settings]);
 
-  function openAdd(categoryId) {
+  const dueReminder = useMemo(() => {
+    const reminderSettings = normalizedSettings.reminder_settings || {};
+    const dismissed = reminderSettings.dismissed || {};
+    return REMINDER_DEFINITIONS.find((reminder) => {
+      const config = reminderSettings[reminder.id] || {};
+      if (!config.enabled || Number(config.day) !== todayDay) return false;
+      if (dismissed[reminderDismissKey(reminder.id, today)]) return false;
+      return !records.some((record) => record.category_id === reminder.categoryId && record.occurred_on === today);
+    });
+  }, [normalizedSettings.reminder_settings, records, today, todayDay]);
+
+  function openAdd(categoryId, initialData = null) {
     setEditingRecord(null);
-    if (categoryId) setModalCategory(categoryId);
-    else setShowPicker(true);
+    setModalInitialData(initialData);
+    if (categoryId) {
+      setModalCategory(categoryId);
+    } else {
+      setShowPicker(true);
+    }
   }
 
   function openEdit(record) {
     setViewingRecord(null);
     setEditingRecord(record);
+    setModalInitialData(null);
     setModalCategory(record.category_id);
+  }
+
+  async function dismissReminder(reminder) {
+    const current = normalizedSettings.reminder_settings || {};
+    await saveSettings({
+      ...normalizedSettings,
+      reminder_settings: {
+        ...current,
+        dismissed: {
+          ...(current.dismissed || {}),
+          [reminderDismissKey(reminder.id, today)]: true,
+        },
+      },
+    });
+  }
+
+  async function registerFromReminder(reminder) {
+    await dismissReminder(reminder);
+    openAdd(reminder.categoryId, reminder.makeInitialData(today, todayDay));
   }
 
   async function updateRecordData(id, data) {
@@ -120,6 +219,14 @@ export default function App() {
           onOpenRecord={setViewingRecord}
           onEdit={openEdit}
           onDelete={confirmDelete}
+        />
+      )}
+
+      {view === 'home' && dueReminder && (
+        <ReminderPrompt
+          reminder={dueReminder}
+          onRegister={() => registerFromReminder(dueReminder)}
+          onDismiss={() => dismissReminder(dueReminder)}
         />
       )}
 
@@ -178,7 +285,7 @@ export default function App() {
           onClose={() => setShowPicker(false)}
           onSelect={(categoryId) => {
             setShowPicker(false);
-            setModalCategory(categoryId);
+            openAdd(categoryId);
           }}
         />
       )}
@@ -196,9 +303,11 @@ export default function App() {
         <RecordModal
           categoryId={modalCategory}
           record={editingRecord}
+          initialData={modalInitialData}
           onClose={() => {
             setModalCategory(null);
             setEditingRecord(null);
+            setModalInitialData(null);
           }}
           onSave={saveRecord}
         />

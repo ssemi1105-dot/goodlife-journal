@@ -12,7 +12,7 @@ import {
   searchWeatherLocation,
 } from '../services/weatherClient';
 
-function buildInitialForm(category, record) {
+function buildInitialForm(category, record, initialData = null) {
   const base = Object.fromEntries(category.fields.map((field) => {
     if (['tags', 'multiChoice', 'lineItems', 'photos'].includes(field.type)) return [field.id, []];
     if (field.type === 'rating') return [field.id, 0];
@@ -20,7 +20,7 @@ function buildInitialForm(category, record) {
     if (field.type === 'dateRange') return [field.id, { start: '', end: '' }];
     return [field.id, ''];
   }));
-  const data = record?.data || {};
+  const data = record?.data || initialData || {};
   const initial = {
     ...base,
     ...data,
@@ -109,9 +109,9 @@ function withTimeout(promise, ms) {
   ]);
 }
 
-export default function RecordModal({ categoryId, record, onClose, onSave }) {
+export default function RecordModal({ categoryId, record, initialData = null, onClose, onSave }) {
   const category = CATEGORY_MAP[categoryId];
-  const [form, setForm] = useState(() => buildInitialForm(category, record));
+  const [form, setForm] = useState(() => buildInitialForm(category, record, initialData));
   const formRef = useRef(form);
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
@@ -131,7 +131,7 @@ export default function RecordModal({ categoryId, record, onClose, onSave }) {
   const weatherFetchKeyRef = useRef('');
 
   useEffect(() => {
-    const nextForm = buildInitialForm(category, record);
+    const nextForm = buildInitialForm(category, record, initialData);
     formRef.current = nextForm;
     setForm(nextForm);
     setFormRevision((revision) => revision + 1);
@@ -140,7 +140,7 @@ export default function RecordModal({ categoryId, record, onClose, onSave }) {
     setLocationResults([]);
     setLocationMessage('');
     weatherFetchKeyRef.current = '';
-  }, [category, record]);
+  }, [category, record, initialData]);
 
   const dutchPay = categoryId === 'dining' ? calcDutchPay(form) : null;
   const investment = categoryId === 'investment' ? calcInvestment(form) : null;
