@@ -219,12 +219,14 @@ export default function FieldInput({ field, value, onChange, onDraftChange }) {
     );
   }
 
-  const inputType = field.type === 'money' || field.type === 'number' ? 'number' : field.type === 'duration' ? 'text' : field.type;
+  const hasDecimalStep = field.step !== undefined && Number(field.step) % 1 !== 0;
+  const inputType = hasDecimalStep ? 'text' : field.type === 'money' || field.type === 'number' ? 'number' : field.type === 'duration' ? 'text' : field.type;
   const placeholder = field.placeholder || (field.type === 'duration' ? '예: 1시간 30분' : '');
 
   return (
     <input
       type={inputType}
+      inputMode={hasDecimalStep ? 'decimal' : field.type === 'money' || field.type === 'number' ? 'numeric' : undefined}
       min={field.min}
       max={field.max}
       step={field.step}
