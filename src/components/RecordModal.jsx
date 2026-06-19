@@ -317,11 +317,9 @@ export default function RecordModal({ categoryId, record, onClose, onSave }) {
   }
 
   function setField(fieldId, value) {
-    setForm((current) => {
-      const next = applyDerivedValues({ ...current, [fieldId]: value }, fieldId);
-      formRef.current = next;
-      return next;
-    });
+    const next = applyDerivedValues({ ...formRef.current, [fieldId]: value }, fieldId);
+    formRef.current = next;
+    setForm(next);
   }
 
   function setFieldDraft(fieldId, value) {
@@ -329,14 +327,12 @@ export default function RecordModal({ categoryId, record, onClose, onSave }) {
   }
 
   function mergeFormPatch(patch) {
-    setForm((current) => {
-      let next = { ...current, ...patch };
-      Object.keys(patch).forEach((fieldId) => {
-        next = applyDerivedValues(next, fieldId);
-      });
-      formRef.current = next;
-      return next;
+    let next = { ...formRef.current, ...patch };
+    Object.keys(patch).forEach((fieldId) => {
+      next = applyDerivedValues(next, fieldId);
     });
+    formRef.current = next;
+    setForm(next);
   }
 
   function applySymbolResult(result) {

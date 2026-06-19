@@ -167,7 +167,15 @@ export default function FieldInput({ field, value, onChange, onDraftChange }) {
     return (
       <div className="tmdb-input">
         <div className="inline-control">
-          <input value={tmdbQuery} onChange={(event) => setTmdbQuery(event.target.value)} placeholder="작품명 검색" />
+          <input
+            value={tmdbQuery}
+            onChange={(event) => {
+              const nextQuery = event.target.value;
+              setTmdbQuery(nextQuery);
+              onDraftChange?.(nextQuery);
+            }}
+            placeholder="작품명 검색"
+          />
           <button type="button" onClick={() => searchTmdb()} disabled={searching}>{searching ? '검색 중' : '검색'}</button>
         </div>
         {(value?.posterUrl || value?.poster || value?.tmdbPosterUrl) && (
