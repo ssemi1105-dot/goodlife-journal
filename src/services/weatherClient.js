@@ -2,7 +2,6 @@ export const WEATHER_ENABLED_CATEGORIES = [
   'fishing',
   'dining',
   'cooking',
-  'exercise',
   'shopping',
   'meeting',
   'game',

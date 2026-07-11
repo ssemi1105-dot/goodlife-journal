@@ -65,6 +65,7 @@ export function getRecordTitle(categoryId, data = {}) {
     if (type === 'sold') return `${name} 매도`;
     return name;
   }
+  if (categoryId === 'exercise') return data.bodyWeight ? `체중 ${toNumber(data.bodyWeight)}kg` : data.type || '체중관리';
   if (categoryId === 'hospital') return data.hospitalName || data.hospital || '병원진료';
   if (categoryId === 'kpass') return data.yearMonth || 'K-pass';
   if (categoryId === 'annual_leave') {

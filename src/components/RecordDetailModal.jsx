@@ -38,7 +38,7 @@ export default function RecordDetailModal({ record, onClose, onEdit, onDelete })
   const title = getRecordTitle(record.category_id, data);
   const fields = category?.fields || [];
   const extraPhotoUrls = Array.isArray(data.photos) ? data.photos.map((photo) => photo.signedUrl).filter(Boolean).slice(1) : [];
-  const showWeather = record.category_id !== 'investment' && record.category_id !== 'video';
+  const showWeather = record.category_id !== 'investment' && record.category_id !== 'video' && record.category_id !== 'exercise';
 
   return (
     <div className="modal-backdrop">

@@ -240,6 +240,110 @@ function InvestmentRecordSections({ records, onOpenRecord, onEdit, onDelete, onA
   );
 }
 
+const BODY_METRICS = [
+  { id: 'bodyWeight', label: '체중', unit: 'kg', color: '#0f766e' },
+  { id: 'armCm', label: '팔', unit: 'cm', color: '#2563eb' },
+  { id: 'waistCm', label: '허리', unit: 'cm', color: '#dc2626' },
+  { id: 'thighCm', label: '허벅지', unit: 'cm', color: '#7c3aed' },
+  { id: 'calfCm', label: '종아리', unit: 'cm', color: '#ca8a04' },
+];
+
+function formatBodyValue(value, unit) {
+  const number = toNumber(value);
+  if (!number) return '-';
+  return `${Number.isInteger(number) ? number : number.toFixed(1)}${unit}`;
+}
+
+function BodyMetricChart({ metric, points }) {
+  const values = points
+    .map((point) => ({ ...point, value: toNumber(point.data?.[metric.id]) }))
+    .filter((point) => point.value > 0);
+  const latest = values[values.length - 1];
+  const first = values[0];
+  const trend = latest && first ? latest.value - first.value : 0;
+  const min = Math.min(...values.map((point) => point.value));
+  const max = Math.max(...values.map((point) => point.value));
+  const range = Math.max(0.1, max - min);
+  const padding = Math.max(range * 0.12, metric.id === 'bodyWeight' ? 0.4 : 0.2);
+  const minScale = min - padding;
+  const maxScale = max + padding;
+  const width = 260;
+  const height = 86;
+  const xFor = (index) => values.length <= 1 ? width / 2 : (index / (values.length - 1)) * width;
+  const yFor = (value) => height - ((value - minScale) / (maxScale - minScale)) * height;
+  const path = values
+    .map((point, index) => `${index === 0 ? 'M' : 'L'} ${xFor(index).toFixed(1)} ${yFor(point.value).toFixed(1)}`)
+    .join(' ');
+
+  return (
+    <article className="body-metric-card">
+      <header>
+        <span>{metric.label}</span>
+        <strong>{latest ? formatBodyValue(latest.value, metric.unit) : '-'}</strong>
+      </header>
+      <div className="body-chart-frame">
+        {values.length > 0 ? (
+          <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label={`${metric.label} 변화 그래프`}>
+            <path className="body-chart-grid" d={`M 0 ${height / 2} H ${width}`} />
+            {values.length > 1 && <path className="body-chart-line" d={path} style={{ stroke: metric.color }} />}
+            {values.map((point, index) => (
+              <circle
+                key={`${metric.id}-${point.id || point.occurred_on}-${index}`}
+                cx={xFor(index)}
+                cy={yFor(point.value)}
+                r={values.length === 1 ? 4.5 : 3}
+                style={{ fill: metric.color }}
+              />
+            ))}
+          </svg>
+        ) : (
+          <p>기록 없음</p>
+        )}
+      </div>
+      <footer>
+        <span>{values.length > 0 ? `${values.length}회 기록` : '기록 대기'}</span>
+        {values.length > 1 && (
+          <strong className={trend <= 0 ? 'is-down' : 'is-up'}>
+            {trend > 0 ? '+' : ''}{trend.toFixed(1)}{metric.unit}
+          </strong>
+        )}
+      </footer>
+    </article>
+  );
+}
+
+function BodyManagementSummary({ records }) {
+  const points = [...records]
+    .filter((record) => record.data?.bodyWeight || record.data?.armCm || record.data?.waistCm || record.data?.thighCm || record.data?.calfCm)
+    .sort((a, b) => `${a.occurred_on}${a.created_at}`.localeCompare(`${b.occurred_on}${b.created_at}`));
+  const latest = points[points.length - 1]?.data || {};
+
+  return (
+    <section className="body-management-panel">
+      <header>
+        <div>
+          <p className="eyebrow">Body log</p>
+          <h2>체중관리 변화</h2>
+        </div>
+        <strong>{formatBodyValue(latest.bodyWeight, 'kg')}</strong>
+      </header>
+      <div className="body-latest-grid">
+        {BODY_METRICS.map((metric) => (
+          <div key={metric.id}>
+            <span>{metric.label}</span>
+            <strong>{formatBodyValue(latest[metric.id], metric.unit)}</strong>
+          </div>
+        ))}
+      </div>
+      <div className="body-chart-grid-list">
+        {BODY_METRICS.map((metric) => (
+          <BodyMetricChart key={metric.id} metric={metric} points={points} />
+        ))}
+      </div>
+    </section>
+  );
+}
+
 function CategorySummary({ records }) {
   const now = new Date();
   const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
@@ -335,6 +439,7 @@ export default function CategoryView({ categoryId, records, onBack, onAdd, onOpe
   const isInvestment = categoryId === 'investment';
   const isKpass = categoryId === 'kpass';
   const isAnnualLeave = categoryId === 'annual_leave';
+  const isBodyManagement = categoryId === 'exercise';
   const displayRecords = isAnnualLeave
     ? [...categoryRecords].sort((a, b) => {
       const aGrant = a.data?.recordType === 'grant' ? 1 : 0;
@@ -361,7 +466,8 @@ export default function CategoryView({ categoryId, records, onBack, onAdd, onOpe
       {isInvestment && <InvestmentPortfolio records={categoryRecords} onPriceUpdate={onUpdateRecord} />}
       {isKpass && <KpassSummary records={categoryRecords} />}
       {isAnnualLeave && <AnnualLeaveSummary records={categoryRecords} />}
-      {!isInvestment && !isKpass && !isAnnualLeave && <CategorySummary records={categoryRecords} />}
+      {isBodyManagement && <BodyManagementSummary records={categoryRecords} />}
+      {!isInvestment && !isKpass && !isAnnualLeave && !isBodyManagement && <CategorySummary records={categoryRecords} />}
 
       {isInvestment ? (
         <InvestmentRecordSections

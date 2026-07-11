@@ -17,7 +17,7 @@ export default function RecordCard({ record, onOpen, onEdit, onDelete, onInvestm
   const dailyChangeClass = dailyChangeRate > 0 || dailyChange > 0 ? 'is-up' : dailyChangeRate < 0 || dailyChange < 0 ? 'is-down' : 'is-flat';
   const kpass = record.category_id === 'kpass' ? calcKpass(data) : null;
   const period = formatPeriod(data) || record.occurred_on;
-  const showWeather = record.category_id !== 'investment' && record.category_id !== 'video';
+  const showWeather = record.category_id !== 'investment' && record.category_id !== 'video' && record.category_id !== 'exercise';
   const shoppingItems = record.category_id === 'shopping'
     ? (Array.isArray(data.productItems) ? data.productItems : data.items || []).filter((item) => item?.name)
     : [];
@@ -94,6 +94,9 @@ export default function RecordCard({ record, onOpen, onEdit, onDelete, onInvestm
           {data.watchStatus && <span>{data.watchStatus}</span>}
           {data.episodeStart && data.episodeEnd && <span>{data.episodeStart}화~{data.episodeEnd}화</span>}
           {record.category_id === 'hospital' && <span>실부담 {formatMoney(data.netMedicalCost || record.amount)}</span>}
+          {record.category_id === 'exercise' && toNumber(data.bodyWeight) > 0 && <span>체중 {toNumber(data.bodyWeight)}kg</span>}
+          {record.category_id === 'exercise' && toNumber(data.waistCm) > 0 && <span>허리 {toNumber(data.waistCm)}cm</span>}
+          {record.category_id === 'exercise' && toNumber(data.thighCm) > 0 && <span>허벅지 {toNumber(data.thighCm)}cm</span>}
           {record.category_id === 'investment' && (
             <>
               <span className={`investment-type-badge is-${investmentType}`}>
