@@ -451,7 +451,7 @@ export default function CategoryView({ categoryId, records, onBack, onAdd, onOpe
   const hasSearch = Boolean(filters.query || filters.dateFrom || filters.dateTo || filters.minAmount || filters.maxAmount || filters.minRating);
 
   return (
-    <main className="screen category-screen">
+    <main className="screen category-screen" data-transition-surface="category-surface" style={{ viewTransitionName: 'category-surface' }}>
       <header className="sub-header mobile-sub-header">
         <button className="icon-button" onClick={onBack} aria-label="뒤로">←</button>
         <div className="tile-icon" style={getCategoryThemeStyle(category.id)}>{CATEGORY_ICONS[category.id]}</div>
@@ -460,7 +460,7 @@ export default function CategoryView({ categoryId, records, onBack, onAdd, onOpe
           <h1>{category.label}</h1>
         </div>
         <button type="button" className={hasSearch ? 'search-icon-button is-active' : 'search-icon-button'} onClick={() => setShowSearch(true)} aria-label="검색">🔍</button>
-        <button className="primary-button compact" onClick={() => onAdd(categoryId)}>추가</button>
+        <button className="primary-button compact" onClick={(event) => onAdd(categoryId, null, event.currentTarget)}>추가</button>
       </header>
 
       {isInvestment && <InvestmentPortfolio records={categoryRecords} onPriceUpdate={onUpdateRecord} />}
@@ -493,9 +493,9 @@ export default function CategoryView({ categoryId, records, onBack, onAdd, onOpe
           filters={filters}
           onFiltersChange={setFilters}
           onClose={() => setShowSearch(false)}
-          onOpen={(record) => {
+          onOpen={(record, sourceElement) => {
             setShowSearch(false);
-            onOpenRecord(record);
+            onOpenRecord(record, sourceElement);
           }}
           onEdit={(record) => {
             setShowSearch(false);

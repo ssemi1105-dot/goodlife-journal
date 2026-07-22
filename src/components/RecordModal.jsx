@@ -626,7 +626,7 @@ export default function RecordModal({ categoryId, record, initialData = null, on
 
   return (
     <div className="modal-backdrop" role="presentation">
-      <form className="record-modal" onSubmit={submit}>
+      <form className="record-modal" data-transition-surface="form-surface" style={{ viewTransitionName: 'form-surface' }} onSubmit={submit}>
         <header className="modal-header">
           <div>
             <p className="eyebrow">{record ? '기록 수정' : '새 기록'}</p>

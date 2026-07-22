@@ -164,11 +164,11 @@ export default function Dashboard({
       <section className="section-block">
         <div className="section-title">
           <h2>카테고리</h2>
-          <button className="primary-button compact" onClick={() => onAdd(null)}>기록 추가</button>
+          <button className="primary-button compact" onClick={(event) => onAdd(null, null, event.currentTarget)}>기록 추가</button>
         </div>
         <div className="category-grid">
           {visibleCategories.map(({ category, count }) => (
-            <button className="category-tile" style={getCategoryThemeStyle(category.id)} key={category.id} onClick={() => onOpenCategory(category.id)}>
+            <button className="category-tile" style={getCategoryThemeStyle(category.id)} key={category.id} onClick={(event) => onOpenCategory(category.id, event.currentTarget)}>
               <span className="tile-icon">{CATEGORY_ICONS[category.id]}</span>
               <span className="category-tile-copy">
                 <strong>{category.label}</strong>
@@ -208,9 +208,9 @@ export default function Dashboard({
           filters={filters}
           onFiltersChange={onFiltersChange}
           onClose={() => setShowSearch(false)}
-          onOpen={(record) => {
+          onOpen={(record, sourceElement) => {
             setShowSearch(false);
-            onOpenRecord(record);
+            onOpenRecord(record, sourceElement);
           }}
           onEdit={(record) => {
             setShowSearch(false);

@@ -4617,3 +4617,117 @@ select:focus {
   }
 }
 
+/* Tactile shared-surface navigation */
+.category-screen,
+.settings-screen,
+.navigation-backdrop,
+.navigation-detail-panel {
+  animation: none;
+}
+
+.category-tile,
+.record-card,
+.primary-button,
+.bottom-fab {
+  will-change: transform;
+}
+
+.category-tile.is-tactile-pressed,
+.record-card.is-tactile-pressed,
+.primary-button.is-tactile-pressed {
+  transform: translateY(3px) scale(0.94) !important;
+  box-shadow: 0 1px 0 var(--accent-strong), 0 1px 3px rgba(45, 38, 28, 0.08) !important;
+  filter: saturate(0.92) brightness(0.98);
+  transition-duration: 90ms !important;
+}
+
+.category-tile.is-tactile-releasing,
+.record-card.is-tactile-releasing,
+.primary-button.is-tactile-releasing {
+  transform: translateY(-2px) scale(1.025) !important;
+  box-shadow: 0 6px 0 var(--card-base), 0 10px 22px rgba(45, 38, 28, 0.11) !important;
+  transition-duration: 70ms !important;
+}
+
+.bottom-fab.is-tactile-pressed {
+  transform: translateX(-50%) translateY(3px) scale(0.88) !important;
+  box-shadow: 0 1px 0 var(--accent-strong), 0 2px 4px oklch(36% 0.09 155 / 0.14) !important;
+  transition-duration: 90ms !important;
+}
+
+.bottom-fab.is-tactile-releasing {
+  transform: translateX(-50%) translateY(-2px) scale(1.08) !important;
+  box-shadow: 0 6px 0 var(--accent-strong), 0 10px 22px oklch(36% 0.09 155 / 0.24) !important;
+  transition-duration: 70ms !important;
+}
+
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation: none;
+  mix-blend-mode: normal;
+}
+
+::view-transition-group(category-surface),
+::view-transition-group(record-surface),
+::view-transition-group(picker-surface),
+::view-transition-group(form-surface) {
+  z-index: 120;
+  overflow: hidden;
+  border-radius: var(--radius-lg);
+  animation-duration: 440ms;
+  animation-timing-function: cubic-bezier(.22, 1, .36, 1);
+}
+
+::view-transition-image-pair(category-surface),
+::view-transition-image-pair(record-surface),
+::view-transition-image-pair(picker-surface),
+::view-transition-image-pair(form-surface) {
+  isolation: auto;
+}
+
+::view-transition-old(category-surface),
+::view-transition-old(record-surface),
+::view-transition-old(picker-surface),
+::view-transition-old(form-surface) {
+  animation: tactile-surface-old 440ms cubic-bezier(.22, 1, .36, 1) both;
+}
+
+::view-transition-new(category-surface),
+::view-transition-new(record-surface),
+::view-transition-new(picker-surface),
+::view-transition-new(form-surface) {
+  animation: tactile-surface-new 440ms cubic-bezier(.22, 1, .36, 1) both;
+}
+
+@keyframes tactile-surface-old {
+  0% { opacity: 1; filter: brightness(1); }
+  45% { opacity: 0.94; filter: brightness(1.02); }
+  100% { opacity: 0; filter: brightness(1); }
+}
+
+@keyframes tactile-surface-new {
+  0% { opacity: 0.18; filter: blur(1px) brightness(1.04); }
+  36% { opacity: 0.62; filter: blur(0.5px) brightness(1.02); }
+  100% { opacity: 1; filter: blur(0) brightness(1); }
+}
+
+.tactile-fallback-transition .navigation-backdrop {
+  animation: tactile-scrim-fallback 300ms ease-out both;
+}
+
+.tactile-transition-clone {
+  contain: layout paint;
+  overflow: hidden;
+  backface-visibility: hidden;
+  box-shadow: 0 10px 28px rgba(45, 38, 28, 0.18) !important;
+}
+
+.tactile-transition-clone * {
+  pointer-events: none !important;
+}
+
+@keyframes tactile-scrim-fallback {
+  from { background: rgba(0, 0, 0, 0); }
+  to { background: rgba(0, 0, 0, 0.18); }
+}
+

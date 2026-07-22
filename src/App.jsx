@@ -9,6 +9,7 @@ import { CATEGORIES, CATEGORY_ICONS, CATEGORY_MAP, getCategoryThemeStyle } from 
 import { useAppSettings } from './hooks/useAppSettings';
 import { useAuth } from './hooks/useAuth';
 import { useRecords } from './hooks/useRecords';
+import { runTactileTransition } from './utils/tactileTransition';
 
 const EMPTY_FILTERS = { query: '', dateFrom: '', dateTo: '', minAmount: '', maxAmount: '', minRating: '' };
 
@@ -81,7 +82,7 @@ function CategoryPicker({ settings, onSelect, onClose }) {
 
   return (
     <div className="modal-backdrop">
-      <section className="picker-panel">
+      <section className="picker-panel" data-transition-surface="picker-surface" style={{ viewTransitionName: 'picker-surface' }}>
         <header className="modal-header">
           <div>
             <p className="eyebrow">New record</p>
@@ -91,7 +92,7 @@ function CategoryPicker({ settings, onSelect, onClose }) {
         </header>
         <div className="category-grid">
           {categories.map((category) => (
-            <button className="category-tile" style={getCategoryThemeStyle(category.id)} key={category.id} onClick={() => onSelect(category.id)}>
+            <button className="category-tile" style={getCategoryThemeStyle(category.id)} key={category.id} onClick={(event) => onSelect(category.id, event.currentTarget)}>
               <span className="tile-icon">{CATEGORY_ICONS[category.id]}</span>
               <strong>{category.label}</strong>
             </button>
@@ -134,14 +135,36 @@ export default function App() {
     });
   }, [normalizedSettings.reminder_settings, records, today, todayDay]);
 
-  function openAdd(categoryId, initialData = null) {
-    setEditingRecord(null);
-    setModalInitialData(initialData);
-    if (categoryId) {
-      setModalCategory(categoryId);
-    } else {
-      setShowPicker(true);
-    }
+  function openAdd(categoryId, initialData = null, sourceElement = null) {
+    const commit = () => {
+      setEditingRecord(null);
+      setModalInitialData(initialData);
+      if (categoryId) {
+        setShowPicker(false);
+        setModalCategory(categoryId);
+      } else {
+        setShowPicker(true);
+      }
+    };
+
+    return runTactileTransition(
+      sourceElement,
+      categoryId ? 'form-surface' : 'picker-surface',
+      commit,
+    );
+  }
+
+  function openCategory(categoryId, sourceElement) {
+    return runTactileTransition(sourceElement, 'category-surface', () => {
+      setActiveCategory(categoryId);
+      setView('category');
+    });
+  }
+
+  function openRecord(record, sourceElement) {
+    return runTactileTransition(sourceElement, 'record-surface', () => {
+      setViewingRecord(record);
+    });
   }
 
   function openEdit(record) {
@@ -211,12 +234,9 @@ export default function App() {
           settings={normalizedSettings}
           filters={filters}
           onFiltersChange={setFilters}
-          onOpenCategory={(categoryId) => {
-            setActiveCategory(categoryId);
-            setView('category');
-          }}
+          onOpenCategory={openCategory}
           onAdd={openAdd}
-          onOpenRecord={setViewingRecord}
+          onOpenRecord={openRecord}
           onEdit={openEdit}
           onDelete={confirmDelete}
         />
@@ -236,7 +256,7 @@ export default function App() {
           records={records}
           onBack={() => setView('home')}
           onAdd={openAdd}
-          onOpenRecord={setViewingRecord}
+          onOpenRecord={openRecord}
           onEdit={openEdit}
           onDelete={confirmDelete}
           onUpdateRecord={updateRecordData}
@@ -263,7 +283,7 @@ export default function App() {
       <button
         type="button"
         className="bottom-fab"
-        onClick={() => openAdd(view === 'category' ? activeCategory : null)}
+        onClick={(event) => openAdd(view === 'category' ? activeCategory : null, null, event.currentTarget)}
         aria-label="기록 추가"
       >
         +
@@ -283,10 +303,7 @@ export default function App() {
         <CategoryPicker
           settings={normalizedSettings}
           onClose={() => setShowPicker(false)}
-          onSelect={(categoryId) => {
-            setShowPicker(false);
-            openAdd(categoryId);
-          }}
+          onSelect={(categoryId, sourceElement) => openAdd(categoryId, null, sourceElement)}
         />
       )}
 

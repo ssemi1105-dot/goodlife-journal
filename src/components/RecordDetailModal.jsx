@@ -42,7 +42,7 @@ export default function RecordDetailModal({ record, onClose, onEdit, onDelete })
 
   return (
     <div className="modal-backdrop navigation-backdrop">
-      <section className="detail-modal navigation-detail-panel">
+      <section className="detail-modal navigation-detail-panel" data-transition-surface="record-surface" style={{ viewTransitionName: 'record-surface' }}>
         <header className="modal-header">
           <div>
             <p className="eyebrow">{CATEGORY_ICONS[record.category_id]} {category?.label}</p>

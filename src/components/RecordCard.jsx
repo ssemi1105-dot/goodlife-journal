@@ -24,8 +24,11 @@ export default function RecordCard({ record, onOpen, onEdit, onDelete, onInvestm
   const visibleShoppingItems = shoppingItems.slice(0, 10);
 
   return (
-    <article className={record.category_id === 'investment' ? 'record-card is-investment-record' : 'record-card'} role="button" tabIndex={0} onClick={() => onOpen?.(record)} onKeyDown={(event) => {
-      if (event.key === 'Enter') onOpen?.(record);
+    <article className={record.category_id === 'investment' ? 'record-card is-investment-record' : 'record-card'} role="button" tabIndex={0} onClick={(event) => onOpen?.(record, event.currentTarget)} onKeyDown={(event) => {
+      if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault();
+        onOpen?.(record, event.currentTarget);
+      }
     }}>
       <RecordImagePreview record={record} />
       <div className="record-body">
