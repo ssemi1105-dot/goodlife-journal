@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { CATEGORY_ICONS, CATEGORY_MAP } from '../data/categoryDefinitions';
+import { CATEGORY_ICONS, CATEGORY_MAP, getCategoryThemeStyle } from '../data/categoryDefinitions';
 import { APP_VERSION } from '../lib/appVersion';
 import { formatMoney, summarizeCategoryTotals, summarizePeriod } from '../utils/recordUtils';
 import RecordCard from './RecordCard';
@@ -168,8 +168,8 @@ export default function Dashboard({
         </div>
         <div className="category-grid">
           {visibleCategories.map(({ category, count }) => (
-            <button className="category-tile" key={category.id} onClick={() => onOpenCategory(category.id)}>
-              <span className="tile-icon" style={{ background: `${category.color}18`, color: category.color }}>{CATEGORY_ICONS[category.id]}</span>
+            <button className="category-tile" style={getCategoryThemeStyle(category.id)} key={category.id} onClick={() => onOpenCategory(category.id)}>
+              <span className="tile-icon">{CATEGORY_ICONS[category.id]}</span>
               <span className="category-tile-copy">
                 <strong>{category.label}</strong>
                 <small>{count}개 기록</small>

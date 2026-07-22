@@ -99,7 +99,8 @@ export default function PhotoUploader({ value = [], onChange }) {
         ))}
       </div>
       <label className="photo-add-button">
-        {busy ? '압축 중' : photos.length >= MAX_PHOTOS ? '최대 3장' : '사진 추가'}
+        <span>{busy ? '압축 중' : photos.length >= MAX_PHOTOS ? '사진 3/3' : '사진'}</span>
+        {!busy && photos.length < MAX_PHOTOS && <small>추가</small>}
         <input ref={inputRef} type="file" accept="image/*" multiple disabled={busy || photos.length >= MAX_PHOTOS} onChange={selectFiles} />
       </label>
       <p className="input-hint">사진은 업로드 전 약 300KB 수준으로 압축됩니다.</p>

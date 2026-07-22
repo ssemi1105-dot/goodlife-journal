@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { CATEGORIES, CATEGORY_ICONS, FINANCE_MODES } from '../data/categoryDefinitions';
+import { CATEGORIES, CATEGORY_ICONS, FINANCE_MODES, getCategoryThemeStyle } from '../data/categoryDefinitions';
 import { useSharing } from '../hooks/useSharing';
 import AdminUserList from './AdminUserList';
 import ShareSettingsPanel from './ShareSettingsPanel';
@@ -268,7 +268,7 @@ export default function SettingsScreen({
                 onClick={() => setSelectedCategoryId(category.id)}
               >
                 <div className="category-setting-head">
-                  <span className="tile-icon" style={{ background: `${category.color}16`, color: category.color }}>{CATEGORY_ICONS[category.id]}</span>
+                  <span className="tile-icon" style={getCategoryThemeStyle(category.id)}>{CATEGORY_ICONS[category.id]}</span>
                   <div>
                     <strong>{category.label}</strong>
                     <small>
@@ -404,7 +404,7 @@ export default function SettingsScreen({
           <section className="category-option-modal bottom-sheet">
             <header className="modal-header">
               <div className="category-setting-head">
-                <span className="tile-icon" style={{ background: `${selectedCategory.color}16`, color: selectedCategory.color }}>
+                <span className="tile-icon" style={getCategoryThemeStyle(selectedCategory.id)}>
                   {CATEGORY_ICONS[selectedCategory.id]}
                 </span>
                 <div>

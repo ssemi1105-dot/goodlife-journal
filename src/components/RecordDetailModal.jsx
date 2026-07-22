@@ -41,8 +41,8 @@ export default function RecordDetailModal({ record, onClose, onEdit, onDelete })
   const showWeather = record.category_id !== 'investment' && record.category_id !== 'video' && record.category_id !== 'exercise';
 
   return (
-    <div className="modal-backdrop">
-      <section className="detail-modal">
+    <div className="modal-backdrop navigation-backdrop">
+      <section className="detail-modal navigation-detail-panel">
         <header className="modal-header">
           <div>
             <p className="eyebrow">{CATEGORY_ICONS[record.category_id]} {category?.label}</p>

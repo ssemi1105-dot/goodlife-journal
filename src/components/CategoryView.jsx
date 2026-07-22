@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { CATEGORY_ICONS, CATEGORY_MAP } from '../data/categoryDefinitions';
+import { CATEGORY_ICONS, CATEGORY_MAP, getCategoryThemeStyle } from '../data/categoryDefinitions';
 import { calcAnnualLeave, calcInvestment, calcKpass, formatMoney, getInvestmentRecordType, getRecordFinanceValue, toNumber } from '../utils/recordUtils';
 import { fetchKisPrice } from '../services/kisApiClient';
 import RecordCard from './RecordCard';
@@ -451,10 +451,10 @@ export default function CategoryView({ categoryId, records, onBack, onAdd, onOpe
   const hasSearch = Boolean(filters.query || filters.dateFrom || filters.dateTo || filters.minAmount || filters.maxAmount || filters.minRating);
 
   return (
-    <main className="screen">
+    <main className="screen category-screen">
       <header className="sub-header mobile-sub-header">
         <button className="icon-button" onClick={onBack} aria-label="뒤로">←</button>
-        <div className="tile-icon" style={{ background: `${category.color}18`, color: category.color }}>{CATEGORY_ICONS[category.id]}</div>
+        <div className="tile-icon" style={getCategoryThemeStyle(category.id)}>{CATEGORY_ICONS[category.id]}</div>
         <div className="sub-header-title">
           <p className="eyebrow">Category</p>
           <h1>{category.label}</h1>

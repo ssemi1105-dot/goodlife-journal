@@ -5,7 +5,7 @@ import Dashboard from './components/Dashboard';
 import RecordDetailModal from './components/RecordDetailModal';
 import RecordModal from './components/RecordModal';
 import SettingsScreen from './components/SettingsScreen';
-import { CATEGORIES, CATEGORY_ICONS, CATEGORY_MAP } from './data/categoryDefinitions';
+import { CATEGORIES, CATEGORY_ICONS, CATEGORY_MAP, getCategoryThemeStyle } from './data/categoryDefinitions';
 import { useAppSettings } from './hooks/useAppSettings';
 import { useAuth } from './hooks/useAuth';
 import { useRecords } from './hooks/useRecords';
@@ -91,8 +91,8 @@ function CategoryPicker({ settings, onSelect, onClose }) {
         </header>
         <div className="category-grid">
           {categories.map((category) => (
-            <button className="category-tile" key={category.id} onClick={() => onSelect(category.id)}>
-              <span className="tile-icon" style={{ background: `${category.color}18`, color: category.color }}>{CATEGORY_ICONS[category.id]}</span>
+            <button className="category-tile" style={getCategoryThemeStyle(category.id)} key={category.id} onClick={() => onSelect(category.id)}>
+              <span className="tile-icon">{CATEGORY_ICONS[category.id]}</span>
               <strong>{category.label}</strong>
             </button>
           ))}
@@ -203,7 +203,7 @@ export default function App() {
   }
 
   return (
-    <div className="app-shell">
+    <div className={`app-shell ${viewingRecord ? 'has-pushed-detail' : ''}`}>
       {view === 'home' && (
         <Dashboard
           profile={auth.profile}

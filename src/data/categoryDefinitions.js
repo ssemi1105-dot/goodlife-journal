@@ -483,6 +483,12 @@ export const CATEGORIES = [
 
 export const CATEGORY_MAP = Object.fromEntries(CATEGORIES.map((cat) => [cat.id, cat]));
 
+export function getCategoryThemeStyle(categoryId) {
+  const index = Math.max(0, CATEGORIES.findIndex((category) => category.id === categoryId));
+  const hue = (155 + index * 43) % 360;
+  return { '--category-hue': String(hue) };
+}
+
 export function getDefaultCategoryOrder() {
   return CATEGORIES.map((cat) => cat.id);
 }
