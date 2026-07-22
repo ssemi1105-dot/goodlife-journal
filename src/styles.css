@@ -4726,6 +4726,72 @@ select:focus {
   pointer-events: none !important;
 }
 
+/* Record action menu: viewport-level popover avoids card/scroll clipping */
+.record-menu-trigger {
+  width: 36px;
+  height: 36px;
+  display: grid;
+  place-items: center;
+  padding: 0 0 8px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--text-muted);
+  box-shadow: 0 2px 0 var(--card-base);
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.record-menu-trigger[aria-expanded="true"] {
+  border-color: oklch(75% 0.05 155);
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+  transform: translateY(1px);
+  box-shadow: 0 1px 0 var(--card-base);
+}
+
+.record-menu-popover {
+  position: fixed;
+  z-index: 95;
+  width: 116px;
+  display: grid;
+  overflow: hidden;
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  box-shadow: 0 12px 30px rgba(45, 38, 28, 0.18), 0 3px 0 var(--card-base);
+  animation: record-menu-pop 140ms cubic-bezier(.34, 1.56, .64, 1) both;
+}
+
+.record-menu-popover button {
+  min-height: 42px;
+  padding: 9px 11px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 700;
+  text-align: left;
+}
+
+.record-menu-popover button:hover,
+.record-menu-popover button:focus-visible {
+  outline: none;
+  background: var(--accent-soft);
+}
+
+.record-menu-popover button.danger {
+  color: var(--danger);
+}
+
+@keyframes record-menu-pop {
+  from { opacity: 0; transform: translateY(-4px) scale(0.94); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
 @keyframes tactile-scrim-fallback {
   from { background: rgba(0, 0, 0, 0); }
   to { background: rgba(0, 0, 0, 0.18); }

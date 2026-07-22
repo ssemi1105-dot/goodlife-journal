@@ -1,9 +1,15 @@
+import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { CATEGORY_ICONS, CATEGORY_MAP } from '../data/categoryDefinitions';
 import { calcInvestment, calcKpass, calcLineItemAmount, calcSoldInvestment, formatMoney, formatPeriod, getInvestmentRecordType, getRecordTitle, toNumber } from '../utils/recordUtils';
 import InvestmentMoodImage from './ui/InvestmentMoodImage';
 import RecordImagePreview from './ui/RecordImagePreview';
 
 export default function RecordCard({ record, onOpen, onEdit, onDelete, onInvestmentSell }) {
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [menuPosition, setMenuPosition] = useState({ top: 0, left: 0 });
+  const menuButtonRef = useRef(null);
+  const menuPopoverRef = useRef(null);
   const category = CATEGORY_MAP[record.category_id];
   const data = record.data || {};
   const title = getRecordTitle(record.category_id, data);
@@ -22,6 +28,67 @@ export default function RecordCard({ record, onOpen, onEdit, onDelete, onInvestm
     ? (Array.isArray(data.productItems) ? data.productItems : data.items || []).filter((item) => item?.name)
     : [];
   const visibleShoppingItems = shoppingItems.slice(0, 10);
+  const showSellAction = record.category_id === 'investment' && investmentType === 'holding' && onInvestmentSell;
+
+  useEffect(() => {
+    if (!menuOpen) return undefined;
+
+    function closeOnOutsidePointer(event) {
+      if (menuButtonRef.current?.contains(event.target) || menuPopoverRef.current?.contains(event.target)) return;
+      setMenuOpen(false);
+    }
+
+    function closeMenu() {
+      setMenuOpen(false);
+    }
+
+    function closeOnEscape(event) {
+      if (event.key === 'Escape') closeMenu();
+    }
+
+    document.addEventListener('pointerdown', closeOnOutsidePointer, true);
+    document.addEventListener('keydown', closeOnEscape);
+    window.addEventListener('resize', closeMenu);
+    window.addEventListener('scroll', closeMenu, true);
+
+    return () => {
+      document.removeEventListener('pointerdown', closeOnOutsidePointer, true);
+      document.removeEventListener('keydown', closeOnEscape);
+      window.removeEventListener('resize', closeMenu);
+      window.removeEventListener('scroll', closeMenu, true);
+    };
+  }, [menuOpen]);
+
+  function toggleMenu(event) {
+    event.preventDefault();
+    event.stopPropagation();
+
+    if (menuOpen) {
+      setMenuOpen(false);
+      return;
+    }
+
+    const rect = event.currentTarget.getBoundingClientRect();
+    const menuWidth = 116;
+    const menuHeight = (showSellAction ? 3 : 2) * 42 + 8;
+    const viewportPadding = 8;
+    const openAbove = window.innerHeight - rect.bottom < menuHeight + 12;
+    const top = openAbove
+      ? Math.max(viewportPadding, rect.top - menuHeight - 6)
+      : Math.min(window.innerHeight - menuHeight - viewportPadding, rect.bottom + 6);
+    const left = Math.min(
+      window.innerWidth - menuWidth - viewportPadding,
+      Math.max(viewportPadding, rect.right - menuWidth),
+    );
+
+    setMenuPosition({ top, left });
+    setMenuOpen(true);
+  }
+
+  function runMenuAction(action) {
+    setMenuOpen(false);
+    action();
+  }
 
   return (
     <article className={record.category_id === 'investment' ? 'record-card is-investment-record' : 'record-card'} role="button" tabIndex={0} onClick={(event) => onOpen?.(record, event.currentTarget)} onKeyDown={(event) => {
@@ -147,17 +214,40 @@ export default function RecordCard({ record, onOpen, onEdit, onDelete, onInvestm
         {data.memo && <p className="record-memo">{data.memo}</p>}
       </div>
       <div className="record-actions">
-        <details className="record-menu" onClick={(event) => event.stopPropagation()}>
-          <summary aria-label="기록 메뉴">...</summary>
-          <div>
-            {record.category_id === 'investment' && investmentType === 'holding' && onInvestmentSell && (
-              <button type="button" onClick={() => onInvestmentSell(record)}>매도 기록</button>
-            )}
-            <button type="button" onClick={() => onEdit(record)}>수정</button>
-            <button type="button" className="danger" onClick={() => onDelete(record)}>삭제</button>
-          </div>
-        </details>
+        <div className="record-menu">
+          <button
+            ref={menuButtonRef}
+            type="button"
+            className="record-menu-trigger"
+            aria-label="기록 메뉴"
+            aria-haspopup="menu"
+            aria-expanded={menuOpen}
+            onClick={toggleMenu}
+            onPointerDown={(event) => event.stopPropagation()}
+            onKeyDown={(event) => event.stopPropagation()}
+          >
+            ...
+          </button>
+        </div>
       </div>
+      {menuOpen && createPortal(
+        <div
+          ref={menuPopoverRef}
+          className="record-menu-popover"
+          role="menu"
+          style={{ top: menuPosition.top, left: menuPosition.left }}
+          onPointerDown={(event) => event.stopPropagation()}
+          onClick={(event) => event.stopPropagation()}
+          onKeyDown={(event) => event.stopPropagation()}
+        >
+          {showSellAction && (
+            <button type="button" role="menuitem" onClick={() => runMenuAction(() => onInvestmentSell(record))}>매도 기록</button>
+          )}
+          <button type="button" role="menuitem" onClick={() => runMenuAction(() => onEdit(record))}>수정</button>
+          <button type="button" role="menuitem" className="danger" onClick={() => runMenuAction(() => onDelete(record))}>삭제</button>
+        </div>,
+        document.body,
+      )}
     </article>
   );
 }
