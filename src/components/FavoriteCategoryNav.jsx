@@ -41,13 +41,22 @@ export default function FavoriteCategoryNav({ settings, onOpenCategory, onManage
       </div>
 
       {open && createPortal(
-        <div className="favorite-category-backdrop" role="presentation" onPointerDown={() => setOpen(false)}>
+        <div
+          className="favorite-category-backdrop"
+          role="presentation"
+          onClick={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            setOpen(false);
+          }}
+        >
           <section
             className="favorite-category-sheet"
             role="dialog"
             aria-modal="true"
             aria-label="즐겨찾기 카테고리"
             onPointerDown={(event) => event.stopPropagation()}
+            onClick={(event) => event.stopPropagation()}
           >
             <div className="favorite-sheet-handle" aria-hidden="true" />
             <header className="favorite-sheet-header">
