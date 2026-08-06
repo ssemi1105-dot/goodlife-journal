@@ -135,12 +135,20 @@ create policy "profiles_select_self_or_owner"
 
 create policy "profiles_insert_self"
   on public.profiles for insert
-  with check (id = auth.uid());
+  with check (
+    id = auth.uid()
+    and role in ('member', 'user')
+  );
 
 create policy "profiles_update_self"
   on public.profiles for update
   using (id = auth.uid())
   with check (id = auth.uid());
+
+-- Authenticated clients may edit presentation fields only. Role changes must be
+-- performed by a trusted service-role function or directly by an administrator.
+revoke update on table public.profiles from authenticated;
+grant update (display_name, avatar_color, updated_at) on table public.profiles to authenticated;
 
 drop policy if exists "records_select_owner_or_shared" on public.records;
 drop policy if exists "records_insert_self" on public.records;

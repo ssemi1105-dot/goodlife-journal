@@ -70,47 +70,64 @@ function deriveWeatherColumns(formData = {}) {
   };
 }
 
-async function getSignedPhotoUrl(path) {
-  if (!path) return null;
-  const { data, error } = await supabase.storage
-    .from('record-photos')
-    .createSignedUrl(path, 60 * 60);
-  if (error) return null;
-  return data.signedUrl;
+function collectPhotoPaths(records) {
+  const paths = new Set();
+  records.forEach((record) => {
+    if (record.data?.photoPath) paths.add(record.data.photoPath);
+    (record.data?.photos || []).forEach((photo) => {
+      if (photo.path) paths.add(photo.path);
+    });
+  });
+  return [...paths];
 }
 
-async function attachSignedPhotoUrls(records) {
-  return Promise.all(
-    records.map(async (record) => {
-      const photoPath = record.data?.photoPath;
-      const photoUrl = await getSignedPhotoUrl(photoPath);
-      const photoUrls = await Promise.all((record.data?.photos || []).map((photo) => getSignedPhotoUrl(photo.path)));
-      return {
-        ...record,
-        photoUrl: photoUrl || photoUrls.find(Boolean) || null,
-        photoUrls: photoUrls.filter(Boolean),
-        data: {
-          ...record.data,
-          photos: (record.data?.photos || []).map((photo, index) => ({ ...photo, signedUrl: photoUrls[index] || null })),
-        },
-      };
-    }),
+async function getSignedPhotoUrlMap(paths) {
+  if (paths.length === 0) return new Map();
+
+  const batches = [];
+  for (let index = 0; index < paths.length; index += 100) {
+    batches.push(paths.slice(index, index + 100));
+  }
+
+  const results = await Promise.all(batches.map((batch) => (
+    supabase.storage.from('record-photos').createSignedUrls(batch, 60 * 60)
+  )));
+  const signedItems = [];
+  results.forEach(({ data, error }) => {
+    if (error) console.warn('[photos] signed URL batch failed:', error);
+    else signedItems.push(...(data || []));
+  });
+
+  return new Map(
+    signedItems
+      .filter((item) => item.path && item.signedUrl)
+      .map((item) => [item.path, item.signedUrl]),
   );
 }
 
-async function attachSignedPhotoUrl(record) {
+function attachSignedPhotoData(record, signedUrlByPath) {
   const photoPath = record.data?.photoPath;
-  const photoUrl = await getSignedPhotoUrl(photoPath);
-  const photoUrls = await Promise.all((record.data?.photos || []).map((photo) => getSignedPhotoUrl(photo.path)));
+  const photos = record.data?.photos || [];
+  const photoUrls = photos.map((photo) => signedUrlByPath.get(photo.path) || null);
   return {
     ...record,
-    photoUrl: photoUrl || photoUrls.find(Boolean) || null,
+    photoUrl: signedUrlByPath.get(photoPath) || photoUrls.find(Boolean) || null,
     photoUrls: photoUrls.filter(Boolean),
     data: {
       ...record.data,
-      photos: (record.data?.photos || []).map((photo, index) => ({ ...photo, signedUrl: photoUrls[index] || null })),
+      photos: photos.map((photo, index) => ({ ...photo, signedUrl: photoUrls[index] || null })),
     },
   };
+}
+
+async function attachSignedPhotoUrls(records) {
+  const signedUrlByPath = await getSignedPhotoUrlMap(collectPhotoPaths(records));
+  return records.map((record) => attachSignedPhotoData(record, signedUrlByPath));
+}
+
+async function attachSignedPhotoUrl(record) {
+  const [attached] = await attachSignedPhotoUrls([record]);
+  return attached;
 }
 
 async function uploadPhoto(userId, recordId, file) {
@@ -255,7 +272,8 @@ export function useRecords(userId) {
       const { error: updateError } = await supabase
         .from('records')
         .update({ data: payloadData })
-        .eq('id', data.id);
+        .eq('id', data.id)
+        .eq('user_id', userId);
       if (updateError) throw updateError;
     }
     if (Array.isArray(formData.photos) && formData.photos.some((photo) => photo.file instanceof File)) {
