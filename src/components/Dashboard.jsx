@@ -13,7 +13,9 @@ const PERIODS = [
 ];
 
 function FinanceSummaryModal({ period, summary, categoryTotals, onClose }) {
-  const [showBreakdown, setShowBreakdown] = useState(true);
+  const [breakdownType, setBreakdownType] = useState('expense');
+  const breakdownItems = categoryTotals.filter((item) => item[breakdownType] > 0);
+  const breakdownLabel = breakdownType === 'expense' ? '지출' : '수입';
 
   return (
     <div className="modal-backdrop">
@@ -32,33 +34,33 @@ function FinanceSummaryModal({ period, summary, categoryTotals, onClose }) {
         </div>
 
         <div className="finance-modal-grid">
-          <button type="button" onClick={() => setShowBreakdown(true)}>
+          <button type="button" className={breakdownType === 'expense' ? 'is-selected' : ''} onClick={() => setBreakdownType('expense')}>
             <span>지출</span>
             <strong className="expense-text">{formatMoney(summary.expense)}</strong>
           </button>
-          <button type="button" onClick={() => setShowBreakdown(false)}>
+          <button type="button" className={breakdownType === 'income' ? 'is-selected' : ''} onClick={() => setBreakdownType('income')}>
             <span>수입</span>
             <strong className="income-text">{formatMoney(summary.income)}</strong>
           </button>
         </div>
 
-        {showBreakdown && (
-          <div className="finance-breakdown">
-            <h3>카테고리별 지출</h3>
-            {categoryTotals.filter((item) => item.expense > 0).map((item) => {
-              const category = CATEGORY_MAP[item.categoryId];
-              return (
-                <div key={item.categoryId}>
-                  <span>{CATEGORY_ICONS[item.categoryId]} {category?.label || item.categoryId}</span>
-                  <strong>{formatMoney(item.expense)}</strong>
-                </div>
-              );
-            })}
-            {categoryTotals.filter((item) => item.expense > 0).length === 0 && (
-              <p className="empty-text">이 기간의 지출 기록이 없습니다.</p>
-            )}
-          </div>
-        )}
+        <div className="finance-breakdown">
+          <h3>카테고리별 {breakdownLabel}</h3>
+          {breakdownItems.map((item) => {
+            const category = CATEGORY_MAP[item.categoryId];
+            return (
+              <div key={item.categoryId}>
+                <span>{CATEGORY_ICONS[item.categoryId]} {category?.label || item.categoryId}</span>
+                <strong className={breakdownType === 'income' ? 'income-text' : 'expense-text'}>
+                  {formatMoney(item[breakdownType])}
+                </strong>
+              </div>
+            );
+          })}
+          {breakdownItems.length === 0 && (
+            <p className="empty-text">이 기간의 {breakdownLabel} 기록이 없습니다.</p>
+          )}
+        </div>
       </section>
     </div>
   );
@@ -99,6 +101,12 @@ export default function Dashboard({
   }, [records, settings]);
 
   const hasSearch = Boolean(filters.query || filters.dateFrom || filters.dateTo || filters.minAmount || filters.maxAmount || filters.minRating);
+  const quickCategories = useMemo(() => {
+    const orderIndex = Object.fromEntries(settings.category_order.map((id, index) => [id, index]));
+    return [...visibleCategories]
+      .sort((a, b) => b.count - a.count || orderIndex[a.category.id] - orderIndex[b.category.id])
+      .slice(0, 4);
+  }, [settings.category_order, visibleCategories]);
 
   function cyclePeriod() {
     setPeriodIndex((index) => (index + 1) % PERIODS.length);
@@ -161,9 +169,31 @@ export default function Dashboard({
         </div>
       </section>
 
+      <section className="section-block quick-record-section">
+        <div className="section-title">
+          <h2>빠른 기록</h2>
+          <span>기록이 많은 순</span>
+        </div>
+        <div className="quick-category-grid">
+          {quickCategories.map(({ category, count }) => (
+            <button
+              type="button"
+              className="quick-category-button"
+              style={getCategoryThemeStyle(category.id)}
+              key={category.id}
+              onClick={(event) => onOpenCategory(category.id, event.currentTarget)}
+            >
+              <span className="tile-icon">{CATEGORY_ICONS[category.id]}</span>
+              <strong>{category.label}</strong>
+              <small>{count}건</small>
+            </button>
+          ))}
+        </div>
+      </section>
+
       <section className="section-block">
         <div className="section-title">
-          <h2>카테고리</h2>
+          <h2>전체 카테고리</h2>
           <button className="primary-button compact" onClick={(event) => onAdd(null, null, event.currentTarget)}>기록 추가</button>
         </div>
         <div className="category-grid">

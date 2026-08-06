@@ -118,6 +118,14 @@ export default function SettingsScreen({
     setSelectedCategoryId(null);
   }
 
+  async function toggleFavorite(categoryId, checked) {
+    const current = settings.favorite_categories || [];
+    const favoriteCategories = checked
+      ? [...current.filter((id) => id !== categoryId), categoryId]
+      : current.filter((id) => id !== categoryId);
+    await onSaveSettings({ ...settings, favorite_categories: favoriteCategories });
+  }
+
   async function setCategorySharing(categoryId, checked) {
     setSharingSavingCategory(categoryId);
     try {
@@ -190,6 +198,7 @@ export default function SettingsScreen({
   const selectedCategory = CATEGORIES.find((category) => category.id === selectedCategoryId);
   const selectedHidden = selectedCategory ? settings.hidden_categories.includes(selectedCategory.id) : false;
   const selectedShared = selectedCategory ? Boolean(sharing.shareSettings[selectedCategory.id]?.is_shared) : false;
+  const selectedFavorite = selectedCategory ? Boolean(settings.favorite_categories?.includes(selectedCategory.id)) : false;
 
   return (
     <main className="screen settings-screen">
@@ -273,6 +282,7 @@ export default function SettingsScreen({
                     <strong>{category.label}</strong>
                     <small>
                       {countByCategory[category.id] || 0}개 · {hidden ? '숨김' : '표시'} · {FINANCE_MODES[settings.finance_modes[category.id] || 'excluded']}
+                      {settings.favorite_categories?.includes(category.id) ? ' · 즐겨찾기' : ''}
                       {sharing.shareSettings[category.id]?.is_shared ? ' · 공유' : ''}
                     </small>
                   </div>
@@ -414,6 +424,17 @@ export default function SettingsScreen({
               </div>
               <button type="button" className="icon-button" onClick={() => setSelectedCategoryId(null)} aria-label="닫기">×</button>
             </header>
+
+            <div className="category-option-group">
+              <CompactToggle
+                checked={selectedFavorite}
+                onChange={(checked) => toggleFavorite(selectedCategory.id, checked)}
+                label={selectedFavorite ? '즐겨찾기 등록됨' : '즐겨찾기에 추가'}
+              />
+              <p className="muted compact-help">
+                하단 중앙의 별 버튼에서 이 카테고리로 바로 이동할 수 있습니다.
+              </p>
+            </div>
 
             <div className="category-option-group">
               <CompactToggle

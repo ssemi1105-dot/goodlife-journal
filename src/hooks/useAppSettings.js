@@ -12,6 +12,7 @@ const DEFAULT_REMINDER_SETTINGS = {
 const DEFAULT_SETTINGS = {
   category_order: getDefaultCategoryOrder(),
   hidden_categories: [],
+  favorite_categories: [],
   finance_modes: DEFAULT_FINANCE_MODES,
   sort_by_record_count: true,
   reminder_settings: DEFAULT_REMINDER_SETTINGS,
@@ -48,6 +49,7 @@ export function useAppSettings(userId) {
     const merged = {
       category_order: data?.category_order?.length ? data.category_order : DEFAULT_SETTINGS.category_order,
       hidden_categories: data?.hidden_categories || [],
+      favorite_categories: Array.isArray(rawFinanceModes.__favorite_categories) ? rawFinanceModes.__favorite_categories : [],
       finance_modes: { ...DEFAULT_FINANCE_MODES, ...rawFinanceModes },
       sort_by_record_count: rawFinanceModes.__sort_by_record_count ?? DEFAULT_SETTINGS.sort_by_record_count,
       reminder_settings: normalizeReminderSettings(rawFinanceModes.__reminder_settings),
@@ -67,10 +69,12 @@ export function useAppSettings(userId) {
       ...(next.finance_modes || {}),
       __sort_by_record_count: next.sort_by_record_count ?? DEFAULT_SETTINGS.sort_by_record_count,
       __reminder_settings: normalizeReminderSettings(next.reminder_settings),
+      __favorite_categories: Array.isArray(next.favorite_categories) ? next.favorite_categories : [],
     };
     const normalized = {
       category_order: next.category_order || DEFAULT_SETTINGS.category_order,
       hidden_categories: next.hidden_categories || [],
+      favorite_categories: financeModes.__favorite_categories,
       finance_modes: financeModes,
       sort_by_record_count: next.sort_by_record_count ?? DEFAULT_SETTINGS.sort_by_record_count,
       reminder_settings: financeModes.__reminder_settings,

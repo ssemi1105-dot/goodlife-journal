@@ -40,9 +40,9 @@ export function calcAnnualLeave(records = [], year) {
   const targetYear = year || new Date().getFullYear();
   const yearStr = String(targetYear);
 
-  const grantRecord = records.find(
-    (record) => record.data?.recordType === 'grant' && String(record.data?.year) === yearStr,
-  );
+  const grantRecord = records
+    .filter((record) => record.data?.recordType === 'grant' && String(record.data?.year) === yearStr)
+    .sort((a, b) => `${b.updated_at || ''}${b.created_at || ''}`.localeCompare(`${a.updated_at || ''}${a.created_at || ''}`))[0];
   const grantDays = toNumber(grantRecord?.data?.grantDays);
 
   const usedDays = records
@@ -62,8 +62,8 @@ export function getRecordTitle(categoryId, data = {}) {
     const type = getInvestmentRecordType(data);
     const name = data.assetName || data.symbol || data.ticker || '투자';
     if (type === 'watch') return `${name} 관심`;
-    if (type === 'sold') return `${name} 매도`;
-    return name;
+    if (type === 'sell') return `${name} 매도`;
+    return `${name} 매수`;
   }
   if (categoryId === 'exercise') return data.bodyWeight ? `체중 ${toNumber(data.bodyWeight)}kg` : data.type || '체중관리';
   if (categoryId === 'hospital') return data.hospitalName || data.hospital || '병원진료';
@@ -106,7 +106,7 @@ export function deriveRecordColumns(categoryId, formData = {}) {
   }
   if (categoryId === 'investment') {
     const type = getInvestmentRecordType(formData);
-    if (type === 'holding') {
+    if (type === 'buy') {
       amount = calcInvestment(formData).buyTotal;
     } else {
       amount = 0;
@@ -116,7 +116,7 @@ export function deriveRecordColumns(categoryId, formData = {}) {
   if (categoryId === 'kpass') amount = calcKpass(formData).netCost;
   if (categoryId === 'annual_leave') amount = 0;
   let occurred_on = occurredOn;
-  if (categoryId === 'investment' && getInvestmentRecordType(formData) === 'sold') {
+  if (categoryId === 'investment' && getInvestmentRecordType(formData) === 'sell') {
     occurred_on = formData.sellDate || occurredOn;
   }
   if (categoryId === 'kpass' && formData.yearMonth) occurred_on = `${formData.yearMonth}-01`;
@@ -267,10 +267,111 @@ export function calcDutchPay(data = {}) {
 }
 
 export function getInvestmentRecordType(data = {}) {
-  if (['holding', 'watch', 'sold'].includes(data.recordType)) return data.recordType;
-  if (data.sellDate || data.sellPrice || data.soldQuantity || data.realizedProfit) return 'sold';
+  if (data.recordType === 'holding') return 'buy';
+  if (data.recordType === 'sold') return 'sell';
+  if (['buy', 'watch', 'sell'].includes(data.recordType)) return data.recordType;
+  if (data.sellDate || data.sellPrice || data.soldQuantity || data.realizedProfit) return 'sell';
   if (data.targetPrice && !data.quantity && !data.avgBuyPrice) return 'watch';
-  return 'holding';
+  return 'buy';
+}
+
+function normalizeInvestmentText(value) {
+  return String(value || '').trim().toUpperCase().replace(/\s+/g, '');
+}
+
+export function getInvestmentAssetKey(data = {}) {
+  const market = normalizeInvestmentText(data.market || 'KR');
+  const identity = normalizeInvestmentText(data.symbol || data.ticker || data.assetName);
+  return identity ? `${market}:${identity}` : '';
+}
+
+export function buildInvestmentLedger(records = []) {
+  const investmentRecords = records
+    .filter((record) => record.category_id === 'investment')
+    .sort((a, b) => `${a.occurred_on || ''}${a.created_at || ''}`.localeCompare(`${b.occurred_on || ''}${b.created_at || ''}`));
+  const positionsByKey = new Map();
+  const watchRecords = [];
+  const transactions = [];
+
+  investmentRecords.forEach((record) => {
+    const data = record.data || {};
+    const type = getInvestmentRecordType(data);
+    if (type === 'watch') {
+      watchRecords.push(record);
+      return;
+    }
+
+    const key = getInvestmentAssetKey(data);
+    if (!key) return;
+    const current = positionsByKey.get(key) || {
+      key,
+      market: data.market || 'KR',
+      symbol: data.symbol || data.ticker || '',
+      assetName: data.assetName || data.symbol || data.ticker || '투자',
+      investmentType: data.investmentType || '국내주식',
+      quantity: 0,
+      costBasis: 0,
+      currentPrice: 0,
+      realizedProfit: 0,
+      buyRecords: [],
+      sellRecords: [],
+      latestRecord: record,
+    };
+
+    current.market = data.market || current.market;
+    current.symbol = data.symbol || data.ticker || current.symbol;
+    current.assetName = data.assetName || current.assetName;
+    current.investmentType = data.investmentType || current.investmentType;
+    if (toNumber(data.currentPrice) > 0) current.currentPrice = toNumber(data.currentPrice);
+    current.latestRecord = record;
+
+    if (type === 'buy') {
+      const quantity = toNumber(data.quantity);
+      const unitPrice = toNumber(data.avgBuyPrice || data.buyPrice);
+      current.quantity += quantity;
+      current.costBasis += unitPrice * quantity;
+      current.buyRecords.push(record);
+      transactions.push(record);
+    } else if (type === 'sell') {
+      const soldQuantity = toNumber(data.soldQuantity || data.quantity);
+      const averageCost = current.quantity > 0
+        ? current.costBasis / current.quantity
+        : toNumber(data.avgBuyPrice || data.buyPrice);
+      const matchedQuantity = Math.min(current.quantity, soldQuantity);
+      const matchedCost = averageCost * matchedQuantity;
+      current.quantity = Math.max(0, current.quantity - matchedQuantity);
+      current.costBasis = Math.max(0, current.costBasis - matchedCost);
+      current.realizedProfit += (toNumber(data.sellPrice) * soldQuantity) - (averageCost * soldQuantity) - toNumber(data.feeTax);
+      current.sellRecords.push(record);
+      transactions.push(record);
+    }
+
+    positionsByKey.set(key, current);
+  });
+
+  const positions = [...positionsByKey.values()]
+    .filter((position) => position.quantity > 0.0000001)
+    .map((position) => {
+      const avgBuyPrice = position.quantity > 0 ? position.costBasis / position.quantity : 0;
+      const currentTotal = position.currentPrice * position.quantity;
+      const profit = currentTotal - position.costBasis;
+      const rate = position.costBasis > 0 ? (profit / position.costBasis) * 100 : 0;
+      return {
+        ...position,
+        avgBuyPrice,
+        buyTotal: position.costBasis,
+        currentTotal,
+        profit,
+        rate,
+      };
+    })
+    .sort((a, b) => b.currentTotal - a.currentTotal || a.assetName.localeCompare(b.assetName, 'ko'));
+
+  return {
+    positions,
+    watchRecords: [...watchRecords].sort((a, b) => `${b.occurred_on}${b.created_at}`.localeCompare(`${a.occurred_on}${a.created_at}`)),
+    transactions: [...transactions].sort((a, b) => `${b.occurred_on}${b.created_at}`.localeCompare(`${a.occurred_on}${a.created_at}`)),
+  };
 }
 
 export function calcInvestment(data = {}) {

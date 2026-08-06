@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import AuthScreen from './components/AuthScreen';
 import CategoryView from './components/CategoryView';
 import Dashboard from './components/Dashboard';
+import FavoriteCategoryNav from './components/FavoriteCategoryNav';
 import RecordDetailModal from './components/RecordDetailModal';
 import RecordModal from './components/RecordModal';
 import SettingsScreen from './components/SettingsScreen';
@@ -10,6 +11,7 @@ import { useAppSettings } from './hooks/useAppSettings';
 import { useAuth } from './hooks/useAuth';
 import { useRecords } from './hooks/useRecords';
 import { runTactileTransition } from './utils/tactileTransition';
+import { buildInvestmentLedger, getInvestmentAssetKey, toNumber } from './utils/recordUtils';
 
 const EMPTY_FILTERS = { query: '', dateFrom: '', dateTo: '', minAmount: '', maxAmount: '', minRating: '' };
 
@@ -207,6 +209,36 @@ export default function App() {
     );
   }
 
+  async function saveRecordWithRules(categoryId, formData, existingRecord = null) {
+    if (categoryId === 'annual_leave' && formData.recordType === 'grant') {
+      const year = String(formData.year || new Date().getFullYear());
+      const existingGrant = records.find((record) => (
+        record.category_id === 'annual_leave'
+        && record.id !== existingRecord?.id
+        && record.data?.recordType === 'grant'
+        && String(record.data?.year) === year
+      ));
+      await saveRecord(categoryId, formData, existingRecord || existingGrant || null);
+      return;
+    }
+
+    if (categoryId === 'investment' && formData.recordType === 'sell') {
+      const ledgerRecords = existingRecord
+        ? records.filter((record) => record.id !== existingRecord.id)
+        : records;
+      const assetKey = getInvestmentAssetKey(formData);
+      const position = buildInvestmentLedger(ledgerRecords).positions.find((item) => item.key === assetKey);
+      const soldQuantity = toNumber(formData.soldQuantity);
+      const availableQuantity = position?.quantity || 0;
+      if (soldQuantity <= 0) throw new Error('매도수량을 입력해주세요.');
+      if (!position || soldQuantity > availableQuantity + 0.0000001) {
+        throw new Error(`매도 가능한 수량은 ${availableQuantity.toLocaleString('ko-KR')}주입니다.`);
+      }
+    }
+
+    await saveRecord(categoryId, formData, existingRecord);
+  }
+
   useEffect(() => {
     window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
   }, [view, activeCategory]);
@@ -280,21 +312,27 @@ export default function App() {
 
       {recordsLoading && <div className="sync-indicator">동기화 중</div>}
 
-      <button
-        type="button"
-        className="bottom-fab"
-        onClick={(event) => openAdd(view === 'category' ? activeCategory : null, null, event.currentTarget)}
-        aria-label="기록 추가"
-      >
-        +
-      </button>
-
       <nav className="bottom-nav" aria-label="하단 내비게이션">
         <button type="button" className={view === 'home' ? 'is-active' : ''} onClick={() => setView('home')}>
+          <span className="bottom-nav-icon" aria-hidden="true">⌂</span>
           <span>홈</span>
         </button>
-        <span className="bottom-nav-spacer" aria-hidden="true" />
+        <FavoriteCategoryNav
+          settings={normalizedSettings}
+          onOpenCategory={openCategory}
+          onManage={() => {
+            const key = `goodlife-settings-sections-${auth.userId || 'guest'}`;
+            try {
+              const saved = JSON.parse(window.localStorage.getItem(key) || '{}');
+              window.localStorage.setItem(key, JSON.stringify({ ...saved, categories: true }));
+            } catch {
+              // SettingsScreen falls back to its defaults when storage is unavailable.
+            }
+            setView('settings');
+          }}
+        />
         <button type="button" className={view === 'settings' ? 'is-active' : ''} onClick={() => setView('settings')}>
+          <span className="bottom-nav-icon" aria-hidden="true">⚙</span>
           <span>설정</span>
         </button>
       </nav>
@@ -326,7 +364,7 @@ export default function App() {
             setEditingRecord(null);
             setModalInitialData(null);
           }}
-          onSave={saveRecord}
+          onSave={saveRecordWithRules}
         />
       )}
     </div>

@@ -253,7 +253,7 @@ export const CATEGORIES = [
     titleField: 'assetName',
     fields: [
       commonDate,
-      { id: 'recordType', label: '기록 유형', type: 'choice', required: true, options: [{ value: 'holding', label: '보유' }, { value: 'watch', label: '관심' }, { value: 'sold', label: '매도' }] },
+      { id: 'recordType', label: '기록 유형', type: 'choice', required: true, options: [{ value: 'buy', label: '매수' }, { value: 'sell', label: '매도' }, { value: 'watch', label: '관심' }] },
       { id: 'investmentType', label: '투자 종류', type: 'choice', options: ['국내주식', '해외주식', 'ETF', '코인', '펀드', '기타'] },
       { id: 'market', label: '시장', type: 'choice', options: [{ value: 'KR', label: '국내' }, { value: 'US', label: '미국' }] },
       { id: 'assetName', label: '종목명', type: 'text', placeholder: '예: 삼성전자, SK하이닉스' },
@@ -388,7 +388,7 @@ export const CATEGORIES = [
     color: '#16a34a',
     titleField: 'recordType',
     fields: [
-      { id: 'recordType', label: '기록 유형', type: 'choice', required: true, options: [{ value: 'grant', label: '부여' }, { value: 'use', label: '사용' }] },
+      { id: 'recordType', label: '기록 유형', type: 'choice', required: true, options: [{ value: 'grant', label: '부여/갱신' }, { value: 'use', label: '사용' }] },
       { id: 'year', label: '연도', type: 'text', required: true, placeholder: '예: 2026' },
       { id: 'grantDays', label: '부여 일수', type: 'number', required: true, min: 0, step: 0.5 },
       { id: 'date', label: '사용 날짜', type: 'date', required: true },

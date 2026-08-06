@@ -247,7 +247,7 @@ export default function RecordModal({ categoryId, record, initialData = null, on
     }
     if (categoryId === 'investment' && ['recordType', 'avgBuyPrice', 'quantity', 'currentPrice', 'buyAmount', 'currentAmount', 'soldQuantity', 'sellPrice', 'feeTax'].includes(fieldId)) {
       const type = getInvestmentRecordType(next);
-      if (type === 'holding') {
+      if (type === 'buy') {
         const buyAmount = toNumber(next.avgBuyPrice) * toNumber(next.quantity);
         const currentAmount = toNumber(next.currentPrice) * toNumber(next.quantity);
         next.buyAmount = buyAmount > 0 ? String(buyAmount) : next.buyAmount || '';
@@ -255,7 +255,7 @@ export default function RecordModal({ categoryId, record, initialData = null, on
         next.profitLoss = String(toNumber(next.currentAmount) - toNumber(next.buyAmount));
         next.profitLossRate = toNumber(next.buyAmount) > 0 ? String(((toNumber(next.currentAmount) - toNumber(next.buyAmount)) / toNumber(next.buyAmount)) * 100) : '';
       }
-      if (type === 'sold') {
+      if (type === 'sell') {
         const sold = calcSoldInvestment(next);
         next.buyAmount = sold.buyTotal > 0 ? String(sold.buyTotal) : next.buyAmount || '';
         next.sellAmount = sold.sellTotal > 0 ? String(sold.sellTotal) : next.sellAmount || '';
@@ -276,13 +276,13 @@ export default function RecordModal({ categoryId, record, initialData = null, on
       const always = ['date', 'recordType', 'investmentType', 'market', 'assetName', 'symbol', 'rating', 'memo'];
       if (always.includes(field.id)) return true;
       const type = getInvestmentRecordType(form);
-      if (type === 'holding') {
+      if (type === 'buy') {
         return ['avgBuyPrice', 'quantity', 'currentPrice', 'buyAmount', 'currentAmount', 'profitLoss', 'profitLossRate'].includes(field.id);
       }
       if (type === 'watch') {
         return ['currentPrice', 'targetPrice'].includes(field.id);
       }
-      if (type === 'sold') {
+      if (type === 'sell') {
         return ['sellDate', 'avgBuyPrice', 'soldQuantity', 'sellPrice', 'feeTax', 'buyAmount', 'sellAmount', 'realizedProfit', 'realizedProfitRate'].includes(field.id);
       }
     }
@@ -302,7 +302,8 @@ export default function RecordModal({ categoryId, record, initialData = null, on
         recordType: type,
         market: currentForm.market || 'KR',
       };
-      if (type === 'holding') {
+      delete next.availableQuantity;
+      if (type === 'buy') {
         const investmentCalc = calcInvestment(next);
         next.buyAmount = String(investmentCalc.buyTotal || '');
         next.currentAmount = String(investmentCalc.currentTotal || '');
@@ -332,7 +333,7 @@ export default function RecordModal({ categoryId, record, initialData = null, on
         delete next.realizedProfit;
         delete next.realizedProfitRate;
       }
-      if (type === 'sold') {
+      if (type === 'sell') {
         const sold = calcSoldInvestment(next);
         next.sellAmount = String(sold.sellTotal || '');
         next.buyAmount = String(sold.buyTotal || '');
@@ -526,8 +527,8 @@ export default function RecordModal({ categoryId, record, initialData = null, on
     }
 
     if (symbol && assetName) return true;
-    if (type === 'sold' && symbol) return true;
-    if (type === 'sold' && assetName && !symbol) return true;
+    if (type === 'sell' && symbol) return true;
+    if (type === 'sell' && assetName && !symbol) return true;
 
     const keyword = assetName || symbol;
     setSymbolSearching(true);
@@ -609,16 +610,30 @@ export default function RecordModal({ categoryId, record, initialData = null, on
 
     setSaving(true);
     try {
+      if (categoryId === 'investment' && getInvestmentRecordType(formRef.current) === 'sell') {
+        const soldQuantity = toNumber(formRef.current.soldQuantity);
+        const availableQuantity = toNumber(formRef.current.availableQuantity);
+        if (soldQuantity <= 0) {
+          setError('매도수량을 입력해주세요.');
+          setSaving(false);
+          return;
+        }
+        if (availableQuantity > 0 && soldQuantity > availableQuantity + 0.0000001) {
+          setError(`매도 가능한 수량은 ${availableQuantity.toLocaleString('ko-KR')}주입니다.`);
+          setSaving(false);
+          return;
+        }
+      }
       const investmentReady = await ensureInvestmentSymbolBeforeSave();
       if (!investmentReady) {
         setSaving(false);
         return;
       }
       await ensureWeatherBeforeSave();
-      onClose();
       await onSave(categoryId, prepareFormForSave(formRef.current), record);
+      onClose();
     } catch (err) {
-      window.alert(err.message || '저장에 실패했습니다.');
+      setError(err.message || '저장에 실패했습니다. 입력 내용은 그대로 유지됩니다.');
     } finally {
       setSaving(false);
     }
@@ -632,7 +647,7 @@ export default function RecordModal({ categoryId, record, initialData = null, on
             <p className="eyebrow">{record ? '기록 수정' : '새 기록'}</p>
             <h2>{category.label}</h2>
           </div>
-          <button type="button" className="icon-button" onClick={onClose} aria-label="닫기">×</button>
+          <button type="button" className="icon-button" onClick={onClose} aria-label="닫기" disabled={saving}>×</button>
         </header>
 
         <div className="field-grid">
@@ -795,7 +810,7 @@ export default function RecordModal({ categoryId, record, initialData = null, on
           </aside>
         )}
 
-        {categoryId === 'investment' && investmentRecordType === 'holding' && investment.buyTotal > 0 && (
+        {categoryId === 'investment' && investmentRecordType === 'buy' && investment.buyTotal > 0 && (
           <aside className={`calc-box investment-mood ${investment.profit > 0 ? 'is-positive' : investment.profit < 0 ? 'is-negative' : 'is-neutral'}`}>
             <span>투자 계산</span>
             <strong className={investment.profit >= 0 ? 'profit-plus' : 'profit-minus'}>
@@ -804,7 +819,7 @@ export default function RecordModal({ categoryId, record, initialData = null, on
           </aside>
         )}
 
-        {categoryId === 'investment' && investmentRecordType === 'sold' && (soldInvestment.buyTotal > 0 || soldInvestment.sellTotal > 0) && (
+        {categoryId === 'investment' && investmentRecordType === 'sell' && (soldInvestment.buyTotal > 0 || soldInvestment.sellTotal > 0) && (
           <aside className={`calc-box investment-mood ${soldInvestment.profit > 0 ? 'is-positive' : soldInvestment.profit < 0 ? 'is-negative' : 'is-neutral'}`}>
             <span>매도 계산</span>
             <strong className={soldInvestment.profit >= 0 ? 'profit-plus' : 'profit-minus'}>
@@ -823,7 +838,7 @@ export default function RecordModal({ categoryId, record, initialData = null, on
         {error && <p className="form-error">{error}</p>}
 
         <footer className="modal-actions">
-          <button type="button" className="secondary-button" onClick={onClose}>취소</button>
+          <button type="button" className="secondary-button" onClick={onClose} disabled={saving}>취소</button>
           <button type="submit" className="primary-button" disabled={saving}>{saving ? '저장 중' : '저장'}</button>
         </footer>
       </form>

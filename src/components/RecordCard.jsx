@@ -28,7 +28,7 @@ export default function RecordCard({ record, onOpen, onEdit, onDelete, onInvestm
     ? (Array.isArray(data.productItems) ? data.productItems : data.items || []).filter((item) => item?.name)
     : [];
   const visibleShoppingItems = shoppingItems.slice(0, 10);
-  const showSellAction = record.category_id === 'investment' && investmentType === 'holding' && onInvestmentSell;
+  const showSellAction = record.category_id === 'investment' && investmentType === 'buy' && onInvestmentSell;
 
   useEffect(() => {
     if (!menuOpen) return undefined;
@@ -170,17 +170,17 @@ export default function RecordCard({ record, onOpen, onEdit, onDelete, onInvestm
           {record.category_id === 'investment' && (
             <>
               <span className={`investment-type-badge is-${investmentType}`}>
-                {investmentType === 'watch' ? '관심' : investmentType === 'sold' ? '매도' : '보유'}
+                {investmentType === 'watch' ? '관심' : investmentType === 'sell' ? '매도' : '매수'}
               </span>
               {data.symbol && <span>{data.symbol}</span>}
               {investmentType === 'watch' && toNumber(data.currentPrice) > 0 && <span>현재가 {formatMoney(data.currentPrice)}</span>}
               {investmentType === 'watch' && toNumber(data.targetPrice) > 0 && <span>목표가 {formatMoney(data.targetPrice)}</span>}
-              {investmentType === 'sold' && toNumber(data.sellPrice) > 0 && <span>매도가 {formatMoney(data.sellPrice)}</span>}
-              {investmentType === 'sold' && toNumber(data.soldQuantity) > 0 && <span>{toNumber(data.soldQuantity)}주</span>}
+              {investmentType === 'sell' && toNumber(data.sellPrice) > 0 && <span>매도가 {formatMoney(data.sellPrice)}</span>}
+              {investmentType === 'sell' && toNumber(data.soldQuantity) > 0 && <span>{toNumber(data.soldQuantity)}주</span>}
             </>
           )}
         </div>
-        {record.category_id === 'investment' && investmentType === 'holding' && investment.buyTotal > 0 && (
+        {record.category_id === 'investment' && investmentType === 'buy' && investment.buyTotal > 0 && (
           <div className="investment-card-mood">
             <InvestmentMoodImage rate={investment.rate} compact />
             <p className={investment.profit >= 0 ? 'profit-plus' : 'profit-minus'}>
@@ -203,7 +203,7 @@ export default function RecordCard({ record, onOpen, onEdit, onDelete, onInvestm
             {toNumber(data.currentPrice) > 0 && <small>현재가 {formatMoney(data.currentPrice)}</small>}
           </div>
         )}
-        {record.category_id === 'investment' && investmentType === 'sold' && (soldInvestment.buyTotal > 0 || soldInvestment.sellTotal > 0) && (
+        {record.category_id === 'investment' && investmentType === 'sell' && (soldInvestment.buyTotal > 0 || soldInvestment.sellTotal > 0) && (
           <div className="investment-sold-row">
             <span>실현손익</span>
             <strong className={soldInvestment.profit >= 0 ? 'profit-plus' : 'profit-minus'}>
