@@ -137,6 +137,30 @@ export default function App() {
     });
   }, [normalizedSettings.reminder_settings, records, today, todayDay]);
 
+  const workMealRestaurantSuggestions = useMemo(() => {
+    const restaurantStats = new Map();
+
+    records.forEach((record) => {
+      if (record.category_id !== 'workMeal') return;
+      const restaurant = String(record.data?.restaurant || '').trim();
+      if (!restaurant) return;
+
+      const key = restaurant.toLocaleLowerCase('ko-KR');
+      const usedAt = record.updated_at || record.created_at || record.occurred_on || '';
+      const previous = restaurantStats.get(key) || { name: restaurant, count: 0, usedAt: '' };
+      restaurantStats.set(key, {
+        name: previous.name,
+        count: previous.count + 1,
+        usedAt: usedAt > previous.usedAt ? usedAt : previous.usedAt,
+      });
+    });
+
+    return [...restaurantStats.values()]
+      .sort((left, right) => right.count - left.count || right.usedAt.localeCompare(left.usedAt))
+      .map((item) => item.name)
+      .slice(0, 30);
+  }, [records]);
+
   function openAdd(categoryId, initialData = null, sourceElement = null) {
     const commit = () => {
       setEditingRecord(null);
@@ -359,6 +383,7 @@ export default function App() {
           categoryId={modalCategory}
           record={editingRecord}
           initialData={modalInitialData}
+          fieldSuggestions={modalCategory === 'workMeal' ? { restaurant: workMealRestaurantSuggestions } : {}}
           onClose={() => {
             setModalCategory(null);
             setEditingRecord(null);

@@ -5134,3 +5134,57 @@ select:focus {
   to { background: rgba(0, 0, 0, 0.18); }
 }
 
+.history-autocomplete {
+  position: relative;
+  width: 100%;
+}
+
+.history-autocomplete > input {
+  width: 100%;
+}
+
+.history-autocomplete-list {
+  display: grid;
+  max-height: 172px;
+  margin-top: 6px;
+  padding: 4px;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  box-shadow: 0 8px 20px rgba(34, 31, 26, 0.1);
+}
+
+.history-autocomplete-list button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 38px;
+  padding: 7px 10px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+}
+
+.history-autocomplete-list button:active {
+  background: var(--accent-soft);
+}
+
+.history-autocomplete-list span {
+  overflow: hidden;
+  font-size: 13px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.history-autocomplete-list small {
+  flex: 0 0 auto;
+  margin-left: 10px;
+  color: var(--text-muted);
+  font-size: 10px;
+  font-weight: 600;
+}
+

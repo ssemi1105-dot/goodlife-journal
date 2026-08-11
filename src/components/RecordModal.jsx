@@ -120,7 +120,14 @@ function withTimeout(promise, ms) {
   ]);
 }
 
-export default function RecordModal({ categoryId, record, initialData = null, onClose, onSave }) {
+function isMovieRecord(data = {}) {
+  const tmdbMediaType = typeof data.title === 'object'
+    ? data.title?.mediaType || data.title?.tmdbMediaType
+    : '';
+  return data.mediaType === '영화' || data.tmdbMediaType === 'movie' || tmdbMediaType === 'movie';
+}
+
+export default function RecordModal({ categoryId, record, initialData = null, fieldSuggestions = {}, onClose, onSave }) {
   const category = CATEGORY_MAP[categoryId];
   const [form, setForm] = useState(() => buildInitialForm(category, record, initialData));
   const formRef = useRef(form);
@@ -233,6 +240,9 @@ export default function RecordModal({ categoryId, record, initialData = null, on
   ]);
 
   function applyDerivedValues(next, fieldId) {
+    if (categoryId === 'video' && fieldId === 'title' && typeof next.title === 'object' && next.title?.mediaType === 'movie') {
+      next.mediaType = '영화';
+    }
     if (categoryId === 'delivery' && (fieldId === 'menuItems' || fieldId === 'deliveryFee')) {
       next.totalAmount = String(toNumber(next.menuItems) + toNumber(next.deliveryFee));
     }
@@ -272,6 +282,9 @@ export default function RecordModal({ categoryId, record, initialData = null, on
   }
 
   function isFieldVisible(field) {
+    if (categoryId === 'video' && isMovieRecord(form) && ['watchPeriod', 'episodeStart', 'episodeEnd'].includes(field.id)) {
+      return false;
+    }
     if (categoryId === 'investment') {
       const always = ['date', 'recordType', 'investmentType', 'market', 'assetName', 'symbol', 'rating', 'memo'];
       if (always.includes(field.id)) return true;
@@ -295,6 +308,16 @@ export default function RecordModal({ categoryId, record, initialData = null, on
   }
 
   function prepareFormForSave(currentForm) {
+    if (categoryId === 'video' && isMovieRecord(currentForm)) {
+      const watchedDate = currentForm.date || todayIso();
+      return {
+        ...currentForm,
+        mediaType: '영화',
+        startDate: currentForm.startDate || watchedDate,
+        endDate: currentForm.endDate || currentForm.startDate || watchedDate,
+        watchStatus: currentForm.watchStatus || '시청완료',
+      };
+    }
     if (categoryId === 'investment') {
       const type = getInvestmentRecordType(currentForm);
       const next = {
@@ -671,6 +694,7 @@ export default function RecordModal({ categoryId, record, initialData = null, on
                     setField(field.id, value);
                   }}
                   onDraftChange={(value) => setFieldDraft(field.id, value)}
+                  suggestions={fieldSuggestions[field.id] || []}
                 />
               </div>
             );

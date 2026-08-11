@@ -3,6 +3,7 @@ import { supabase } from '../lib/supabaseClient';
 import ChipGroup from './ui/ChipGroup';
 import CompactToggle from './ui/CompactToggle';
 import DateRangeField from './ui/DateRangeField';
+import HistoryAutocompleteInput from './ui/HistoryAutocompleteInput';
 import LineItemsInput from './ui/LineItemsInput';
 import PhotoUploader from './ui/PhotoUploader';
 import StarRating from './ui/StarRating';
@@ -11,7 +12,7 @@ function normalizeArray(value) {
   return Array.isArray(value) ? value : [];
 }
 
-export default function FieldInput({ field, value, onChange, onDraftChange }) {
+export default function FieldInput({ field, value, onChange, onDraftChange, suggestions = [] }) {
   const [tagText, setTagText] = useState('');
   const [tmdbQuery, setTmdbQuery] = useState(typeof value === 'object' ? value?.title || value?.tmdbTitle || '' : value || '');
   const [tmdbResults, setTmdbResults] = useState([]);
@@ -216,6 +217,18 @@ export default function FieldInput({ field, value, onChange, onDraftChange }) {
           </div>
         )}
       </div>
+    );
+  }
+
+  if (field.type === 'text' && suggestions.length > 0) {
+    return (
+      <HistoryAutocompleteInput
+        value={value}
+        suggestions={suggestions}
+        onChange={onChange}
+        onDraftChange={onDraftChange}
+        placeholder={field.placeholder || ''}
+      />
     );
   }
 
