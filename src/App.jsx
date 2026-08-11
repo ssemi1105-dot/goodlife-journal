@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import AuthScreen from './components/AuthScreen';
 import CategoryView from './components/CategoryView';
 import Dashboard from './components/Dashboard';
@@ -14,6 +14,7 @@ import { runTactileTransition } from './utils/tactileTransition';
 import { buildInvestmentLedger, getInvestmentAssetKey, toNumber } from './utils/recordUtils';
 
 const EMPTY_FILTERS = { query: '', dateFrom: '', dateTo: '', minAmount: '', maxAmount: '', minRating: '' };
+const APP_HISTORY_KEY = 'goodlifeNavigation';
 
 const REMINDER_DEFINITIONS = [
   {
@@ -117,8 +118,92 @@ export default function App() {
   const [viewingRecord, setViewingRecord] = useState(null);
   const [showPicker, setShowPicker] = useState(false);
   const [filters, setFilters] = useState(EMPTY_FILTERS);
+  const recordsRef = useRef(records);
   const today = todayLocalIso();
   const todayDay = Number(today.slice(-2));
+
+  useEffect(() => {
+    recordsRef.current = records;
+  }, [records]);
+
+  function applyNavigationState(navigationState) {
+    const nextView = ['home', 'category', 'settings'].includes(navigationState?.view)
+      ? navigationState.view
+      : 'home';
+    const nextLayer = navigationState?.layer || '';
+    const targetRecord = navigationState?.recordId
+      ? recordsRef.current.find((record) => record.id === navigationState.recordId) || null
+      : null;
+
+    setView(nextView);
+    setActiveCategory(nextView === 'category' ? navigationState?.activeCategory || null : null);
+    setShowPicker(nextLayer === 'picker');
+    setViewingRecord(nextLayer === 'record' ? targetRecord : null);
+    setModalCategory(nextLayer === 'form' ? navigationState?.modalCategory || null : null);
+    setEditingRecord(nextLayer === 'form' ? targetRecord : null);
+    setModalInitialData(nextLayer === 'form' ? navigationState?.initialData || null : null);
+  }
+
+  function setNavigationState(navigationState, { replace = false } = {}) {
+    const nextState = {
+      [APP_HISTORY_KEY]: true,
+      view: navigationState.view || 'home',
+      activeCategory: navigationState.activeCategory || null,
+      layer: navigationState.layer || '',
+      modalCategory: navigationState.modalCategory || null,
+      recordId: navigationState.recordId || null,
+      initialData: navigationState.initialData || null,
+    };
+    const method = replace ? 'replaceState' : 'pushState';
+    window.history[method](nextState, '', window.location.href);
+    applyNavigationState(nextState);
+  }
+
+  function currentBaseNavigation() {
+    return {
+      view,
+      activeCategory: view === 'category' ? activeCategory : null,
+    };
+  }
+
+  function navigateBack(fallback = { view: 'home' }) {
+    const currentState = window.history.state;
+    if (currentState?.[APP_HISTORY_KEY] && (currentState.layer || currentState.view !== 'home')) {
+      window.history.back();
+      return;
+    }
+    setNavigationState(fallback, { replace: true });
+  }
+
+  function navigateToView(nextView) {
+    if (view === nextView && !showPicker && !viewingRecord && !modalCategory) return;
+    setNavigationState({ view: nextView });
+  }
+
+  useEffect(() => {
+    if (!auth.userId) return undefined;
+
+    const homeState = {
+      [APP_HISTORY_KEY]: true,
+      view: 'home',
+      activeCategory: null,
+      layer: '',
+      modalCategory: null,
+      recordId: null,
+      initialData: null,
+    };
+    window.history.replaceState(homeState, '', window.location.href);
+    applyNavigationState(homeState);
+
+    function handlePopState(event) {
+      if (event.state?.[APP_HISTORY_KEY]) {
+        applyNavigationState(event.state);
+      }
+    }
+
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, [auth.userId]);
 
   const normalizedSettings = useMemo(() => {
     const allIds = CATEGORIES.map((category) => category.id);
@@ -163,13 +248,15 @@ export default function App() {
 
   function openAdd(categoryId, initialData = null, sourceElement = null) {
     const commit = () => {
-      setEditingRecord(null);
-      setModalInitialData(initialData);
       if (categoryId) {
-        setShowPicker(false);
-        setModalCategory(categoryId);
+        setNavigationState({
+          ...currentBaseNavigation(),
+          layer: 'form',
+          modalCategory: categoryId,
+          initialData,
+        }, { replace: showPicker });
       } else {
-        setShowPicker(true);
+        setNavigationState({ ...currentBaseNavigation(), layer: 'picker' });
       }
     };
 
@@ -182,22 +269,27 @@ export default function App() {
 
   function openCategory(categoryId, sourceElement) {
     return runTactileTransition(sourceElement, 'category-surface', () => {
-      setActiveCategory(categoryId);
-      setView('category');
+      setNavigationState({ view: 'category', activeCategory: categoryId });
     });
   }
 
   function openRecord(record, sourceElement) {
     return runTactileTransition(sourceElement, 'record-surface', () => {
-      setViewingRecord(record);
+      setNavigationState({
+        ...currentBaseNavigation(),
+        layer: 'record',
+        recordId: record.id,
+      });
     });
   }
 
   function openEdit(record) {
-    setViewingRecord(null);
-    setEditingRecord(record);
-    setModalInitialData(null);
-    setModalCategory(record.category_id);
+    setNavigationState({
+      ...currentBaseNavigation(),
+      layer: 'form',
+      modalCategory: record.category_id,
+      recordId: record.id,
+    });
   }
 
   async function dismissReminder(reminder) {
@@ -270,7 +362,7 @@ export default function App() {
   async function confirmDelete(record) {
     if (!window.confirm('이 기록을 삭제할까요?')) return;
     await deleteRecord(record);
-    setViewingRecord(null);
+    if (viewingRecord?.id === record.id) navigateBack(currentBaseNavigation());
   }
 
   if (auth.loading) {
@@ -310,7 +402,7 @@ export default function App() {
         <CategoryView
           categoryId={activeCategory}
           records={records}
-          onBack={() => setView('home')}
+          onBack={() => navigateBack({ view: 'home' })}
           onAdd={openAdd}
           onOpenRecord={openRecord}
           onEdit={openEdit}
@@ -329,7 +421,7 @@ export default function App() {
           onSaveSettings={saveSettings}
           onUpdateProfile={auth.updateProfile}
           onSignOut={auth.signOut}
-          onBack={() => setView('home')}
+          onBack={() => navigateBack({ view: 'home' })}
           onBackfillWeather={backfillMissingWeather}
         />
       )}
@@ -337,7 +429,7 @@ export default function App() {
       {recordsLoading && <div className="sync-indicator">동기화 중</div>}
 
       <nav className="bottom-nav" aria-label="하단 내비게이션">
-        <button type="button" className={view === 'home' ? 'is-active' : ''} onClick={() => setView('home')}>
+        <button type="button" className={view === 'home' ? 'is-active' : ''} onClick={() => navigateToView('home')}>
           <span className="bottom-nav-icon" aria-hidden="true">⌂</span>
           <span>홈</span>
         </button>
@@ -352,10 +444,10 @@ export default function App() {
             } catch {
               // SettingsScreen falls back to its defaults when storage is unavailable.
             }
-            setView('settings');
+            navigateToView('settings');
           }}
         />
-        <button type="button" className={view === 'settings' ? 'is-active' : ''} onClick={() => setView('settings')}>
+        <button type="button" className={view === 'settings' ? 'is-active' : ''} onClick={() => navigateToView('settings')}>
           <span className="bottom-nav-icon" aria-hidden="true">⚙</span>
           <span>설정</span>
         </button>
@@ -364,7 +456,7 @@ export default function App() {
       {showPicker && (
         <CategoryPicker
           settings={normalizedSettings}
-          onClose={() => setShowPicker(false)}
+          onClose={() => navigateBack(currentBaseNavigation())}
           onSelect={(categoryId, sourceElement) => openAdd(categoryId, null, sourceElement)}
         />
       )}
@@ -372,7 +464,7 @@ export default function App() {
       {viewingRecord && (
         <RecordDetailModal
           record={viewingRecord}
-          onClose={() => setViewingRecord(null)}
+          onClose={() => navigateBack(currentBaseNavigation())}
           onEdit={openEdit}
           onDelete={confirmDelete}
         />
@@ -384,11 +476,7 @@ export default function App() {
           record={editingRecord}
           initialData={modalInitialData}
           fieldSuggestions={modalCategory === 'workMeal' ? { restaurant: workMealRestaurantSuggestions } : {}}
-          onClose={() => {
-            setModalCategory(null);
-            setEditingRecord(null);
-            setModalInitialData(null);
-          }}
+          onClose={() => navigateBack(currentBaseNavigation())}
           onSave={saveRecordWithRules}
         />
       )}
