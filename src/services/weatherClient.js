@@ -18,6 +18,8 @@ export const WEATHER_ENABLED_CATEGORIES = [
   'outing',
   'domesticTravel',
   'overseasTravel',
+  'vehicle',
+  'culture',
 ];
 
 export const DEFAULT_WEATHER_LOCATION = {

@@ -81,6 +81,10 @@ export function getRecordTitle(categoryId, data = {}) {
     const first = Array.isArray(items) ? items.find((item) => item?.name) : null;
     return data.store || data.storeName || data.product || first?.name || '쇼핑';
   }
+  if (categoryId === 'vehicle') {
+    const vehicleName = data.vehicleName || '차량';
+    return data.maintenanceType ? `${data.maintenanceType} · ${vehicleName}` : vehicleName;
+  }
   const raw = data[category.titleField];
   if (typeof raw === 'object' && (raw?.title || raw?.tmdbTitle)) return raw.title || raw.tmdbTitle;
   if (Array.isArray(raw)) {

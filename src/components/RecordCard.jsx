@@ -161,6 +161,9 @@ export default function RecordCard({ record, onOpen, onEdit, onDelete, onInvestm
           {data.deliveryPlatform && <span>{data.deliveryPlatform}</span>}
           {data.ideaCategory && <span>{data.ideaCategory}</span>}
           {data.ideaStatus && <span>{data.ideaStatus}</span>}
+          {data.maintenanceType && <span>{data.maintenanceType}</span>}
+          {data.cultureType && <span>{data.cultureType}</span>}
+          {record.category_id === 'vehicle' && toNumber(data.odometerKm) > 0 && <span>{toNumber(data.odometerKm).toLocaleString('ko-KR')}km</span>}
           {data.watchStatus && <span>{data.watchStatus}</span>}
           {data.episodeStart && data.episodeEnd && <span>{data.episodeStart}화~{data.episodeEnd}화</span>}
           {record.category_id === 'hospital' && <span>실부담 {formatMoney(data.netMedicalCost || record.amount)}</span>}

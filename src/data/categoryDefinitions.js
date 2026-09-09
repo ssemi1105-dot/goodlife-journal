@@ -28,6 +28,8 @@ export const DEFAULT_FINANCE_MODES = {
   outing: 'expense',
   domesticTravel: 'expense',
   overseasTravel: 'expense',
+  vehicle: 'expense',
+  culture: 'expense',
 };
 
 const commonDate = { id: 'date', label: '날짜', type: 'date', required: true };
@@ -59,6 +61,8 @@ export const CATEGORY_ICONS = {
   outing: '🚗',
   domesticTravel: '🧳',
   overseasTravel: '✈️',
+  vehicle: '🚘',
+  culture: '🎭',
 };
 
 export const CATEGORIES = [
@@ -474,6 +478,44 @@ export const CATEGORIES = [
       { id: 'currency', label: '현지통화', type: 'text', placeholder: '예: JPY, USD' },
       { id: 'localExpenses', label: '현지 지출 비용', type: 'lineItems', nameLabel: '지출 항목', amountLabel: '금액', itemRating: true },
       { id: 'krwAmount', label: '원화환산 총비용', type: 'money' },
+      rating,
+      photo,
+      memo,
+    ],
+  },
+  {
+    id: 'vehicle',
+    label: '차량관리',
+    color: '#0e7490',
+    titleField: 'vehicleName',
+    amountField: 'serviceItems',
+    fields: [
+      commonDate,
+      { id: 'vehicleName', label: '차량명/번호', type: 'text', required: true, placeholder: '예: 쏘렌토 / 12가 3456' },
+      { id: 'maintenanceType', label: '관리 종류', type: 'choice', required: true, options: ['주유', '전기충전', '정비', '수리', '소모품', '세차', '보험', '자동차세', '검사', '주차/통행료', '기타'] },
+      { id: 'odometerKm', label: '누적 주행거리(km)', type: 'number', min: 0 },
+      { id: 'location', label: '업체/장소', type: 'text' },
+      { id: 'serviceItems', label: '관리 내역별 금액', type: 'lineItems', nameLabel: '관리 내역', amountLabel: '금액', addLabel: '내역 추가' },
+      { id: 'nextServiceDate', label: '다음 점검일', type: 'date' },
+      { id: 'nextServiceKm', label: '다음 점검거리(km)', type: 'number', min: 0 },
+      rating,
+      photo,
+      memo,
+    ],
+  },
+  {
+    id: 'culture',
+    label: '문화생활',
+    color: '#a21caf',
+    titleField: 'eventTitle',
+    amountField: 'amount',
+    fields: [
+      commonDate,
+      { id: 'eventTitle', label: '공연/행사명', type: 'text', required: true },
+      { id: 'cultureType', label: '문화 종류', type: 'choice', required: true, options: ['공연', '전시', '뮤지컬', '연극', '콘서트', '축제', '박물관', '스포츠관람', '기타'] },
+      { id: 'venue', label: '장소', type: 'text' },
+      { id: 'companions', label: '동행인', type: 'tags' },
+      { id: 'amount', label: '총비용', type: 'money' },
       rating,
       photo,
       memo,

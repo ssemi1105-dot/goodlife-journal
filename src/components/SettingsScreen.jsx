@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { CATEGORIES, CATEGORY_ICONS, FINANCE_MODES, getCategoryThemeStyle } from '../data/categoryDefinitions';
 import { useSharing } from '../hooks/useSharing';
 import AdminUserList from './AdminUserList';
+import DataExportPanel from './DataExportPanel';
 import ShareSettingsPanel from './ShareSettingsPanel';
 import CompactToggle from './ui/CompactToggle';
 
@@ -9,6 +10,7 @@ const DEFAULT_SECTION_OPEN = {
   profile: true,
   sharing: false,
   categories: false,
+  data: false,
   integrations: false,
   admin: false,
 };
@@ -295,9 +297,21 @@ export default function SettingsScreen({
       </SettingsSection>
 
       <SettingsSection
+        sectionId="data"
+        eyebrow="My Data"
+        title="내 데이터"
+        summary={`${records.length}개 기록`}
+        open={Boolean(openSections.data)}
+        onToggle={toggleSettingsSection}
+        className="data-settings-panel"
+      >
+        <DataExportPanel records={records} profile={profile} />
+      </SettingsSection>
+
+      <SettingsSection
         sectionId="integrations"
         eyebrow="Integrations"
-        title="데이터/연동"
+        title="알림/연동"
         summary="알림 · 날씨 · API"
         open={Boolean(openSections.integrations)}
         onToggle={toggleSettingsSection}

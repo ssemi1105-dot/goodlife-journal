@@ -4811,6 +4811,121 @@ select:focus {
   touch-action: pan-y;
 }
 
+.data-export-panel {
+  display: grid;
+  gap: 8px;
+  border-top: 1px solid var(--line);
+  padding-top: 9px;
+}
+
+.data-export-overview {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 2px 4px 5px;
+}
+
+.data-export-overview > div {
+  display: grid;
+  gap: 1px;
+}
+
+.data-export-overview strong {
+  font-size: 15px;
+}
+
+.data-export-overview span,
+.data-export-overview small,
+.data-export-note {
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.45;
+}
+
+.data-export-overview > small {
+  max-width: 145px;
+  text-align: right;
+}
+
+.data-export-actions {
+  display: grid;
+}
+
+.data-export-action {
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr) 16px;
+  align-items: center;
+  gap: 9px;
+  min-height: 52px;
+  padding: 7px 4px;
+  border: 0;
+  border-top: 1px solid var(--line);
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+  transition: background 130ms ease, transform var(--spring);
+}
+
+.data-export-action:not(:disabled):active {
+  background: var(--accent-soft);
+  transform: scale(0.985);
+}
+
+.data-export-action:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.data-export-format {
+  display: grid;
+  width: 42px;
+  height: 30px;
+  place-items: center;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.data-export-copy {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.data-export-copy strong {
+  font-size: 13px;
+}
+
+.data-export-copy small {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.data-export-note {
+  margin: 0;
+  padding: 0 4px;
+}
+
+@media (max-width: 360px) {
+  .data-export-overview {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 3px;
+  }
+
+  .data-export-overview > small {
+    max-width: none;
+    text-align: left;
+  }
+}
+
 /* v0.2.0 favorites navigation and ledger refinements */
 .quick-record-section {
   padding: 0;
