@@ -63,6 +63,7 @@ export default function SettingsScreen({
   onSignOut,
   onBack,
   onBackfillWeather,
+  onExportRecords,
 }) {
   const [selectedCategoryId, setSelectedCategoryId] = useState(null);
   const [profileName, setProfileName] = useState(profile?.display_name || '');
@@ -305,7 +306,7 @@ export default function SettingsScreen({
         onToggle={toggleSettingsSection}
         className="data-settings-panel"
       >
-        <DataExportPanel records={records} profile={profile} />
+        <DataExportPanel records={records} profile={profile} settings={settings} onExportRecords={onExportRecords} />
       </SettingsSection>
 
       <SettingsSection

@@ -1,12 +1,13 @@
 {
   "name": "goodlife-journal",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "private": true,
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test": "node --test tests/regressions.test.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.43.4",

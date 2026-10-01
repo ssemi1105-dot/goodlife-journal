@@ -53,14 +53,24 @@ serve(async (req) => {
     const directionRequester = currentUserId;
     const directionAddressee = target.id;
 
-    const { error } = await admin.from('friendships').upsert({
+    const { data: existing, error: existingError } = await admin.from('friendships')
+      .select('id, status, requester_id').eq('pair_low', requesterId).eq('pair_high', addresseeId).maybeSingle();
+    if (existingError) return json({ error: '친구 관계를 확인하지 못했습니다.' }, 500);
+    if (existing?.status === 'blocked') return json({ error: '요청할 수 없는 연결입니다.' }, 403);
+    if (existing?.status === 'accepted' || (existing?.status === 'pending' && existing.requester_id === currentUserId)) return json({ ok: true });
+    if (existing?.status === 'pending') return json({ error: '이미 받은 요청이 있습니다. 친구 목록에서 수락해주세요.' }, 409);
+    const payload = {
       requester_id: directionRequester,
       addressee_id: directionAddressee,
       pair_low: requesterId,
       pair_high: addresseeId,
       status: 'pending',
       updated_at: new Date().toISOString(),
-    }, { onConflict: 'pair_low,pair_high' });
+    };
+    const { data: saved, error } = existing
+      ? await admin.from('friendships').update(payload).eq('id', existing.id).eq('status', 'rejected').select('id')
+      : await admin.from('friendships').insert(payload).select('id');
+    if (error?.code === '23505' || (!error && !saved?.length)) return json({ error: '요청 상태가 바뀌었습니다. 다시 불러와 주세요.' }, 409);
     if (error) return json({ error: error.message }, 500);
 
     return json({ ok: true });
@@ -73,18 +83,20 @@ serve(async (req) => {
 
     const { data: friendship, error: loadError } = await admin
       .from('friendships')
-      .select('id, addressee_id')
+      .select('id, addressee_id, status')
       .eq('id', friendshipId)
       .maybeSingle();
     if (loadError) return json({ error: loadError.message }, 500);
     if (!friendship) return json({ error: 'Friend request not found.' }, 404);
     if (friendship.addressee_id !== currentUserId) return json({ error: 'Forbidden' }, 403);
+    if (friendship.status !== 'pending') return json({ error: '이미 처리된 친구 요청입니다.' }, 409);
 
-    const { error } = await admin
+    const { data: changed, error } = await admin
       .from('friendships')
       .update({ status, updated_at: new Date().toISOString() })
-      .eq('id', friendshipId);
+      .eq('id', friendshipId).eq('addressee_id', currentUserId).eq('status', 'pending').select('id');
     if (error) return json({ error: error.message }, 500);
+    if (!changed?.length) return json({ error: '요청 상태가 바뀌었습니다. 다시 불러와 주세요.' }, 409);
     return json({ ok: true });
   }
 

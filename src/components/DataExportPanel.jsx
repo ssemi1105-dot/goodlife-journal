@@ -1,6 +1,10 @@
+import { useState } from 'react';
 import { APP_VERSION } from '../lib/appVersion';
 import { CATEGORY_MAP } from '../data/categoryDefinitions';
-import { getRecordTitle, toNumber } from '../utils/recordUtils';
+import { getRecordFinanceValue, getRecordTitle, toNumber } from '../utils/recordUtils';
+import { photoPaths } from '../services/recordStorage';
+import { supabase } from '../lib/supabaseClient';
+import CompactToggle from './ui/CompactToggle';
 
 const RUNTIME_ONLY_KEYS = new Set(['signedUrl', 'previewUrl', 'file']);
 
@@ -15,7 +19,7 @@ function cleanExportValue(value) {
   );
 }
 
-function toExportRecord(record) {
+export function toExportRecord(record) {
   return {
     id: record.id,
     category_id: record.category_id,
@@ -58,10 +62,10 @@ function downloadBlob(content, type, fileName) {
   window.setTimeout(() => window.URL.revokeObjectURL(url), 1000);
 }
 
-function escapeCsv(value) {
+export function escapeCsv(value) {
   if (value === null || value === undefined) return '""';
   let text = typeof value === 'string' ? value : String(value);
-  if (typeof value === 'string' && /^[=+\-@]/.test(text)) text = `'${text}`;
+  if (typeof value === 'string' && /^[\s\u0000-\u001f]*[=+\-@]/.test(text)) text = `'${text}`;
   return `"${text.replaceAll('"', '""')}"`;
 }
 
@@ -78,17 +82,73 @@ function displayMoney(value) {
   return `${Math.round(toNumber(value)).toLocaleString('ko-KR')}원`;
 }
 
-export default function DataExportPanel({ records = [], profile }) {
-  const exportRecords = records.map(toExportRecord);
+export function exportFinance(record, settings = {}) {
+  return getRecordFinanceValue(record, settings.finance_modes || {});
+}
+
+export default function DataExportPanel({ records = [], profile, settings = {}, onExportRecords }) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const [includePhotos, setIncludePhotos] = useState(false);
   const categoryCount = new Set(records.map((record) => record.category_id)).size;
 
-  function downloadJson() {
+  async function runExport(format) {
+    if (busy) return;
+    // Open synchronously with the tap; mobile browsers block windows opened after await.
+    const printWindow = format === 'PDF' ? window.open('', '_blank') : null;
+    if (format === 'PDF' && !printWindow) {
+      setError('브라우저의 팝업 차단을 해제해 주세요.');
+      return;
+    }
+    if (printWindow) {
+      printWindow.opener = null;
+      printWindow.document.body.textContent = '전체 기록을 확인하고 있습니다.';
+    }
+    setBusy(true);
+    setError('');
+    try {
+      if (!onExportRecords) throw new Error('전체 기록 조회가 연결되지 않았습니다.');
+      const fresh = await onExportRecords();
+      const exportRecords = fresh.map(toExportRecord);
+      if (format === 'JSON') await downloadJson(exportRecords);
+      else if (format === 'CSV') downloadCsv(exportRecords);
+      else printRecords(exportRecords, printWindow);
+    } catch (err) {
+      printWindow?.close();
+      setError(err.message || '파일을 만들지 못했습니다. 다시 시도해주세요.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function downloadJson(exportRecords) {
+    const photos = [];
+    if (includePhotos) {
+      const paths = [...new Set(exportRecords.flatMap(photoPaths))];
+      let totalBytes = 0;
+      for (const path of paths) {
+        const { data: blob, error: photoError } = await supabase.storage.from('record-photos').download(path);
+        if (photoError || !blob) throw new Error('사진을 모두 받지 못했습니다. 다시 시도하거나 사진 포함을 꺼주세요.');
+        totalBytes += blob.size;
+        if (totalBytes > 50 * 1024 * 1024) throw new Error('사진이 50MB를 초과합니다. 모바일 메모리 보호를 위해 사진 포함을 끄고 내보내주세요.');
+        const dataUrl = await new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result);
+          reader.onerror = () => reject(new Error('사진 파일을 읽지 못했습니다.'));
+          reader.readAsDataURL(blob);
+        });
+        photos.push({ path, type: blob.type, size: blob.size, dataUrl });
+      }
+    }
     const payload = {
       exportType: 'goodlife-journal',
-      schemaVersion: 1,
+      schemaVersion: 2,
       appVersion: APP_VERSION,
       exportedAt: new Date().toISOString(),
       profile: { displayName: profile?.display_name || '사용자' },
+      settings: cleanExportValue(settings),
+      photosIncluded: includePhotos,
+      photos,
       recordCount: exportRecords.length,
       records: exportRecords,
     };
@@ -99,20 +159,22 @@ export default function DataExportPanel({ records = [], profile }) {
     );
   }
 
-  function downloadCsv() {
-    const headers = ['날짜', '카테고리', '제목', '지출금액', '수입금액', '평점', '메모', '날씨', '최저기온', '최고기온', '상세데이터'];
+  function downloadCsv(exportRecords) {
+    const headers = ['날짜', '카테고리', '제목', '집계지출', '집계수입', '평점', '메모', '날씨', '최저기온', '최고기온', '상세데이터', '원본금액', '원본수입'];
     const rows = exportRecords.map((record) => [
       record.occurred_on,
       CATEGORY_MAP[record.category_id]?.label || record.category_id,
       record.title,
-      record.amount,
-      record.income_amount,
+      exportFinance(record, settings).expense,
+      exportFinance(record, settings).income,
       record.rating ?? '',
       record.data?.memo || '',
       record.weather_label || '',
       record.temperature_min ?? '',
       record.temperature_max ?? '',
       JSON.stringify(record.data),
+      record.amount,
+      record.income_amount,
     ]);
     const csv = [headers, ...rows].map((row) => row.map(escapeCsv).join(',')).join('\r\n');
     downloadBlob(
@@ -122,23 +184,16 @@ export default function DataExportPanel({ records = [], profile }) {
     );
   }
 
-  function printRecords() {
-    const printWindow = window.open('', '_blank');
-    if (!printWindow) {
-      window.alert('인쇄 화면을 열지 못했습니다. 브라우저의 팝업 차단을 확인해 주세요.');
-      return;
-    }
-    printWindow.opener = null;
-
-    const expenseTotal = exportRecords.reduce((sum, record) => sum + toNumber(record.amount), 0);
-    const incomeTotal = exportRecords.reduce((sum, record) => sum + toNumber(record.income_amount), 0);
+  function printRecords(exportRecords, printWindow) {
+    const expenseTotal = exportRecords.reduce((sum, record) => sum + exportFinance(record, settings).expense, 0);
+    const incomeTotal = exportRecords.reduce((sum, record) => sum + exportFinance(record, settings).income, 0);
     const tableRows = exportRecords.map((record) => `
       <tr>
         <td>${escapeHtml(record.occurred_on)}</td>
         <td>${escapeHtml(CATEGORY_MAP[record.category_id]?.label || record.category_id)}</td>
         <td>${escapeHtml(record.title)}</td>
-        <td class="number">${escapeHtml(displayMoney(record.amount))}</td>
-        <td class="number">${escapeHtml(displayMoney(record.income_amount))}</td>
+        <td class="number">${escapeHtml(displayMoney(exportFinance(record, settings).expense))}</td>
+        <td class="number">${escapeHtml(displayMoney(exportFinance(record, settings).income))}</td>
         <td>${escapeHtml(record.rating ?? '')}</td>
         <td>${escapeHtml(record.data?.memo || '')}</td>
       </tr>
@@ -186,9 +241,9 @@ export default function DataExportPanel({ records = [], profile }) {
   }
 
   const actions = [
-    { format: 'JSON', title: '전체 백업 파일', description: '기록과 상세 필드를 보존합니다.', onClick: downloadJson },
-    { format: 'CSV', title: '표 형식 다운로드', description: '엑셀에서 열어 정리할 수 있습니다.', onClick: downloadCsv },
-    { format: 'PDF', title: '인쇄 또는 PDF 저장', description: '날짜순 기록표를 출력합니다.', onClick: printRecords },
+    { format: 'JSON', title: '기록·설정 백업', description: '사진 포함 여부를 선택할 수 있습니다.' },
+    { format: 'CSV', title: '표 형식 다운로드', description: '집계 설정을 반영한 기록표입니다.' },
+    { format: 'PDF', title: '인쇄 또는 PDF 저장', description: '날짜순 기록표를 출력합니다.' },
   ];
 
   return (
@@ -201,9 +256,12 @@ export default function DataExportPanel({ records = [], profile }) {
         <small>현재 로그인한 계정의 데이터만 사용합니다.</small>
       </div>
 
+      <CompactToggle checked={includePhotos} onChange={setIncludePhotos} label="JSON에 사진 포함 (최대 50MB)" disabled={busy} />
+      {busy && <p role="status">전체 기록과 파일을 준비하고 있습니다.</p>}
+      {error && <p className="form-error" role="alert">{error}</p>}
       <div className="data-export-actions">
         {actions.map((action) => (
-          <button type="button" className="data-export-action" key={action.format} onClick={action.onClick} disabled={records.length === 0}>
+          <button type="button" className="data-export-action" key={action.format} onClick={() => runExport(action.format)} disabled={busy}>
             <span className="data-export-format" aria-hidden="true">{action.format}</span>
             <span className="data-export-copy">
               <strong>{action.title}</strong>
@@ -215,7 +273,7 @@ export default function DataExportPanel({ records = [], profile }) {
       </div>
 
       <p className="data-export-note">
-        파일은 이 기기에서 생성되며 외부 서버로 전송되지 않습니다. 사진 원본은 포함하지 않고 저장 경로 정보만 백업합니다.
+        파일은 이 기기에서 생성됩니다. JSON에는 기록과 개인 설정이 포함됩니다. 사진 포함을 끄면 사진 경로만 남습니다. CSV·인쇄의 금액은 현재 집계 설정을 따릅니다.
       </p>
     </div>
   );

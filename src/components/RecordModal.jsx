@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { CATEGORY_MAP } from '../data/categoryDefinitions';
 import FieldInput from './FieldInput';
-import { calcDutchPay, calcInvestment, calcKpass, calcSoldInvestment, formatMoney, getInvestmentRecordType, toNumber, todayIso } from '../utils/recordUtils';
+import { calcDutchPay, calcInvestment, calcKpass, calcSoldInvestment, formatMoney, getInvestmentRecordType, getSalaryNet, toNumber, todayIso } from '../utils/recordUtils';
 import { searchKisSymbol } from '../services/kisApiClient';
 import { analyzeReceipt, toGoodlifeFormat } from '../services/receiptOcrClient';
 import {
@@ -9,6 +9,7 @@ import {
   fetchWeatherForDate,
   getWeatherTargetDate,
   isWeatherEnabledCategory,
+  isValidWeatherCode,
   searchWeatherLocation,
 } from '../services/weatherClient';
 
@@ -54,6 +55,10 @@ function buildInitialForm(category, record, initialData = null) {
     initial.medicalCost = data.medicalCost || data.amount || '';
     initial.insuranceRefund = data.insuranceRefund || '';
     initial.netMedicalCost = data.netMedicalCost || data.amount || '';
+  }
+  if (category.id === 'salary') {
+    initial.salaryBasis = data.salaryBasis || (data.netAmount !== undefined && data.netAmount !== '' ? '세후' : '세전');
+    initial.netAmount = String(getSalaryNet(initial));
   }
   if (category.id === 'investment') {
     const recordType = getInvestmentRecordType(data);
@@ -104,6 +109,7 @@ function weatherMatchesForm(form, date) {
   const longitude = weather.longitude ?? DEFAULT_WEATHER_LOCATION.longitude;
   return Boolean(
     weather.fetchedAt
+    && isValidWeatherCode(weather.weatherCode)
     && weather.weatherLabel
     && weather.date === date
     && Number(weather.latitude) === Number(latitude)
@@ -111,13 +117,13 @@ function weatherMatchesForm(form, date) {
   );
 }
 
-function withTimeout(promise, ms) {
-  return Promise.race([
-    promise,
-    new Promise((resolve) => {
-      window.setTimeout(() => resolve(null), ms);
-    }),
-  ]);
+async function withTimeout(promise, ms) {
+  let timer;
+  try {
+    return await Promise.race([promise, new Promise((resolve) => { timer = window.setTimeout(() => resolve(null), ms); })]);
+  } finally {
+    window.clearTimeout(timer);
+  }
 }
 
 function isMovieRecord(data = {}) {
@@ -131,6 +137,8 @@ export default function RecordModal({ categoryId, record, initialData = null, fi
   const category = CATEGORY_MAP[categoryId];
   const [form, setForm] = useState(() => buildInitialForm(category, record, initialData));
   const formRef = useRef(form);
+  const draftId = useRef(crypto.randomUUID());
+  const savingRef = useRef(false);
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
   const [symbolSearching, setSymbolSearching] = useState(false);
@@ -246,8 +254,8 @@ export default function RecordModal({ categoryId, record, initialData = null, fi
     if (categoryId === 'delivery' && (fieldId === 'menuItems' || fieldId === 'deliveryFee')) {
       next.totalAmount = String(toNumber(next.menuItems) + toNumber(next.deliveryFee));
     }
-    if (categoryId === 'salary' && (fieldId === 'grossAmount' || fieldId === 'tax') && !toNumber(next.netAmount)) {
-      next.netAmount = String(Math.max(0, toNumber(next.grossAmount) - toNumber(next.tax)));
+    if (categoryId === 'salary' && next.salaryBasis === '세전') {
+      next.netAmount = String(getSalaryNet(next));
     }
     if (categoryId === 'overseasTravel' && ['airfare', 'lodgingCost', 'localExpenses'].includes(fieldId)) {
       next.krwAmount = String(toNumber(next.airfare) + toNumber(next.lodgingCost) + toNumber(next.localExpenses));
@@ -475,12 +483,14 @@ export default function RecordModal({ categoryId, record, initialData = null, fi
   async function ensureWeatherBeforeSave() {
     if (!isWeatherEnabledCategory(categoryId)) return;
     const date = getWeatherTargetDate(categoryId, formRef.current);
-    if (!date || weatherMatchesForm(formRef.current, date)) return;
+    if (date && weatherMatchesForm(formRef.current, date)) return;
 
     const weather = formRef.current.weather || {};
     const latitude = weather.latitude ?? DEFAULT_WEATHER_LOCATION.latitude;
     const longitude = weather.longitude ?? DEFAULT_WEATHER_LOCATION.longitude;
     const locationName = weather.locationName || DEFAULT_WEATHER_LOCATION.name;
+    formRef.current = { ...formRef.current, weather: { date, latitude, longitude, locationName } };
+    if (!date) return;
 
     setWeatherLoading(true);
     try {
@@ -624,6 +634,7 @@ export default function RecordModal({ categoryId, record, initialData = null, fi
 
   async function submit(event) {
     event.preventDefault();
+    if (savingRef.current) return;
     setError('');
     const missing = category.fields.find((field) => field.required && isFieldVisible(field) && !formRef.current[field.id]);
     if (missing) {
@@ -631,6 +642,7 @@ export default function RecordModal({ categoryId, record, initialData = null, fi
       return;
     }
 
+    savingRef.current = true;
     setSaving(true);
     try {
       if (categoryId === 'investment' && getInvestmentRecordType(formRef.current) === 'sell') {
@@ -653,18 +665,19 @@ export default function RecordModal({ categoryId, record, initialData = null, fi
         return;
       }
       await ensureWeatherBeforeSave();
-      await onSave(categoryId, prepareFormForSave(formRef.current), record);
+      await onSave(categoryId, prepareFormForSave(formRef.current), record, draftId.current);
       onClose();
     } catch (err) {
       setError(err.message || '저장에 실패했습니다. 입력 내용은 그대로 유지됩니다.');
     } finally {
+      savingRef.current = false;
       setSaving(false);
     }
   }
 
   return (
     <div className="modal-backdrop" role="presentation">
-      <form className="record-modal" data-transition-surface="form-surface" style={{ viewTransitionName: 'form-surface' }} onSubmit={submit}>
+      <form className="record-modal" role="dialog" aria-modal="true" aria-label={`${category.label} 기록`} data-transition-surface="form-surface" style={{ viewTransitionName: 'form-surface' }} onSubmit={submit}>
         <header className="modal-header">
           <div>
             <p className="eyebrow">{record ? '기록 수정' : '새 기록'}</p>
@@ -673,16 +686,17 @@ export default function RecordModal({ categoryId, record, initialData = null, fi
           <button type="button" className="icon-button" onClick={onClose} aria-label="닫기" disabled={saving}>×</button>
         </header>
 
+        <div className="record-form-body">
         <div className="field-grid">
           {category.fields.map((field) => {
             if (categoryId === 'salary' && field.id === 'bonusAmount' && !form.bonus) return null;
             if (!isFieldVisible(field)) return null;
             const fieldKey = categoryId === 'shopping' && field.id === 'productItems' ? `${field.id}-${formRevision}` : field.id;
-            return (
+            const input = (
               <div className="field" key={fieldKey}>
                 <span>{field.label}{field.required && <b> *</b>}</span>
                 <FieldInput
-                  field={field}
+                  field={categoryId === 'salary' && field.id === 'netAmount' && form.salaryBasis === '세전' ? { ...field, readOnly: true } : field}
                   value={field.type === 'dateRange' ? { start: form[field.startId] || form[field.id]?.start || '', end: form[field.endId] || form[field.id]?.end || '' } : form[field.id]}
                   onChange={(value) => {
                     if (field.type === 'dateRange') {
@@ -698,6 +712,9 @@ export default function RecordModal({ categoryId, record, initialData = null, fi
                 />
               </div>
             );
+            return !field.required && (field.id === 'memo' || field.type === 'photos')
+              ? <details className="optional-record-field" key={fieldKey}><summary>{field.label}</summary>{input}</details>
+              : input;
           })}
         </div>
 
@@ -859,7 +876,8 @@ export default function RecordModal({ categoryId, record, initialData = null, fi
           </aside>
         )}
 
-        {error && <p className="form-error">{error}</p>}
+        </div>
+        {error && <p className="form-error" role="alert">{error}</p>}
 
         <footer className="modal-actions">
           <button type="button" className="secondary-button" onClick={onClose} disabled={saving}>취소</button>

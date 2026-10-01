@@ -1,3 +1,5 @@
+import { todayIso } from '../utils/recordUtils';
+
 export const WEATHER_ENABLED_CATEGORIES = [
   'fishing',
   'dining',
@@ -24,8 +26,8 @@ export const WEATHER_ENABLED_CATEGORIES = [
 
 export const DEFAULT_WEATHER_LOCATION = {
   name: '경기도 구리시 인창동',
-  latitude: 37.5,
-  longitude: 127.0,
+  latitude: 37.6,
+  longitude: 127.13,
 };
 
 const WEATHER_LABELS = {
@@ -59,16 +61,13 @@ const WEATHER_LABELS = {
   99: '강한 우박 동반 천둥번개',
 };
 
-function todayIso() {
-  return new Date().toISOString().slice(0, 10);
-}
-
-function isPastDate(date) {
-  return date < todayIso();
+export function isValidWeatherCode(code) {
+  return (typeof code === 'number' || (typeof code === 'string' && code.trim() !== ''))
+    && Object.hasOwn(WEATHER_LABELS, Number(code));
 }
 
 export function getWeatherLabel(code) {
-  return WEATHER_LABELS[Number(code)] || '날씨 정보';
+  return isValidWeatherCode(code) ? WEATHER_LABELS[Number(code)] : '';
 }
 
 export function getWeatherTargetDate(categoryId, form = {}) {
@@ -115,6 +114,10 @@ export async function fetchWeatherForDate({
   locationName = DEFAULT_WEATHER_LOCATION.name,
 }) {
   if (!date) return null;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !Number.isFinite(Date.parse(date))) throw new Error('날짜를 확인해주세요.');
+  if (latitude === '' || longitude === '' || latitude == null || longitude == null
+    || !Number.isFinite(Number(latitude)) || !Number.isFinite(Number(longitude))
+    || Math.abs(Number(latitude)) > 90 || Math.abs(Number(longitude)) > 180) throw new Error('위도와 경도를 확인해주세요.');
 
   const params = new URLSearchParams({
     latitude: String(latitude),
@@ -126,22 +129,27 @@ export async function fetchWeatherForDate({
   });
 
   let url = `https://api.open-meteo.com/v1/forecast?${params.toString()}`;
-  if (isPastDate(date)) {
+  const daysAgo = (Date.parse(todayIso()) - Date.parse(date)) / 86400000;
+  if (daysAgo > 7) {
     url = `https://archive-api.open-meteo.com/v1/archive?${params.toString()}`;
-  } else {
-    params.set('current_weather', 'true');
-    url = `https://api.open-meteo.com/v1/forecast?${params.toString()}`;
   }
 
-  const response = await fetch(url);
-  if (!response.ok) throw new Error('날씨 정보를 가져오지 못했습니다.');
-
-  const json = await response.json();
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 8000);
+  let json;
+  try {
+    const response = await fetch(url, { signal: controller.signal });
+    if (!response.ok) throw new Error('날씨 정보를 가져오지 못했습니다.');
+    json = await response.json();
+  } finally {
+    clearTimeout(timer);
+  }
   const daily = json.daily || {};
-  const weatherCode = daily.weathercode?.[0] ?? json.current_weather?.weathercode ?? null;
+  const weatherCode = daily.weathercode?.[0] ?? daily.weather_code?.[0] ?? null;
+  if (!isValidWeatherCode(weatherCode)) return null;
 
   return {
-    weatherCode,
+    weatherCode: Number(weatherCode),
     weatherLabel: getWeatherLabel(weatherCode),
     temperatureMax: daily.temperature_2m_max?.[0] ?? null,
     temperatureMin: daily.temperature_2m_min?.[0] ?? null,

@@ -6,13 +6,15 @@ import RecordCard from './RecordCard';
 import SearchModal from './SearchModal';
 import InvestmentMoodImage from './ui/InvestmentMoodImage';
 
-function InvestmentPortfolio({ records, onPriceUpdate }) {
+function InvestmentPortfolio({ records, onPriceUpdate, paused = false }) {
   const [loading, setLoading] = useState(false);
   const [lastUpdated, setLastUpdated] = useState(null);
   const [refreshMessage, setRefreshMessage] = useState('자동 갱신 대기 중');
   const refreshRunningRef = useRef(false);
   const recordsRef = useRef(records);
   const onPriceUpdateRef = useRef(onPriceUpdate);
+  const pausedRef = useRef(paused);
+  pausedRef.current = paused;
 
   useEffect(() => {
     recordsRef.current = records;
@@ -34,7 +36,7 @@ function InvestmentPortfolio({ records, onPriceUpdate }) {
   const hasQuoteValue = (value) => value !== null && value !== undefined && value !== '';
 
   const handleRefresh = useCallback(async ({ silent = false } = {}) => {
-    if (refreshRunningRef.current) return;
+    if (refreshRunningRef.current || pausedRef.current || document.hidden) return;
     const updatePrice = onPriceUpdateRef.current;
     const currentRecords = recordsRef.current;
 
@@ -77,6 +79,7 @@ function InvestmentPortfolio({ records, onPriceUpdate }) {
           };
 
           for (const record of groupRecords) {
+            if (pausedRef.current || document.hidden) return;
             const recordType = getInvestmentRecordType(record.data || {});
             const safeQuantity = toNumber(record.data?.quantity);
             const buyAmount = recordType === 'buy' ? toNumber(record.data?.avgBuyPrice) * safeQuantity : 0;
@@ -89,7 +92,6 @@ function InvestmentPortfolio({ records, onPriceUpdate }) {
               .some(([key, value]) => record.data?.[key] !== value);
             if (previousPrice !== currentPrice || toNumber(record.data?.currentAmount) !== currentAmount || quoteChanged) {
               await updatePrice(record.id, {
-                ...record.data,
                 ...quotePatch,
                 ...(recordType === 'buy' ? { currentAmount, profitLoss, profitLossRate } : {}),
               });
@@ -116,12 +118,14 @@ function InvestmentPortfolio({ records, onPriceUpdate }) {
   }, []);
 
   useEffect(() => {
+    pausedRef.current = paused;
     handleRefresh({ silent: true });
     const timer = window.setInterval(() => {
       handleRefresh({ silent: true });
     }, 5000);
 
     return () => {
+      pausedRef.current = true;
       window.clearInterval(timer);
     };
   }, [handleRefresh]);
@@ -471,7 +475,7 @@ function AnnualLeaveSummary({ records, onAdd, onEdit }) {
   );
 }
 
-export default function CategoryView({ categoryId, records, onBack, onAdd, onOpenRecord, onEdit, onDelete, onUpdateRecord }) {
+export default function CategoryView({ categoryId, records, onBack, onAdd, onOpenRecord, onEdit, onDelete, onUpdateRecord, quotesPaused = false }) {
   const category = CATEGORY_MAP[categoryId];
   const [showSearch, setShowSearch] = useState(false);
   const [filters, setFilters] = useState({ query: '', dateFrom: '', dateTo: '', minAmount: '', maxAmount: '', minRating: '' });
@@ -506,7 +510,7 @@ export default function CategoryView({ categoryId, records, onBack, onAdd, onOpe
         <button className="primary-button compact" onClick={(event) => onAdd(categoryId, null, event.currentTarget)}>추가</button>
       </header>
 
-      {isInvestment && <InvestmentPortfolio records={categoryRecords} onPriceUpdate={onUpdateRecord} />}
+      {isInvestment && <InvestmentPortfolio records={categoryRecords} onPriceUpdate={onUpdateRecord} paused={quotesPaused} />}
       {isKpass && <KpassSummary records={categoryRecords} />}
       {isAnnualLeave && <AnnualLeaveSummary records={categoryRecords} onAdd={onAdd} onEdit={onEdit} />}
       {isBodyManagement && <BodyManagementSummary records={categoryRecords} />}

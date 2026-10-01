@@ -1,7 +1,7 @@
 import { CATEGORY_MAP, DEFAULT_FINANCE_MODES } from '../data/categoryDefinitions';
 
-export function todayIso() {
-  return new Date().toISOString().slice(0, 10);
+export function todayIso(date = new Date()) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 }
 
 export function toNumber(value) {
@@ -15,11 +15,25 @@ export function toNumber(value) {
 }
 
 export function calcLineItemAmount(item = {}) {
-  const quantity = toNumber(item.quantity) || 1;
+  if (item.pricingMode === 'amount') return toNumber(item.amount ?? item.price);
+  const quantity = item.quantity === '' || item.quantity === null || item.quantity === undefined ? 1 : toNumber(item.quantity);
   const unitPrice = toNumber(item.unitPrice);
   const discountAmount = toNumber(item.discountAmount);
-  if (unitPrice > 0) return Math.max(0, (unitPrice * quantity) - discountAmount);
+  if (item.pricingMode === 'unit' || (item.unitPrice !== '' && item.unitPrice !== null && item.unitPrice !== undefined)) return Math.max(0, (unitPrice * quantity) - discountAmount);
   return toNumber(item.amount ?? item.price);
+}
+
+export function normalizeLineItem(item = {}, quantityMode = false) {
+  if (!quantityMode) return { ...item, pricingMode: 'amount', unitPrice: null, quantity: null, discountAmount: 0, amount: item.amount ?? item.price ?? '' };
+  const quantity = item.quantity ?? 1;
+  const unitPrice = item.unitPrice ?? ((toNumber(item.amount ?? item.price) + toNumber(item.discountAmount)) / (toNumber(quantity) || 1));
+  return { ...item, pricingMode: 'unit', unitPrice, quantity };
+}
+
+export function getSalaryNet(data = {}) {
+  return data.salaryBasis === '세전'
+    ? Math.max(0, toNumber(data.grossAmount) - toNumber(data.tax))
+    : toNumber(data.netAmount);
 }
 
 export function formatMoney(value) {
@@ -104,9 +118,13 @@ export function deriveRecordColumns(categoryId, formData = {}) {
   const category = CATEGORY_MAP[categoryId];
   const title = getRecordTitle(categoryId, formData);
   const occurredOn = formData.startDate || formData.date || todayIso();
-  let amount = category?.amountField ? toNumber(formData[category.amountField]) : 0;
+  const amountField = category?.fields.find((field) => field.id === category.amountField);
+  let amount = amountField?.type === 'lineItems'
+    ? (formData[amountField.id] || []).reduce((sum, item) => sum + calcLineItemAmount(normalizeLineItem(item, amountField.quantityMode)), 0)
+    : category?.amountField ? toNumber(formData[category.amountField]) : 0;
   if (['dining', 'shopping', 'workMeal'].includes(categoryId)) {
-    amount = toNumber(formData.menuItems || formData.productItems);
+    const items = formData.menuItems || formData.productItems || formData.items;
+    if (Array.isArray(items)) amount = items.reduce((sum, item) => sum + calcLineItemAmount(normalizeLineItem(item, amountField?.quantityMode)), 0);
   }
   if (categoryId === 'investment') {
     const type = getInvestmentRecordType(formData);
@@ -129,7 +147,7 @@ export function deriveRecordColumns(categoryId, formData = {}) {
       ? `${formData.year || new Date().getFullYear()}-01-01`
       : formData.date || todayIso();
   }
-  const baseIncome = category?.incomeField ? toNumber(formData[category.incomeField]) : 0;
+  const baseIncome = categoryId === 'salary' ? getSalaryNet(formData) : category?.incomeField ? toNumber(formData[category.incomeField]) : 0;
   const incomeAmount = categoryId === 'salary' && formData.bonus
     ? baseIncome + toNumber(formData.bonusAmount)
     : baseIncome;
@@ -194,8 +212,8 @@ export function getPeriodRange(period = 'month', date = new Date()) {
   }
 
   return {
-    start: start.toISOString().slice(0, 10),
-    end: end.toISOString().slice(0, 10),
+    start: todayIso(start),
+    end: todayIso(end),
   };
 }
 
@@ -230,23 +248,24 @@ export function summarizeCategoryTotals(records, financeModes, period = 'month',
 }
 
 export function flattenSearchText(record) {
-  const data = record.data || {};
-  const values = Object.values(data).flatMap((value) => {
-    if (Array.isArray(value)) return value;
-    if (value && typeof value === 'object') return Object.values(value);
-    return value;
-  });
-
-  return [record.title, record.category_id, ...values]
-    .filter(Boolean)
+  function values(value) {
+    if (Array.isArray(value)) return value.flatMap(values);
+    if (value && typeof value === 'object') return Object.entries(value)
+      .filter(([key]) => !['signedUrl', 'previewUrl', 'url', 'path', '_clientId'].includes(key))
+      .flatMap(([, item]) => values(item));
+    return value === null || value === undefined ? [] : [String(value)];
+  }
+  return [record.title, record.category_id, CATEGORY_MAP[record.category_id]?.label, ...values(record.data || {})]
+    .filter((value) => value !== null && value !== undefined)
     .join(' ')
+    .normalize('NFC')
     .toLowerCase();
 }
 
 export function filterRecords(records, filters = {}) {
-  const query = filters.query?.trim().toLowerCase();
-  const minAmount = filters.minAmount === '' ? null : toNumber(filters.minAmount);
-  const maxAmount = filters.maxAmount === '' ? null : toNumber(filters.maxAmount);
+  const query = filters.query?.trim().normalize('NFC').toLowerCase();
+  const minAmount = filters.minAmount == null || filters.minAmount === '' ? null : toNumber(filters.minAmount);
+  const maxAmount = filters.maxAmount == null || filters.maxAmount === '' ? null : toNumber(filters.maxAmount);
   const minRating = toNumber(filters.minRating);
 
   return records
@@ -289,10 +308,30 @@ export function getInvestmentAssetKey(data = {}) {
   return identity ? `${market}:${identity}` : '';
 }
 
+export function validateInvestmentLedger(records = [], assetKeys = null) {
+  const balances = new Map();
+  const affected = assetKeys ? new Set(assetKeys) : null;
+  const ordered = records.filter((record) => record.category_id === 'investment')
+    .sort((a, b) => `${a.occurred_on || ''}${a.created_at || ''}${a.id || ''}`.localeCompare(`${b.occurred_on || ''}${b.created_at || ''}${b.id || ''}`));
+  for (const record of ordered) {
+    const data = record.data || {};
+    const type = getInvestmentRecordType(data);
+    const key = getInvestmentAssetKey(data);
+    if (type === 'watch' || (affected && !affected.has(key))) continue;
+    const quantity = toNumber(type === 'sell' ? data.soldQuantity || data.quantity : data.quantity);
+    if (!key || quantity <= 0) throw new Error('종목과 0보다 큰 거래수량을 입력해주세요.');
+    const balance = balances.get(key) || 0;
+    if (type === 'sell' && quantity > balance + 0.0000001) {
+      throw new Error(`${record.occurred_on} ${data.assetName || data.symbol || '종목'}: 당시 보유수량은 ${balance}주입니다. 매수·매도 날짜와 수량을 확인해주세요.`);
+    }
+    balances.set(key, balance + (type === 'sell' ? -quantity : quantity));
+  }
+}
+
 export function buildInvestmentLedger(records = []) {
   const investmentRecords = records
     .filter((record) => record.category_id === 'investment')
-    .sort((a, b) => `${a.occurred_on || ''}${a.created_at || ''}`.localeCompare(`${b.occurred_on || ''}${b.created_at || ''}`));
+    .sort((a, b) => `${a.occurred_on || ''}${a.created_at || ''}${a.id || ''}`.localeCompare(`${b.occurred_on || ''}${b.created_at || ''}${b.id || ''}`));
   const positionsByKey = new Map();
   const watchRecords = [];
   const transactions = [];

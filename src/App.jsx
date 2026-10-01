@@ -11,7 +11,7 @@ import { useAppSettings } from './hooks/useAppSettings';
 import { useAuth } from './hooks/useAuth';
 import { useRecords } from './hooks/useRecords';
 import { runTactileTransition } from './utils/tactileTransition';
-import { buildInvestmentLedger, getInvestmentAssetKey, toNumber } from './utils/recordUtils';
+import { deriveRecordColumns, getInvestmentAssetKey, validateInvestmentLedger } from './utils/recordUtils';
 
 const EMPTY_FILTERS = { query: '', dateFrom: '', dateTo: '', minAmount: '', maxAmount: '', minRating: '' };
 const APP_HISTORY_KEY = 'goodlifeNavigation';
@@ -108,8 +108,8 @@ function CategoryPicker({ settings, onSelect, onClose }) {
 
 export default function App() {
   const auth = useAuth();
-  const { settings, saveSettings } = useAppSettings(auth.userId);
-  const { records, loading: recordsLoading, saveRecord, deleteRecord, backfillMissingWeather } = useRecords(auth.userId);
+  const { settings, saveSettings, error: settingsError, reloadSettings } = useAppSettings(auth.userId);
+  const { records, loading: recordsLoading, error: recordsError, saveRecord, deleteRecord, backfillMissingWeather, exportRecords, reloadRecords } = useRecords(auth.userId);
   const [view, setView] = useState('home');
   const [activeCategory, setActiveCategory] = useState(null);
   const [modalCategory, setModalCategory] = useState(null);
@@ -312,7 +312,7 @@ export default function App() {
   }
 
   async function updateRecordData(id, data) {
-    const existingRecord = records.find((record) => record.id === id);
+    const existingRecord = recordsRef.current.find((record) => record.id === id);
     if (!existingRecord) throw new Error('업데이트할 기록을 찾을 수 없습니다.');
     await saveRecord(
       existingRecord.category_id,
@@ -325,7 +325,7 @@ export default function App() {
     );
   }
 
-  async function saveRecordWithRules(categoryId, formData, existingRecord = null) {
+  async function saveRecordWithRules(categoryId, formData, existingRecord = null, draftId = null) {
     if (categoryId === 'annual_leave' && formData.recordType === 'grant') {
       const year = String(formData.year || new Date().getFullYear());
       const existingGrant = records.find((record) => (
@@ -334,25 +334,20 @@ export default function App() {
         && record.data?.recordType === 'grant'
         && String(record.data?.year) === year
       ));
-      await saveRecord(categoryId, formData, existingRecord || existingGrant || null);
+      await saveRecord(categoryId, formData, existingRecord || existingGrant || null, draftId);
       return;
     }
 
-    if (categoryId === 'investment' && formData.recordType === 'sell') {
-      const ledgerRecords = existingRecord
-        ? records.filter((record) => record.id !== existingRecord.id)
-        : records;
-      const assetKey = getInvestmentAssetKey(formData);
-      const position = buildInvestmentLedger(ledgerRecords).positions.find((item) => item.key === assetKey);
-      const soldQuantity = toNumber(formData.soldQuantity);
-      const availableQuantity = position?.quantity || 0;
-      if (soldQuantity <= 0) throw new Error('매도수량을 입력해주세요.');
-      if (!position || soldQuantity > availableQuantity + 0.0000001) {
-        throw new Error(`매도 가능한 수량은 ${availableQuantity.toLocaleString('ko-KR')}주입니다.`);
-      }
+    if (categoryId === 'investment') {
+      const ledgerRecords = await exportRecords();
+      const candidate = { ...existingRecord, id: existingRecord?.id || draftId,
+        created_at: existingRecord?.created_at || new Date().toISOString(), category_id: categoryId,
+        ...deriveRecordColumns(categoryId, formData), data: formData };
+      const affected = new Set([getInvestmentAssetKey(formData), getInvestmentAssetKey(existingRecord?.data || {})]);
+      validateInvestmentLedger([...ledgerRecords.filter((record) => record.id !== candidate.id), candidate], affected);
     }
 
-    await saveRecord(categoryId, formData, existingRecord);
+    await saveRecord(categoryId, formData, existingRecord, draftId);
   }
 
   useEffect(() => {
@@ -361,8 +356,16 @@ export default function App() {
 
   async function confirmDelete(record) {
     if (!window.confirm('이 기록을 삭제할까요?')) return;
-    await deleteRecord(record);
-    if (viewingRecord?.id === record.id) navigateBack(currentBaseNavigation());
+    try {
+      if (record.category_id === 'investment') {
+        const current = await exportRecords();
+        validateInvestmentLedger(current.filter((item) => item.id !== record.id), new Set([getInvestmentAssetKey(record.data)]));
+      }
+      await deleteRecord(record);
+      if (viewingRecord?.id === record.id) navigateBack(currentBaseNavigation());
+    } catch (err) {
+      window.alert(err.message || '삭제하지 못했습니다. 다시 시도해주세요.');
+    }
   }
 
   if (auth.loading) {
@@ -408,6 +411,7 @@ export default function App() {
           onEdit={openEdit}
           onDelete={confirmDelete}
           onUpdateRecord={updateRecordData}
+          quotesPaused={Boolean(modalCategory || viewingRecord)}
         />
       )}
 
@@ -423,10 +427,13 @@ export default function App() {
           onSignOut={auth.signOut}
           onBack={() => navigateBack({ view: 'home' })}
           onBackfillWeather={backfillMissingWeather}
+          onExportRecords={exportRecords}
         />
       )}
 
       {recordsLoading && <div className="sync-indicator">동기화 중</div>}
+      {recordsError && <div className="sync-error" role="alert">{recordsError}<button type="button" onClick={reloadRecords}>다시 불러오기</button></div>}
+      {!recordsError && settingsError && <div className="sync-error" role="alert">{settingsError}<button type="button" onClick={reloadSettings}>다시 불러오기</button></div>}
 
       <nav className="bottom-nav" aria-label="하단 내비게이션">
         <button type="button" className={view === 'home' ? 'is-active' : ''} onClick={() => navigateToView('home')}>

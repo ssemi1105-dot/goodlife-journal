@@ -151,21 +151,19 @@ revoke update on table public.profiles from authenticated;
 grant update (display_name, avatar_color, updated_at) on table public.profiles to authenticated;
 
 drop policy if exists "records_select_owner_or_shared" on public.records;
+drop policy if exists "records_select_self" on public.records;
 drop policy if exists "records_insert_self" on public.records;
 drop policy if exists "records_update_self" on public.records;
 drop policy if exists "records_delete_self" on public.records;
 
-create policy "records_select_owner_or_shared"
+create policy "records_select_self"
   on public.records for select
-  using (
-    user_id = auth.uid()
-    or visibility = 'public'
-    or exists (
-      select 1 from public.record_shares s
-      where s.record_id = records.id
-        and (s.shared_with = auth.uid() or s.share_scope = 'category_public')
-    )
-  );
+  to authenticated using (user_id = auth.uid());
+
+drop policy if exists "records_owner_boundary" on public.records;
+create policy "records_owner_boundary" on public.records as restrictive
+  for all to authenticated using (user_id = auth.uid()) with check (user_id = auth.uid());
+revoke all on public.records from anon;
 
 create policy "records_insert_self"
   on public.records for insert
@@ -194,9 +192,8 @@ create policy "shares_select_related"
   on public.record_shares for select
   using (owner_id = auth.uid() or shared_with = auth.uid());
 
-create policy "shares_insert_owner"
-  on public.record_shares for insert
-  with check (owner_id = auth.uid());
+-- Sharing is mediated by authenticated Edge Functions, never raw record access.
+revoke insert, update on public.record_shares from anon, authenticated;
 
 create policy "shares_delete_owner"
   on public.record_shares for delete
@@ -243,14 +240,7 @@ create policy "friendships_select_related"
   on public.friendships for select
   using (requester_id = auth.uid() or addressee_id = auth.uid());
 
-create policy "friendships_insert_requester"
-  on public.friendships for insert
-  with check (requester_id = auth.uid());
-
-create policy "friendships_update_addressee"
-  on public.friendships for update
-  using (addressee_id = auth.uid())
-  with check (addressee_id = auth.uid());
+revoke insert, update on public.friendships from anon, authenticated;
 
 create policy "friendships_delete_related"
   on public.friendships for delete

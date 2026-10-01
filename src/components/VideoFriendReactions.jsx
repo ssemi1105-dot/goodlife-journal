@@ -32,6 +32,7 @@ async function loadReactions(record, signal) {
       },
       body: JSON.stringify({
         tmdbId: record.data?.tmdbId || record.data?.title?.id || null,
+        tmdbMediaType: record.data?.tmdbMediaType || record.data?.title?.mediaType || '',
         title: record.data?.tmdbTitle || record.data?.title?.title || record.title,
         recordId: record.id,
       }),

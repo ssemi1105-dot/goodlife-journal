@@ -44,9 +44,16 @@ serve(async (req) => {
 
   const body = await req.json().catch(() => ({}));
   const tmdbId = body.tmdbId ? String(body.tmdbId) : '';
+  const tmdbMediaType = ['movie', 'tv'].includes(body.tmdbMediaType) ? body.tmdbMediaType : '';
   const title = normalizeTitle(body.title);
   const currentRecordId = String(body.recordId || '');
   if (!tmdbId && !title) return json({ reactions: [], averageRating: 0 });
+  if (tmdbId && !tmdbMediaType) return json({ reactions: [], averageRating: 0 });
+
+  const { data: ownSharing, error: ownShareError } = await admin.from('user_share_settings')
+    .select('is_shared, allow_friend_compare').eq('user_id', currentUserId).eq('category_key', 'video').maybeSingle();
+  if (ownShareError) return json({ error: '공유 설정을 확인하지 못했습니다.' }, 500);
+  if (!ownSharing?.is_shared || !ownSharing?.allow_friend_compare) return json({ reactions: [], averageRating: 0 });
 
   const { data: friendRows, error: friendError } = await admin
     .from('friendships')
@@ -87,7 +94,7 @@ serve(async (req) => {
 
   const filteredRecords = (records || []).filter((record) => {
     if (record.id === currentRecordId) return false;
-    if (tmdbId) return true;
+    if (tmdbId) return (record.data?.tmdbMediaType || record.data?.title?.mediaType) === tmdbMediaType;
     return normalizeTitle(record.data?.tmdbTitle || record.data?.title?.title || record.title) === title;
   });
 

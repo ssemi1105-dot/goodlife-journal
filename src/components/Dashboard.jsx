@@ -139,30 +139,12 @@ export default function Dashboard({
           <small>{activePeriod.label}</small>
           <span className="expense-text">지출 {formatMoney(summary.expense)}</span>
           <span className="income-text">수입 {formatMoney(summary.income)}</span>
-          <span
-            role="button"
-            tabIndex={0}
-            className="summary-detail-button"
-            onClick={(event) => {
-              event.stopPropagation();
-              setShowFinanceSummary(true);
-            }}
-            onKeyDown={(event) => {
-              if (event.key === 'Enter' || event.key === ' ') {
-                event.preventDefault();
-                event.stopPropagation();
-                setShowFinanceSummary(true);
-              }
-            }}
-          >
-            상세
-          </span>
         </button>
         <div>
           <button
             type="button"
             className="stats-placeholder-button"
-            onClick={() => window.alert('통계 기능은 추후 업데이트 예정입니다.')}
+            onClick={() => setShowFinanceSummary(true)}
           >
             통계
           </button>
@@ -181,13 +163,26 @@ export default function Dashboard({
               className="quick-category-button"
               style={getCategoryThemeStyle(category.id)}
               key={category.id}
-              onClick={(event) => onOpenCategory(category.id, event.currentTarget)}
+              onClick={(event) => onAdd(category.id, null, event.currentTarget)}
             >
               <span className="tile-icon">{CATEGORY_ICONS[category.id]}</span>
               <strong>{category.label}</strong>
               <small>{count}건</small>
             </button>
           ))}
+        </div>
+      </section>
+
+      <section className="section-block">
+        <div className="section-title">
+          <h2>최근 기록</h2>
+          <span>{records.length}개</span>
+        </div>
+        <div className="record-list">
+          {records.slice(0, 8).map((record) => (
+            <RecordCard key={record.id} record={record} onOpen={onOpenRecord} onEdit={onEdit} onDelete={onDelete} />
+          ))}
+          {records.length === 0 && <p className="empty-text">아직 기록이 없습니다. 첫 기록을 추가해보세요.</p>}
         </div>
       </section>
 
@@ -206,19 +201,6 @@ export default function Dashboard({
               </span>
             </button>
           ))}
-        </div>
-      </section>
-
-      <section className="section-block">
-        <div className="section-title">
-          <h2>최근 기록</h2>
-          <span>{records.length}개</span>
-        </div>
-        <div className="record-list">
-          {records.slice(0, 8).map((record) => (
-            <RecordCard key={record.id} record={record} onOpen={onOpenRecord} onEdit={onEdit} onDelete={onDelete} />
-          ))}
-          {records.length === 0 && <p className="empty-text">아직 기록이 없습니다. 첫 기록을 추가해보세요.</p>}
         </div>
       </section>
 

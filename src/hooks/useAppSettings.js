@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import { DEFAULT_FINANCE_MODES, getDefaultCategoryOrder } from '../data/categoryDefinitions';
 
@@ -28,21 +28,38 @@ function normalizeReminderSettings(value = {}) {
 }
 
 export function useAppSettings(userId) {
-  const [settings, setSettings] = useState(DEFAULT_SETTINGS);
+  const [state, setState] = useState({ userId: null, settings: DEFAULT_SETTINGS });
+  const settings = state.userId === userId ? state.settings : DEFAULT_SETTINGS;
+  const activeUser = useRef(userId);
+  activeUser.current = userId;
+  const generation = useRef(0);
+  const loadedUser = useRef(null);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
 
   const load = useCallback(async () => {
-    if (!userId) return;
+    const request = ++generation.current;
+    loadedUser.current = null;
+    if (!userId) {
+      setState({ userId: null, settings: DEFAULT_SETTINGS });
+      setLoading(false);
+      setError('');
+      return;
+    }
     setLoading(true);
+    setError('');
     const { data, error } = await supabase
       .from('app_settings')
       .select('*')
       .eq('user_id', userId)
-      .maybeSingle();
+      .maybeSingle()
+      .then((result) => result, (loadError) => ({ data: null, error: loadError }));
 
+    if (request !== generation.current || activeUser.current !== userId) return;
     if (error) {
       setLoading(false);
-      throw error;
+      setError('설정을 불러오지 못했습니다. 다시 시도해주세요.');
+      return;
     }
 
     const rawFinanceModes = data?.finance_modes || {};
@@ -55,15 +72,18 @@ export function useAppSettings(userId) {
       reminder_settings: normalizeReminderSettings(rawFinanceModes.__reminder_settings),
     };
 
-    setSettings(merged);
+    loadedUser.current = userId;
+    setState({ userId, settings: merged });
     setLoading(false);
   }, [userId]);
 
   useEffect(() => {
-    load();
+    load().catch(() => { if (activeUser.current === userId) { setError('설정 연결에 실패했습니다.'); setLoading(false); } });
+    return () => { generation.current += 1; };
   }, [load]);
 
   async function saveSettings(next) {
+    if (!userId || loadedUser.current !== userId) throw new Error('설정을 불러온 다음 다시 시도해주세요.');
     const financeModes = {
       ...DEFAULT_FINANCE_MODES,
       ...(next.finance_modes || {}),
@@ -89,8 +109,8 @@ export function useAppSettings(userId) {
     });
 
     if (error) throw error;
-    setSettings(normalized);
+    if (activeUser.current === userId) setState({ userId, settings: normalized });
   }
 
-  return { settings, loading, saveSettings, reloadSettings: load };
+  return { settings, loading, error, saveSettings, reloadSettings: load };
 }

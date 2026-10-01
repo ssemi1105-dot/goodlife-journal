@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { calcLineItemAmount, formatMoney } from '../../utils/recordUtils';
+import { calcLineItemAmount, formatMoney, normalizeLineItem } from '../../utils/recordUtils';
 import StarRating from './StarRating';
 
 function makeClientId(prefix, index) {
@@ -14,6 +14,7 @@ function makeEmptyItem(field, index = 0) {
     quantity: field.quantityMode ? '1' : '',
     amount: '',
     rating: 0,
+    pricingMode: field.quantityMode ? 'unit' : 'amount',
   };
   if (field.discountMode) item.discountAmount = '';
   return item;
@@ -22,13 +23,15 @@ function makeEmptyItem(field, index = 0) {
 function normalizeItems(field, value) {
   const items = Array.isArray(value) ? value : [];
   const normalized = items.map((item, index) => {
+    const normalizedItem = normalizeLineItem(item, field.quantityMode);
     const next = {
       _clientId: item._clientId || makeClientId(field.id, index),
       name: item.name || '',
-      unitPrice: item.unitPrice ?? item.price ?? item.amount ?? '',
-      quantity: item.quantity || (field.quantityMode ? '1' : ''),
-      discountAmount: item.discountAmount ?? '',
-      amount: item.amount ?? item.price ?? '',
+      ...normalizedItem,
+      unitPrice: normalizedItem.unitPrice ?? '',
+      quantity: normalizedItem.quantity ?? '',
+      discountAmount: normalizedItem.discountAmount ?? '',
+      amount: normalizedItem.amount ?? item.price ?? '',
       rating: item.rating || 0,
     };
     if (field.quantityMode) next.amount = String(calcLineItemAmount(next) || '');
@@ -70,7 +73,7 @@ function LineItemRow({ field, item, onDraft, onRemove, onRating }) {
               type="number"
               inputMode="numeric"
               enterKeyHint="done"
-              defaultValue={item.quantity || '1'}
+              defaultValue={item.quantity ?? '1'}
               onChange={(event) => onDraft(item._clientId, 'quantity', event.currentTarget.value)}
               autoComplete="off"
               placeholder={field.quantityLabel || '수량'}
@@ -115,21 +118,19 @@ function LineItemRow({ field, item, onDraft, onRemove, onRating }) {
 
 export default function LineItemsInput({ field, value, onChange, onDraftChange }) {
   const [items, setItems] = useState(() => normalizeItems(field, value));
-  const [totalTick, setTotalTick] = useState(0);
   const itemsRef = useRef(items);
-  const total = totalTick >= 0 ? itemsRef.current.reduce((sum, item) => sum + calcLineItemAmount(item), 0) : 0;
+  const total = items.reduce((sum, item) => sum + calcLineItemAmount(item), 0);
 
   useEffect(() => {
     const nextItems = normalizeItems(field, value);
     itemsRef.current = nextItems;
     setItems(nextItems);
-    setTotalTick((tick) => tick + 1);
   }, [field.id, field.quantityMode]);
 
   function publishDraft(nextItems) {
     itemsRef.current = nextItems;
     onDraftChange?.(nextItems);
-    setTotalTick((tick) => tick + 1);
+    setItems(nextItems);
   }
 
   function draft(clientId, key, nextValue) {
@@ -143,7 +144,6 @@ export default function LineItemsInput({ field, value, onChange, onDraftChange }
 
   function commit(nextItems) {
     publishDraft(nextItems);
-    setItems(nextItems);
     onChange(nextItems);
   }
 

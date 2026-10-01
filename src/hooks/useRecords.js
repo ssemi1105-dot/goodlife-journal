@@ -1,362 +1,147 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { supabase } from '../lib/supabaseClient';
-import {
-  DEFAULT_WEATHER_LOCATION,
-  fetchWeatherForDate,
-  getWeatherTargetDate,
-  isWeatherEnabledCategory,
-} from '../services/weatherClient';
-import { calcLineItemAmount, deriveRecordColumns, toNumber } from '../utils/recordUtils';
-
-function cleanDataForSave(formData) {
-  const data = { ...formData };
-  delete data.photo;
-  delete data.photoPath;
-  delete data.weather;
-  for (const [key, value] of Object.entries(data)) {
-    if (Array.isArray(value)) {
-      data[key] = value
-        .map((item) => {
-          if (!item || typeof item !== 'object') return item;
-          const { _clientId, file, previewUrl, signedUrl, url, tooLarge, ...rest } = item;
-          if ('amount' in rest || 'price' in rest || 'unitPrice' in rest || 'quantity' in rest) {
-            const amount = calcLineItemAmount(rest);
-            return {
-              ...rest,
-              quantity: rest.quantity === '' || rest.quantity === undefined ? null : toNumber(rest.quantity),
-              unitPrice: rest.unitPrice === '' || rest.unitPrice === undefined ? null : toNumber(rest.unitPrice),
-              discountAmount: rest.discountAmount === '' || rest.discountAmount === undefined ? 0 : toNumber(rest.discountAmount),
-              amount,
-              price: amount,
-            };
-          }
-          return rest;
-        })
-        .filter((item) => {
-          if (!item || typeof item !== 'object') return Boolean(item);
-          if (key === 'photos') return Boolean(item.path);
-          return Boolean(item.name || item.amount || item.price || item.unitPrice || item.quantity || item.rating);
-        });
-    }
-  }
-  const tmdb = data.title && typeof data.title === 'object' ? data.title : null;
-  if (tmdb) {
-    data.tmdbId = tmdb.id || tmdb.tmdbId || null;
-    data.tmdbTitle = tmdb.title || tmdb.tmdbTitle || '';
-    data.tmdbMediaType = tmdb.mediaType || tmdb.tmdbMediaType || '';
-    data.tmdbPosterPath = tmdb.posterPath || tmdb.tmdbPosterPath || '';
-    data.tmdbPosterUrl = tmdb.posterUrl || tmdb.poster || tmdb.tmdbPosterUrl || '';
-  }
-  return data;
-}
-
-function nullableNumber(value) {
-  if (value === null || value === undefined || value === '') return null;
-  const number = toNumber(value);
-  return Number.isFinite(number) ? number : null;
-}
+import { DEFAULT_WEATHER_LOCATION, fetchWeatherForDate, getWeatherTargetDate, isWeatherEnabledCategory, isValidWeatherCode } from '../services/weatherClient';
+import { fetchAllRecords, persistRecord, photoPaths, removeRecord } from '../services/recordStorage';
 
 function deriveWeatherColumns(formData = {}) {
   const weather = formData.weather || {};
+  const valid = isValidWeatherCode(weather.weatherCode);
+  const number = (value) => value === null || value === undefined || value === '' || !Number.isFinite(Number(value)) ? null : Number(value);
   return {
-    weather_code: weather.weatherCode === null || weather.weatherCode === undefined || weather.weatherCode === '' ? null : Number(weather.weatherCode),
-    weather_label: weather.weatherLabel || null,
-    temperature_max: nullableNumber(weather.temperatureMax),
-    temperature_min: nullableNumber(weather.temperatureMin),
+    weather_code: valid ? Number(weather.weatherCode) : null,
+    weather_label: valid ? weather.weatherLabel || null : null,
+    temperature_max: valid ? number(weather.temperatureMax) : null,
+    temperature_min: valid ? number(weather.temperatureMin) : null,
     weather_location: weather.locationName || null,
-    weather_latitude: nullableNumber(weather.latitude),
-    weather_longitude: nullableNumber(weather.longitude),
-    weather_fetched_at: weather.fetchedAt || null,
-  };
-}
-
-function collectPhotoPaths(records) {
-  const paths = new Set();
-  records.forEach((record) => {
-    if (record.data?.photoPath) paths.add(record.data.photoPath);
-    (record.data?.photos || []).forEach((photo) => {
-      if (photo.path) paths.add(photo.path);
-    });
-  });
-  return [...paths];
-}
-
-async function getSignedPhotoUrlMap(paths) {
-  if (paths.length === 0) return new Map();
-
-  const batches = [];
-  for (let index = 0; index < paths.length; index += 100) {
-    batches.push(paths.slice(index, index + 100));
-  }
-
-  const results = await Promise.all(batches.map((batch) => (
-    supabase.storage.from('record-photos').createSignedUrls(batch, 60 * 60)
-  )));
-  const signedItems = [];
-  results.forEach(({ data, error }) => {
-    if (error) console.warn('[photos] signed URL batch failed:', error);
-    else signedItems.push(...(data || []));
-  });
-
-  return new Map(
-    signedItems
-      .filter((item) => item.path && item.signedUrl)
-      .map((item) => [item.path, item.signedUrl]),
-  );
-}
-
-function attachSignedPhotoData(record, signedUrlByPath) {
-  const photoPath = record.data?.photoPath;
-  const photos = record.data?.photos || [];
-  const photoUrls = photos.map((photo) => signedUrlByPath.get(photo.path) || null);
-  return {
-    ...record,
-    photoUrl: signedUrlByPath.get(photoPath) || photoUrls.find(Boolean) || null,
-    photoUrls: photoUrls.filter(Boolean),
-    data: {
-      ...record.data,
-      photos: photos.map((photo, index) => ({ ...photo, signedUrl: photoUrls[index] || null })),
-    },
+    weather_latitude: number(weather.latitude),
+    weather_longitude: number(weather.longitude),
+    weather_fetched_at: valid ? weather.fetchedAt || null : null,
   };
 }
 
 async function attachSignedPhotoUrls(records) {
-  const signedUrlByPath = await getSignedPhotoUrlMap(collectPhotoPaths(records));
-  return records.map((record) => attachSignedPhotoData(record, signedUrlByPath));
-}
-
-async function attachSignedPhotoUrl(record) {
-  const [attached] = await attachSignedPhotoUrls([record]);
-  return attached;
-}
-
-async function uploadPhoto(userId, recordId, file) {
-  if (!(file instanceof File)) return null;
-  const safeName = file.name.replace(/[^a-zA-Z0-9_.-]/g, '_');
-  const path = `${userId}/${recordId}/${Date.now()}-${safeName}`;
-  const { error } = await supabase.storage
-    .from('record-photos')
-    .upload(path, file, { cacheControl: '3600', upsert: false });
-  if (error) throw error;
-  return path;
-}
-
-async function uploadPhotos(userId, recordId, photos = []) {
-  const uploaded = [];
-  for (const photo of photos.slice(0, 3)) {
-    if (photo.file instanceof File) {
-      const safeName = photo.file.name.replace(/[^a-zA-Z0-9_.-]/g, '_');
-      const path = `${userId}/${recordId}/${Date.now()}-${uploaded.length}-${safeName}`;
-      const { error } = await supabase.storage
-        .from('record-photos')
-        .upload(path, photo.file, { cacheControl: '3600', upsert: false, contentType: photo.type || photo.file.type });
+  const paths = [...new Set(records.flatMap(photoPaths))];
+  const urls = new Map();
+  for (let index = 0; index < paths.length; index += 100) {
+    try {
+      const { data, error } = await supabase.storage.from('record-photos').createSignedUrls(paths.slice(index, index + 100), 3600);
       if (error) throw error;
-      uploaded.push({
-        path,
-        width: photo.width || null,
-        height: photo.height || null,
-        size: photo.size || photo.file.size,
-        type: photo.type || photo.file.type || 'image/jpeg',
-      });
-    } else if (photo.path) {
-      const { signedUrl, url, previewUrl, file, ...persisted } = photo;
-      uploaded.push(persisted);
+      (data || []).forEach((item) => { if (item.signedUrl) urls.set(item.path, item.signedUrl); });
+    } catch (error) {
+      // A thumbnail failure must not turn a successful record save into a failed save.
+      console.warn('[photos] preview unavailable:', error.message);
     }
   }
-  return uploaded;
+  return records.map((record) => {
+    const photos = (record.data?.photos || []).map((photo) => ({ ...photo, signedUrl: urls.get(photo.path) || null }));
+    return { ...record, photoUrl: urls.get(record.data?.photoPath) || photos.find((photo) => photo.signedUrl)?.signedUrl || null,
+      photoUrls: photos.map((photo) => photo.signedUrl).filter(Boolean), data: { ...record.data, photos } };
+  });
 }
 
 function sortRecords(records) {
-  return [...records].sort((a, b) => `${b.occurred_on}${b.created_at}`.localeCompare(`${a.occurred_on}${a.created_at}`));
-}
-
-function hasWeatherColumns(record) {
-  return Boolean(
-    record.weather_fetched_at
-    || record.weather_label
-    || record.weather_code !== null && record.weather_code !== undefined,
-  );
-}
-
-function getWeatherFormForRecord(record) {
-  return {
-    ...(record.data || {}),
-    date: record.data?.date || record.occurred_on,
-  };
+  return [...records].sort((a, b) => `${b.occurred_on}${b.created_at}${b.id}`.localeCompare(`${a.occurred_on}${a.created_at}${a.id}`));
 }
 
 export function useRecords(userId) {
-  const [records, setRecords] = useState([]);
+  const [state, setState] = useState({ userId: null, records: [] });
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const activeUser = useRef(userId);
+  const generation = useRef(0);
+  activeUser.current = userId;
+  const records = state.userId === userId ? state.records : [];
 
   const loadRecords = useCallback(async () => {
+    const request = ++generation.current;
     if (!userId) {
-      setRecords([]);
+      setState({ userId: null, records: [] });
+      setLoading(false);
+      setError('');
       return;
     }
-
     setLoading(true);
-    const { data, error } = await supabase
-      .from('records')
-      .select('*')
-      .eq('user_id', userId)
-      .order('occurred_on', { ascending: false })
-      .order('created_at', { ascending: false });
-
-    if (error) {
-      setLoading(false);
-      throw error;
+    setError('');
+    try {
+      const data = await fetchAllRecords(supabase, userId);
+      const attached = await attachSignedPhotoUrls(data);
+      if (request === generation.current && activeUser.current === userId) setState({ userId, records: attached });
+    } catch (err) {
+      if (request === generation.current && activeUser.current === userId) setError(err.message || '기록을 불러오지 못했습니다.');
+    } finally {
+      if (request === generation.current) setLoading(false);
     }
-
-    setRecords(await attachSignedPhotoUrls(data || []));
-    setLoading(false);
   }, [userId]);
 
   useEffect(() => {
     loadRecords();
+    return () => { generation.current += 1; };
   }, [loadRecords]);
 
-  async function saveRecord(categoryId, formData, existingRecord = null) {
-    const columns = deriveRecordColumns(categoryId, formData);
-    const weatherColumns = deriveWeatherColumns(formData);
-    let payloadData = cleanDataForSave(formData);
+  function patchState(record, removed = false) {
+    if (activeUser.current !== userId) return;
+    setState((current) => ({ userId, records: sortRecords([
+      ...(removed ? [] : [record]),
+      ...(current.userId === userId ? current.records : []).filter((item) => item.id !== record.id),
+    ]) }));
+  }
 
-    if (existingRecord) {
-      if (formData.photo instanceof File) {
-        if (existingRecord.data?.photoPath) {
-          await supabase.storage.from('record-photos').remove([existingRecord.data.photoPath]);
-        }
-        payloadData.photoPath = await uploadPhoto(userId, existingRecord.id, formData.photo);
-      } else {
-        payloadData.photoPath = formData.photoPath || existingRecord.data?.photoPath || null;
-      }
-      payloadData.photos = await uploadPhotos(userId, existingRecord.id, formData.photos || existingRecord.data?.photos || []);
-
-      const { data, error } = await supabase
-        .from('records')
-        .update({
-          category_id: categoryId,
-          ...columns,
-          ...weatherColumns,
-          data: payloadData,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', existingRecord.id)
-        .eq('user_id', userId)
-        .select()
-        .single();
-      if (error) throw error;
-      const updated = await attachSignedPhotoUrl(data);
-      setRecords((current) => sortRecords(current.map((item) => (item.id === updated.id ? updated : item))));
-      return;
-    }
-
-    const { data, error } = await supabase
-      .from('records')
-      .insert({
-        user_id: userId,
-        category_id: categoryId,
-        ...columns,
-        ...weatherColumns,
-        data: payloadData,
-      })
-      .select()
-      .single();
-    if (error) throw error;
-
-    if (formData.photo instanceof File) {
-      payloadData = {
-        ...payloadData,
-        photoPath: await uploadPhoto(userId, data.id, formData.photo),
-      };
-      const { error: updateError } = await supabase
-        .from('records')
-        .update({ data: payloadData })
-        .eq('id', data.id)
-        .eq('user_id', userId);
-      if (updateError) throw updateError;
-    }
-    if (Array.isArray(formData.photos) && formData.photos.some((photo) => photo.file instanceof File)) {
-      payloadData = {
-        ...payloadData,
-        photos: await uploadPhotos(userId, data.id, formData.photos),
-      };
-      const { error: photosUpdateError } = await supabase
-        .from('records')
-        .update({ data: payloadData })
-        .eq('id', data.id)
-        .eq('user_id', userId);
-      if (photosUpdateError) throw photosUpdateError;
-    }
-
-    const inserted = await attachSignedPhotoUrl({ ...data, data: payloadData });
-    setRecords((current) => sortRecords([inserted, ...current]));
+  async function saveRecord(categoryId, formData, existingRecord = null, draftId = null) {
+    if (!userId) throw new Error('로그인 후 다시 시도해주세요.');
+    const weatherColumns = formData.weather !== undefined || !existingRecord ? deriveWeatherColumns(formData) : {};
+    const data = await persistRecord(supabase, { userId, recordId: existingRecord?.id || draftId || crypto.randomUUID(),
+      categoryId, formData, existingRecord, weatherColumns });
+    const [attached] = await attachSignedPhotoUrls([data]);
+    patchState(attached);
+    return attached;
   }
 
   async function deleteRecord(record) {
-    if (record.data?.photoPath) {
-      await supabase.storage.from('record-photos').remove([record.data.photoPath]);
-    }
+    await removeRecord(supabase, userId, record);
+    patchState(record, true);
+  }
 
-    const photoPaths = (record.data?.photos || []).map((photo) => photo.path).filter(Boolean);
-    if (photoPaths.length > 0) {
-      await supabase.storage.from('record-photos').remove(photoPaths);
-    }
-
-    const { error } = await supabase.from('records').delete().eq('id', record.id).eq('user_id', userId);
-    if (error) throw error;
-    setRecords((current) => current.filter((item) => item.id !== record.id));
+  async function exportRecords() {
+    const data = await fetchAllRecords(supabase, userId);
+    if (activeUser.current !== userId) throw new Error('사용자가 변경되었습니다. 다시 시도해주세요.');
+    return data;
   }
 
   async function backfillMissingWeather(onProgress) {
     if (!userId) return { total: 0, updated: 0, failed: 0 };
-
-    const candidates = records.filter((record) => {
-      if (!isWeatherEnabledCategory(record.category_id)) return false;
-      if (hasWeatherColumns(record)) return false;
-      return Boolean(getWeatherTargetDate(record.category_id, getWeatherFormForRecord(record)));
-    });
-
+    const candidates = records.filter((record) => isWeatherEnabledCategory(record.category_id)
+      && !isValidWeatherCode(record.weather_code)
+      && getWeatherTargetDate(record.category_id, { ...record.data, date: record.data?.date || record.occurred_on }));
     let updated = 0;
     let failed = 0;
     onProgress?.({ total: candidates.length, done: 0, updated, failed });
-
     for (const record of candidates) {
-      const form = getWeatherFormForRecord(record);
-      const date = getWeatherTargetDate(record.category_id, form);
-      const latitude = record.weather_latitude ?? DEFAULT_WEATHER_LOCATION.latitude;
-      const longitude = record.weather_longitude ?? DEFAULT_WEATHER_LOCATION.longitude;
-      const locationName = record.weather_location || DEFAULT_WEATHER_LOCATION.name;
-
+      if (activeUser.current !== userId) break;
+      const date = getWeatherTargetDate(record.category_id, { ...record.data, date: record.data?.date || record.occurred_on });
+      const oldDefault = record.weather_location === DEFAULT_WEATHER_LOCATION.name && Number(record.weather_latitude) === 37.5 && Number(record.weather_longitude) === 127;
       try {
-        const weather = await fetchWeatherForDate({ date, latitude, longitude, locationName });
+        const weather = await fetchWeatherForDate({ date,
+          latitude: oldDefault ? DEFAULT_WEATHER_LOCATION.latitude : record.weather_latitude ?? DEFAULT_WEATHER_LOCATION.latitude,
+          longitude: oldDefault ? DEFAULT_WEATHER_LOCATION.longitude : record.weather_longitude ?? DEFAULT_WEATHER_LOCATION.longitude,
+          locationName: record.weather_location || DEFAULT_WEATHER_LOCATION.name });
         if (!weather) throw new Error('날씨 정보가 없습니다.');
-        const weatherColumns = deriveWeatherColumns({ weather: { ...weather, date } });
-        const { data, error } = await supabase
-          .from('records')
-          .update({
-            ...weatherColumns,
-            updated_at: new Date().toISOString(),
-          })
-          .eq('id', record.id)
-          .eq('user_id', userId)
-          .select()
-          .single();
-        if (error) throw error;
-
-        const patched = await attachSignedPhotoUrl(data);
-        setRecords((current) => sortRecords(current.map((item) => (item.id === patched.id ? patched : item))));
+        if (activeUser.current !== userId) break;
+        let query = supabase.from('records').update({ ...deriveWeatherColumns({ weather }), updated_at: new Date().toISOString() })
+          .eq('id', record.id).eq('user_id', userId);
+        if (record.updated_at) query = query.eq('updated_at', record.updated_at);
+        const { data, error: updateError } = await query.select().single();
+        if (updateError) throw updateError;
+        const [attached] = await attachSignedPhotoUrls([data]);
+        patchState(attached);
         updated += 1;
-      } catch (error) {
-        console.warn('[weather] backfill failed:', record.id, error);
+      } catch (err) {
+        console.warn('[weather] backfill failed:', record.id, err.message);
         failed += 1;
       }
-
       onProgress?.({ total: candidates.length, done: updated + failed, updated, failed });
     }
-
     return { total: candidates.length, updated, failed };
   }
 
-  return { records, loading, saveRecord, deleteRecord, reloadRecords: loadRecords, backfillMissingWeather };
+  return { records, loading, error, saveRecord, deleteRecord, exportRecords, reloadRecords: loadRecords, backfillMissingWeather };
 }
