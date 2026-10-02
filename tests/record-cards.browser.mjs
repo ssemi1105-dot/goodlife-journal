@@ -24,8 +24,8 @@ await mkdir('test-results', { recursive: true });
 try {
   await page.goto(`${server.resolvedUrls.local[0]}tests/ui.html?cards`);
   await card('video').waitFor();
-  assert.equal(await page.locator('.is-compact-record').count(), 7);
-  assert.equal(await card('dining').locator('.compact-record-content').count(), 0);
+  assert.equal(await page.locator('.is-compact-record').count(), 8);
+  assert.equal(await card('dining').locator('.compact-record-content').count(), 1);
   assert.equal(await card('shopping').locator('.shopping-item-preview li').count(), 2);
   assert.equal(await card('long').locator('.compact-record-menu-name').textContent(), '김치찌개 외 1개');
   assert.equal(await card('long').locator('.compact-record-menu-name').getAttribute('title'), '김치찌개, 계란말이');

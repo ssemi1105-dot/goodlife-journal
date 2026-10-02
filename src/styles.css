@@ -5577,6 +5577,97 @@ select:focus {
 .rating-preview-fill { position: absolute; top: 0; left: 0; height: 14px; overflow: hidden; }
 .rating-preview-fill > span { display: block; width: 14px; height: 14px; }
 
+/* Record presentation: the action menu must never own the flexible content column. */
+.record-card.is-presented-record { display: block; padding: 0; min-width: 0; }
+.is-presented-record .record-menu-trigger {
+  width: 28px; height: 24px; padding: 0 0 6px; border: 0; border-radius: 4px;
+  background: transparent; box-shadow: none;
+}
+.is-presented-record .record-menu-trigger[aria-expanded="true"] { background: var(--accent-soft); }
+.record-display { padding: 8px 11px 10px; }
+.record-card.is-presented-record { -webkit-tap-highlight-color: transparent; }
+.record-preview-layout { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; align-items: start; }
+.record-preview-layout.has-photo { grid-template-columns: 58px minmax(0, 1fr); }
+.record-preview-layout .record-photo { width: 58px; height: 72px; object-fit: cover; margin-top: 4px; }
+.record-preview-body { min-width: 0; display: grid; gap: 5px; }
+.record-preview-main { min-width: 0; display: flex; gap: 10px; align-items: center; }
+.record-card .record-preview-main h3 {
+  flex: 1; min-width: 0; margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-size: 17px; line-height: 24px; letter-spacing: 0;
+}
+.record-primary-value { flex: 0 1 auto; min-width: 0; max-width: 55%; display: grid; gap: 2px; text-align: right; }
+.record-primary-value small { font-size: 10px; line-height: 13px; color: var(--text-muted); }
+.record-primary-value strong { font-size: 16px; line-height: 22px; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.record-preview-info { min-width: 0; display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-muted); }
+.record-preview-info > span:not(.record-status) { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.record-status { display: inline-flex; flex-shrink: 0; align-self: start; padding: 2px 6px; border-radius: 999px; font-size: 11px; line-height: 16px; font-weight: 600; color: var(--accent-strong); background: var(--accent-soft); }
+.record-status.paused { color: var(--text-muted); background: var(--surface-pressed); }
+.record-measures { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 10px; margin: 3px 0; }
+.record-measures.has-four { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+.record-measures > div { display: grid; gap: 2px; min-width: 0; }
+.record-measures span { font-size: 10px; color: var(--text-muted); }
+.record-measures strong { font-size: 13px; line-height: 18px; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.record-preview-note { display: flex; min-width: 0; align-items: center; gap: 8px; }
+.record-preview-note > .rating-preview { flex-shrink: 0; }
+.record-preview-note p { min-width: 0; margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; line-height: 18px; color: var(--text-muted); }
+.record-items-preview.shopping-item-preview { border: 0; border-top: 1px solid var(--border); background: none; border-radius: 0; margin: 8px 0 0; padding: 6px 0 0; gap: 0; }
+.record-items-preview.shopping-item-preview li { padding: 4px 0; font-size: 14px; line-height: 20px; }
+.record-items-preview.shopping-item-preview strong { font-size: 14px; font-variant-numeric: tabular-nums; color: var(--text); }
+.record-display .income, .record-category-summary .income, .presented-detail .income { color: var(--income); }
+.record-display .expense, .presented-detail .expense { color: var(--expense); }
+.record-category-summary > div { min-width: 0; }
+.record-category-summary strong { overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
+.record-image-fallback { display: grid; place-items: center; border: 1px dashed var(--border); background: var(--surface-pressed); color: var(--text-muted); font-size: 11px; }
+.record-photo.is-poster { object-fit: contain; background: var(--surface-pressed); }
+.compact-record-content .record-photo.is-poster { object-fit: contain; }
+.compact-record-content.no-reaction .compact-record-body { grid-template-rows: 24px 24px; }
+.compact-record-content.has-meal-info .compact-record-body { grid-template-rows: 24px 22px 18px 16px; }
+.compact-record-content.has-meal-info.has-photo .compact-record-body { grid-template-rows: 24px 22px 18px 14px 16px; }
+.compact-record-content.has-meal-info.no-reaction .compact-record-body { grid-template-rows: 24px 22px 18px; }
+.record-meal-info { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; color: var(--text-muted); font-size: 11px; line-height: 18px; }
+.record-card .compact-record-title { font-size: 16px; }
+
+.record-detail-overview { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; align-items: start; margin: 12px 0 16px; }
+.record-detail-overview.has-photo { grid-template-columns: 92px minmax(0, 1fr); }
+.record-detail-overview .detail-photo { width: 92px; height: 100px; margin: 0; object-fit: cover; }
+.record-detail-overview .detail-photo.is-poster { height: 138px; object-fit: contain; background: var(--surface-pressed); }
+.record-detail-overview-text { min-width: 0; display: flex; flex-direction: column; gap: 8px; font-size: 12px; color: var(--text-muted); }
+.record-detail-weather { color: var(--income); }
+.record-detail-primary { display: grid; gap: 4px; color: var(--text); }
+.record-detail-primary strong { font-size: 22px; line-height: 28px; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
+.record-detail-rating { display: flex; align-items: center; gap: 8px; }
+.presented-detail .modal-header { align-items: flex-start; }
+.presented-detail .modal-header > div { min-width: 0; }
+.presented-detail .modal-header h2 { font-size: 20px; line-height: 1.4; overflow-wrap: anywhere; }
+.presented-detail .modal-header > button { flex-shrink: 0; }
+.record-detail-grid.detail-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 14px; }
+.record-detail-field { min-width: 0; padding: 10px 0; border-bottom: 1px solid var(--border); }
+.record-detail-field.is-wide { grid-column: 1 / -1; }
+.record-detail-field > span { display: block; margin-bottom: 5px; color: var(--text-muted); font-size: 11px; font-weight: 600; }
+.record-detail-field > div { font-size: 14px; line-height: 1.55; white-space: pre-wrap; overflow-wrap: anywhere; }
+.record-detail-items.detail-line-items { display: grid; gap: 0; }
+.record-detail-items.detail-line-items > div { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: 4px 10px; padding: 7px 0; border: 0; }
+.record-detail-items > div > strong { text-align: right; font-variant-numeric: tabular-nums; }
+.record-detail-items > div > span { min-width: 0; }
+.record-detail-items small { color: var(--text-muted); }
+.record-detail-items .rating-preview { grid-column: 1 / -1; }
+.presented-detail .detail-photo-grid { margin-bottom: 14px; }
+.presented-detail .detail-photo-grid .detail-photo { flex: 0 0 82px; width: 82px; height: 82px; margin: 0; }
+
+.leave-year-list { display: grid; gap: 20px; }
+.leave-year-section > header { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
+.leave-year-section h2 { margin: 0; font-size: 16px; }
+.leave-year-section > header > span { font-size: 11px; color: var(--text-muted); }
+.leave-grant-row { display: flex; align-items: center; gap: 8px; width: 100%; padding: 8px 10px; margin-bottom: 8px; border: 1px solid var(--border); border-radius: 8px; background: var(--accent-soft); color: var(--text); font-size: 12px; }
+.leave-grant-row strong { margin-left: auto; }
+.leave-keypad-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+.leave-day-tile { display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 6px; min-width: 0; min-height: 74px; padding: 8px 4px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); color: var(--text); box-shadow: var(--shadow-card); -webkit-tap-highlight-color: transparent; transition: transform 130ms ease, box-shadow 130ms ease; }
+.leave-day-tile time { font-size: 12px; line-height: 16px; font-weight: 600; }
+.leave-day-tile strong { font-size: 22px; line-height: 26px; font-variant-numeric: tabular-nums; }
+.leave-day-tile small { font-size: 11px; margin-left: 3px; font-weight: 500; }
+.leave-day-tile:active { transform: translateY(2px) scale(.97); box-shadow: 0 1px 0 var(--card-base); }
+.leave-day-tile:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
 @media (max-width: 350px) {
   .compact-record-content { padding-inline: 8px; gap: 6px; }
   .compact-record-main { gap: 4px; }

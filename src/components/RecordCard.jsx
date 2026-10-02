@@ -1,58 +1,29 @@
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { CATEGORY_ICONS, CATEGORY_MAP } from '../data/categoryDefinitions';
-import { calcInvestment, calcKpass, calcLineItemAmount, calcSoldInvestment, formatMoney, formatPeriod, getInvestmentRecordType, getKpassRecordDate, getRecordTitle, toNumber } from '../utils/recordUtils';
-import InvestmentMoodImage from './ui/InvestmentMoodImage';
-import RecordImagePreview from './ui/RecordImagePreview';
+import { getInvestmentRecordType } from '../utils/recordUtils';
 import CompactRecordContent from './CompactRecordContent';
+import RecordSummaryContent from './RecordSummaryContent';
 
-export default function RecordCard({ record, onOpen, onEdit, onDelete, onInvestmentSell }) {
+export default function RecordCard({ record, onOpen, onEdit, onDelete, onInvestmentSell, showCategory = true }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [menuPosition, setMenuPosition] = useState({ top: 0, left: 0 });
   const menuButtonRef = useRef(null);
   const menuPopoverRef = useRef(null);
-  const category = CATEGORY_MAP[record.category_id];
-  const data = record.data || {};
-  const title = getRecordTitle(record.category_id, data);
-  const investmentType = record.category_id === 'investment' ? getInvestmentRecordType(data) : '';
-  const investment = record.category_id === 'investment' ? calcInvestment(data) : null;
-  const soldInvestment = record.category_id === 'investment' ? calcSoldInvestment(data) : null;
-  const hasDailyChangeRate = data.priceChangeRate !== null && data.priceChangeRate !== undefined && data.priceChangeRate !== '';
-  const hasDailyChange = data.priceChange !== null && data.priceChange !== undefined && data.priceChange !== '';
-  const dailyChangeRate = toNumber(data.priceChangeRate);
-  const dailyChange = toNumber(data.priceChange);
-  const dailyChangeClass = dailyChangeRate > 0 || dailyChange > 0 ? 'is-up' : dailyChangeRate < 0 || dailyChange < 0 ? 'is-down' : 'is-flat';
-  const kpass = record.category_id === 'kpass' ? calcKpass(data) : null;
-  const period = record.category_id === 'kpass' ? getKpassRecordDate(record) || '일자 미기록' : formatPeriod(data) || record.occurred_on;
-  const showWeather = record.category_id !== 'investment' && record.category_id !== 'video' && record.category_id !== 'exercise';
-  const shoppingItems = record.category_id === 'shopping'
-    ? (Array.isArray(data.productItems) ? data.productItems : data.items || []).filter((item) => item?.name)
-    : [];
-  const visibleShoppingItems = shoppingItems.slice(0, 10);
-  const showSellAction = record.category_id === 'investment' && investmentType === 'buy' && onInvestmentSell;
-  const compact = record.category_id === 'video' || record.category_id === 'workMeal';
+  const showSellAction = record.category_id === 'investment' && getInvestmentRecordType(record.data || {}) === 'buy' && onInvestmentSell;
+  const compact = ['video', 'workMeal', 'dining', 'delivery'].includes(record.category_id);
 
   useEffect(() => {
     if (!menuOpen) return undefined;
-
     function closeOnOutsidePointer(event) {
       if (menuButtonRef.current?.contains(event.target) || menuPopoverRef.current?.contains(event.target)) return;
       setMenuOpen(false);
     }
-
-    function closeMenu() {
-      setMenuOpen(false);
-    }
-
-    function closeOnEscape(event) {
-      if (event.key === 'Escape') closeMenu();
-    }
-
+    function closeMenu() { setMenuOpen(false); }
+    function closeOnEscape(event) { if (event.key === 'Escape') closeMenu(); }
     document.addEventListener('pointerdown', closeOnOutsidePointer, true);
     document.addEventListener('keydown', closeOnEscape);
     window.addEventListener('resize', closeMenu);
     window.addEventListener('scroll', closeMenu, true);
-
     return () => {
       document.removeEventListener('pointerdown', closeOnOutsidePointer, true);
       document.removeEventListener('keydown', closeOnEscape);
@@ -64,202 +35,40 @@ export default function RecordCard({ record, onOpen, onEdit, onDelete, onInvestm
   function toggleMenu(event) {
     event.preventDefault();
     event.stopPropagation();
-
-    if (menuOpen) {
-      setMenuOpen(false);
-      return;
-    }
-
+    if (menuOpen) { setMenuOpen(false); return; }
     const rect = event.currentTarget.getBoundingClientRect();
     const menuWidth = 116;
     const menuHeight = (showSellAction ? 3 : 2) * 42 + 8;
-    const viewportPadding = 8;
     const openAbove = window.innerHeight - rect.bottom < menuHeight + 12;
-    const top = openAbove
-      ? Math.max(viewportPadding, rect.top - menuHeight - 6)
-      : Math.min(window.innerHeight - menuHeight - viewportPadding, rect.bottom + 6);
-    const left = Math.min(
-      window.innerWidth - menuWidth - viewportPadding,
-      Math.max(viewportPadding, rect.right - menuWidth),
-    );
-
-    setMenuPosition({ top, left });
+    setMenuPosition({
+      top: openAbove ? Math.max(8, rect.top - menuHeight - 6) : Math.min(window.innerHeight - menuHeight - 8, rect.bottom + 6),
+      left: Math.min(window.innerWidth - menuWidth - 8, Math.max(8, rect.right - menuWidth)),
+    });
     setMenuOpen(true);
   }
-
-  function runMenuAction(action) {
-    setMenuOpen(false);
-    action();
-  }
-
+  function runMenuAction(action) { setMenuOpen(false); action(); }
+  function stopActionKeys(event) { if (event.key !== 'Escape') event.stopPropagation(); }
   const actions = (
-    <div className="record-actions">
-      <div className="record-menu">
-        <button
-          ref={menuButtonRef}
-          type="button"
-          className="record-menu-trigger"
-          aria-label="기록 메뉴"
-          aria-haspopup="menu"
-          aria-expanded={menuOpen}
-          onClick={toggleMenu}
-          onPointerDown={(event) => event.stopPropagation()}
-          onKeyDown={(event) => {
-            if (event.key !== 'Escape') event.stopPropagation();
-          }}
-        >
-          ...
-        </button>
-      </div>
-    </div>
+    <div className="record-actions"><div className="record-menu">
+      <button ref={menuButtonRef} type="button" className="record-menu-trigger" aria-label="기록 메뉴" title="기록 메뉴"
+        aria-haspopup="menu" aria-expanded={menuOpen} onClick={toggleMenu}
+        onPointerDown={(event) => event.stopPropagation()} onKeyDown={stopActionKeys}>...</button>
+    </div></div>
   );
-
   return (
-    <article className={`record-card${record.category_id === 'investment' ? ' is-investment-record' : ''}${compact ? ' is-compact-record' : ''}`} role="button" tabIndex={0} onClick={(event) => onOpen?.(record, event.currentTarget)} onKeyDown={(event) => {
-      if (event.key === 'Enter' || event.key === ' ') {
-        event.preventDefault();
-        onOpen?.(record, event.currentTarget);
-      }
-    }}>
-      {compact ? <CompactRecordContent record={record} actions={actions} /> : <>
-      <RecordImagePreview record={record} />
-      <div className="record-body">
-        <div className="record-topline">
-          <span style={{ color: category?.color }}>{CATEGORY_ICONS[record.category_id]} {category?.label || record.category_id}</span>
-          <time>
-            {period}
-            {showWeather && record.weather_label && (
-              <em>
-                {record.weather_label}
-                {record.temperature_max !== null && record.temperature_max !== undefined ? ` · 최고 ${record.temperature_max}°C` : ''}
-              </em>
-            )}
-          </time>
-        </div>
-        <h3>{title}</h3>
-        {visibleShoppingItems.length > 0 && (
-          <ul className="shopping-item-preview" aria-label="쇼핑 구매 내역 미리보기">
-            {visibleShoppingItems.map((item, index) => {
-              const amount = calcLineItemAmount(item);
-              return (
-                <li key={`${item.name}-${index}`}>
-                  <span>{item.name}</span>
-                  {amount > 0 && <strong>{formatMoney(amount)}</strong>}
-                </li>
-              );
-            })}
-            {shoppingItems.length > visibleShoppingItems.length && (
-              <li className="is-more">
-                <span>...</span>
-                <strong>외 {shoppingItems.length - visibleShoppingItems.length}개</strong>
-              </li>
-            )}
-          </ul>
-        )}
-        {record.category_id === 'video' && (data.detailGenres?.length > 0 || data.title?.genres?.length > 0) && (
-          <div className="genre-pills compact-pills">
-            {(data.detailGenres || data.title?.genres || []).map((genre) => <em key={genre}>{genre}</em>)}
-          </div>
-        )}
-        <div className="record-meta">
-          {toNumber(record.amount) > 0 && record.category_id !== 'kpass' && <span>{formatMoney(record.amount)}</span>}
-          {toNumber(record.income_amount) > 0 && <span className="income-text">수입 {formatMoney(record.income_amount)}</span>}
-          {toNumber(record.rating) > 0 && <span>평점 {record.rating}</span>}
-          {record.category_id === 'kpass' && (
-            <>
-              <span>충전비용 {formatMoney(kpass.chargeAmount)}</span>
-              <span>환급비용 {formatMoney(kpass.refundAmount)}</span>
-            </>
-          )}
-          {record.category_id === 'annual_leave' && data.recordType === 'grant' && <span>부여 {toNumber(data.grantDays)}일</span>}
-          {record.category_id === 'annual_leave' && data.recordType === 'use' && <span>사용 {toNumber(data.days)}일</span>}
-          {record.category_id === 'subscription' && (
-            <span className={data.active ? 'status-badge is-active' : 'status-badge is-paused'}>
-              {data.active ? '활성' : '비활성'}
-            </span>
-          )}
-          {data.diningType && <span>{data.diningType}</span>}
-          {data.withWhom && <span>{data.withWhom}</span>}
-          {data.payRelation && <span>{data.payRelation}</span>}
-          {data.deliveryPlatform && <span>{data.deliveryPlatform}</span>}
-          {data.ideaCategory && <span>{data.ideaCategory}</span>}
-          {data.ideaStatus && <span>{data.ideaStatus}</span>}
-          {data.maintenanceType && <span>{data.maintenanceType}</span>}
-          {data.cultureType && <span>{data.cultureType}</span>}
-          {record.category_id === 'vehicle' && toNumber(data.odometerKm) > 0 && <span>{toNumber(data.odometerKm).toLocaleString('ko-KR')}km</span>}
-          {data.watchStatus && <span>{data.watchStatus}</span>}
-          {data.episodeStart && data.episodeEnd && <span>{data.episodeStart}화~{data.episodeEnd}화</span>}
-          {record.category_id === 'hospital' && <span>실부담 {formatMoney(data.netMedicalCost || record.amount)}</span>}
-          {record.category_id === 'exercise' && toNumber(data.bodyWeight) > 0 && <span>체중 {toNumber(data.bodyWeight)}kg</span>}
-          {record.category_id === 'exercise' && toNumber(data.waistCm) > 0 && <span>허리 {toNumber(data.waistCm)}cm</span>}
-          {record.category_id === 'exercise' && toNumber(data.thighCm) > 0 && <span>허벅지 {toNumber(data.thighCm)}cm</span>}
-          {record.category_id === 'investment' && (
-            <>
-              <span className={`investment-type-badge is-${investmentType}`}>
-                {investmentType === 'watch' ? '관심' : investmentType === 'sell' ? '매도' : '매수'}
-              </span>
-              {data.symbol && <span>{data.symbol}</span>}
-              {investmentType === 'watch' && toNumber(data.currentPrice) > 0 && <span>현재가 {formatMoney(data.currentPrice)}</span>}
-              {investmentType === 'watch' && toNumber(data.targetPrice) > 0 && <span>목표가 {formatMoney(data.targetPrice)}</span>}
-              {investmentType === 'sell' && toNumber(data.sellPrice) > 0 && <span>매도가 {formatMoney(data.sellPrice)}</span>}
-              {investmentType === 'sell' && toNumber(data.soldQuantity) > 0 && <span>{toNumber(data.soldQuantity)}주</span>}
-            </>
-          )}
-        </div>
-        {record.category_id === 'investment' && investmentType === 'buy' && investment.buyTotal > 0 && (
-          <div className="investment-card-mood">
-            <InvestmentMoodImage rate={investment.rate} compact />
-            <p className={investment.profit >= 0 ? 'profit-plus' : 'profit-minus'}>
-              수익률 {investment.rate.toFixed(2)}% · {formatMoney(investment.profit)}
-            </p>
-          </div>
-        )}
-        {record.category_id === 'investment' && investmentType === 'watch' && (
-          <div className={`investment-watch-row ${dailyChangeClass}`}>
-            <span>
-              {hasDailyChangeRate
-                ? `전일대비 ${dailyChangeRate >= 0 ? '+' : ''}${dailyChangeRate.toFixed(2)}%`
-                : '등락률 대기'}
-            </span>
-            <strong>
-              {hasDailyChange
-                ? `${dailyChange >= 0 ? '+' : ''}${formatMoney(dailyChange)}`
-                : toNumber(data.currentPrice) > 0 ? formatMoney(data.currentPrice) : '현재가 대기'}
-            </strong>
-            {toNumber(data.currentPrice) > 0 && <small>현재가 {formatMoney(data.currentPrice)}</small>}
-          </div>
-        )}
-        {record.category_id === 'investment' && investmentType === 'sell' && (soldInvestment.buyTotal > 0 || soldInvestment.sellTotal > 0) && (
-          <div className="investment-sold-row">
-            <span>실현손익</span>
-            <strong className={soldInvestment.profit >= 0 ? 'profit-plus' : 'profit-minus'}>
-              {soldInvestment.rate.toFixed(2)}% · {formatMoney(soldInvestment.profit)}
-            </strong>
-          </div>
-        )}
-        {data.memo && <p className="record-memo">{data.memo}</p>}
-      </div>
-      {actions}
-      </>}
+    <article className={`record-card is-presented-record${compact ? ' is-compact-record' : ''}`} role="button" tabIndex={0}
+      onClick={(event) => onOpen?.(record, event.currentTarget)} onKeyDown={(event) => {
+        if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); onOpen?.(record, event.currentTarget); }
+      }}>
+      {compact ? <CompactRecordContent record={record} actions={actions} showCategory={showCategory} />
+        : <RecordSummaryContent record={record} actions={actions} showCategory={showCategory} />}
       {menuOpen && createPortal(
-        <div
-          ref={menuPopoverRef}
-          className="record-menu-popover"
-          role="menu"
-          style={{ top: menuPosition.top, left: menuPosition.left }}
-          onPointerDown={(event) => event.stopPropagation()}
-          onClick={(event) => event.stopPropagation()}
-          onKeyDown={(event) => {
-            if (event.key !== 'Escape') event.stopPropagation();
-          }}
-        >
-          {showSellAction && (
-            <button type="button" role="menuitem" onClick={() => runMenuAction(() => onInvestmentSell(record))}>매도 기록</button>
-          )}
+        <div ref={menuPopoverRef} className="record-menu-popover" role="menu" style={menuPosition}
+          onPointerDown={(event) => event.stopPropagation()} onClick={(event) => event.stopPropagation()} onKeyDown={stopActionKeys}>
+          {showSellAction && <button type="button" role="menuitem" onClick={() => runMenuAction(() => onInvestmentSell(record))}>매도 기록</button>}
           <button type="button" role="menuitem" onClick={() => runMenuAction(() => onEdit(record))}>수정</button>
           <button type="button" role="menuitem" className="danger" onClick={() => runMenuAction(() => onDelete(record))}>삭제</button>
-        </div>,
-        document.body,
+        </div>, document.body,
       )}
     </article>
   );

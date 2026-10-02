@@ -1,93 +1,54 @@
 import { CATEGORY_ICONS, CATEGORY_MAP } from '../data/categoryDefinitions';
-import { formatMoney, formatPeriod, getKpassRecordDate, getRecordTitle, toNumber } from '../utils/recordUtils';
+import { formatPeriod, getRecordTitle, toNumber } from '../utils/recordUtils';
+import { getRecordPeriod, getRecordWeather, hasValue, presentRecord } from '../utils/recordPresentation';
 import VideoFriendReactions from './VideoFriendReactions';
-import RecordImagePreview from './ui/RecordImagePreview';
-
-function renderValue(value) {
-  if (value === null || value === undefined || value === '' || value === false) return null;
-  if (value instanceof File) return null;
-  if (Array.isArray(value)) {
-    if (value.length === 0) return null;
-    if (value.every((item) => item && typeof item === 'object')) {
-      return (
-        <div className="detail-line-items">
-          {value.map((item, index) => (
-            <div key={`${item.name || index}-${index}`}>
-              <span>{item.name || '항목'}</span>
-              <strong>{formatMoney(item.amount)}</strong>
-              {toNumber(item.rating) > 0 && <small>평점 {Number(item.rating).toFixed(1)}</small>}
-            </div>
-          ))}
-        </div>
-      );
-    }
-    return value.join(', ');
-  }
-  if (typeof value === 'object') {
-    if (value.title || value.tmdbTitle) return value.title || value.tmdbTitle;
-    return null;
-  }
-  if (typeof value === 'boolean') return value ? '예' : '아니오';
-  return String(value);
-}
+import RecordDetailFields from './RecordDetailFields';
+import RecordImagePreview, { getRecordImageUrl } from './ui/RecordImagePreview';
+import RatingPreview from './ui/RatingPreview';
 
 export default function RecordDetailModal({ record, onClose, onEdit, onDelete }) {
   if (!record) return null;
   const category = CATEGORY_MAP[record.category_id];
   const data = record.data || {};
-  const title = getRecordTitle(record.category_id, data);
-  const fields = category?.fields || [];
-  const extraPhotoUrls = Array.isArray(data.photos) ? data.photos.map((photo) => photo.signedUrl).filter(Boolean).slice(1) : [];
-  const showWeather = record.category_id !== 'investment' && record.category_id !== 'video' && record.category_id !== 'exercise';
+  const isLeave = record.category_id === 'annual_leave';
+  const presentation = presentRecord(record);
+  const title = isLeave ? getRecordTitle(record.category_id, data) : presentation.title;
+  const firstPhoto = getRecordImageUrl(record);
+  const photos = [...new Set([...(Array.isArray(record.photoUrls) ? record.photoUrls : []), ...(Array.isArray(data.photos) ? data.photos : []).map((photo) => photo?.signedUrl || photo?.url)].filter((url) => url && url !== firstPhoto))];
+  const weather = getRecordWeather(record);
+  const rating = record.rating ?? data.rating;
 
   return (
     <div className="modal-backdrop navigation-backdrop">
-      <section className="detail-modal navigation-detail-panel" data-transition-surface="record-surface" style={{ viewTransitionName: 'record-surface' }}>
+      <section className={`detail-modal navigation-detail-panel${isLeave ? '' : ' presented-detail'}`} role="dialog" aria-modal="true" aria-label={`${category?.label || '기록'} 상세`} data-transition-surface="record-surface" style={{ viewTransitionName: 'record-surface' }}>
         <header className="modal-header">
-          <div>
-            <p className="eyebrow">{CATEGORY_ICONS[record.category_id]} {category?.label}</p>
-            <h2>{title}</h2>
-          </div>
+          <div><p className="eyebrow">{CATEGORY_ICONS[record.category_id]} {category?.label}</p><h2>{title}</h2></div>
           <button type="button" className="icon-button" onClick={onClose} aria-label="닫기">×</button>
         </header>
-
-        <RecordImagePreview record={record} large />
-        {extraPhotoUrls.length > 0 && (
-          <div className="detail-photo-grid">
-            {extraPhotoUrls.map((url) => <img src={url} alt="" key={url} />)}
+        {isLeave ? <>
+          <div className="detail-meta-row"><span>{formatPeriod(data) || record.occurred_on}</span>{weather && <span>{weather}</span>}</div>
+          <div className="detail-fields">
+            {(category?.fields || []).filter((field) => field.id !== 'date' && hasValue(data[field.id])).map((field) => (
+              <div className="detail-field" key={field.id}><span>{field.label}</span><div>{String(data[field.id])}</div></div>
+            ))}
           </div>
-        )}
-
-        <div className="detail-meta-row">
-          <span>{record.category_id === 'kpass' ? getKpassRecordDate(record) || '일자 미기록' : formatPeriod(data) || record.occurred_on}</span>
-          {toNumber(record.rating) > 0 && <span>평점 {Number(record.rating).toFixed(1)}</span>}
-          {record.category_id !== 'kpass' && toNumber(record.amount) > 0 && <span>{formatMoney(record.amount)}</span>}
-          {toNumber(record.income_amount) > 0 && <span className="income-text">수입 {formatMoney(record.income_amount)}</span>}
-          {showWeather && record.weather_label && (
-            <span>
-              {record.weather_label}
-              {record.temperature_max !== null && record.temperature_max !== undefined ? ` · 최고 ${record.temperature_max}°C` : ''}
-              {record.temperature_min !== null && record.temperature_min !== undefined ? ` / 최저 ${record.temperature_min}°C` : ''}
-            </span>
-          )}
-        </div>
-
-        <div className="detail-fields">
-          {fields.map((field) => {
-            if (['photo', 'photos', 'date'].includes(field.id)) return null;
-            const value = renderValue(data[field.id]);
-            if (!value) return null;
-            return (
-              <div className="detail-field" key={field.id}>
-                <span>{field.label}</span>
-                <div>{value}</div>
-              </div>
-            );
-          })}
-        </div>
-
-        <VideoFriendReactions record={record} />
-
+        </> : <>
+          <div className={`record-detail-overview${firstPhoto ? ' has-photo' : ''}`}>
+            <RecordImagePreview record={record} large />
+            <div className="record-detail-overview-text">
+              <time>{getRecordPeriod(record)}</time>
+              {weather && <span className="record-detail-weather">{weather}</span>}
+              {presentation.status && <span className={`record-status ${presentation.statusTone}`}>{presentation.status}</span>}
+              {presentation.primary && <div className={`record-detail-primary ${presentation.primary.tone}`}><span>{presentation.primary.label}</span><strong>{presentation.primary.value}</strong></div>}
+              {hasValue(rating) && <div className="record-detail-rating"><RatingPreview value={rating} /><span>{toNumber(rating).toFixed(1)} / 5</span></div>}
+            </div>
+          </div>
+          {photos.length > 0 && <div className="detail-photo-grid">
+            {photos.map((url) => <RecordImagePreview record={record} large url={url} key={url} />)}
+          </div>}
+          <RecordDetailFields record={record} />
+          <VideoFriendReactions record={record} />
+        </>}
         <footer className="modal-actions">
           <button type="button" className="secondary-button" onClick={() => onEdit(record)}>수정</button>
           <button type="button" className="secondary-button danger" onClick={() => onDelete(record)}>삭제</button>

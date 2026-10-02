@@ -6,7 +6,7 @@ import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 
 process.env.TZ = 'Asia/Seoul';
-let server, utils, storage, weather, exports, RecordCard, kpassComponents;
+let server, utils, storage, weather, exports, RecordCard, kpassComponents, presentation, summaries, DetailFields, LeaveGrid, categories;
 before(async () => {
   server = await createServer({ server: { middlewareMode: true }, appType: 'custom', logLevel: 'silent' });
   utils = await server.ssrLoadModule('/src/utils/recordUtils.js');
@@ -15,6 +15,11 @@ before(async () => {
   exports = await server.ssrLoadModule('/src/components/DataExportPanel.jsx');
   RecordCard = (await server.ssrLoadModule('/src/components/RecordCard.jsx')).default;
   kpassComponents = await server.ssrLoadModule('/src/components/KpassRecords.jsx');
+  presentation = await server.ssrLoadModule('/src/utils/recordPresentation.js');
+  summaries = await server.ssrLoadModule('/src/components/CategoryRecordSummary.jsx');
+  DetailFields = (await server.ssrLoadModule('/src/components/RecordDetailFields.jsx')).default;
+  LeaveGrid = (await server.ssrLoadModule('/src/components/AnnualLeaveGrid.jsx')).default;
+  categories = (await server.ssrLoadModule('/src/data/categoryDefinitions.js')).CATEGORIES;
 });
 after(async () => { await server?.close(); });
 
@@ -99,12 +104,82 @@ test('compact video cards preserve flat TMDB titles, period, status, genres and 
   assert.ok(!html.includes('compact-record-menu-name'));
 });
 
-test('non-approved categories retain their existing record-card layout', () => {
-  for (const category_id of ['dining', 'delivery', 'shopping', 'investment', 'salary']) {
+test('every category uses the width-safe common shell with category-specific content', () => {
+  for (const { id: category_id } of categories) {
     const html = renderToStaticMarkup(createElement(RecordCard, { record: { category_id, data: {}, amount: 1000 } }));
-    assert.ok(!html.includes('is-compact-record'), category_id);
-    assert.match(html, /record-body/);
+    assert.match(html, /is-presented-record/);
+    assert.match(html, /compact-record-header/);
+    assert.equal((html.match(/aria-label="기록 메뉴"/g) || []).length, 1);
+    if (['video', 'workMeal', 'dining', 'delivery'].includes(category_id)) assert.match(html, /is-compact-record/);
+    else assert.match(html, /record-preview-body/);
   }
+});
+
+test('display selectors preserve zero values, original records, legacy items and all body measurements', () => {
+  const hospital = { category_id: 'hospital', amount: 50000, data: { hospital: '병원', netMedicalCost: 0, medicalCost: 50000, insuranceRefund: 50000 } };
+  assert.equal(presentation.presentRecord(hospital).primary.value, '0원');
+  const shopping = { category_id: 'shopping', amount: 0, data: { storeName: '구매처', productName: '상품', productPrice: 0 } };
+  const original = structuredClone(shopping);
+  const view = presentation.getDisplayData(shopping);
+  assert.equal(view.productItems[0].amount, 0);
+  assert.equal(presentation.presentRecord(shopping).title, '구매처');
+  assert.deepEqual(shopping, original);
+  const body = presentation.presentRecord({ category_id: 'exercise', data: { bodyWeight: 65.5, armCm: 30, waistCm: 75.5, thighCm: 50, calfCm: 34 } });
+  assert.equal(body.primary.value, '65.5kg');
+  assert.equal(body.metrics.length, 4);
+  assert.equal(presentation.presentRecord({ category_id: 'subscription', data: { active: false } }).status, '비활성');
+  assert.equal(presentation.presentRecord({ category_id: 'subscription', data: { active: 'false' } }).status, '비활성');
+  assert.ok(presentation.presentRecord({ category_id: 'fishing', data: { weight: '1.2kg' } }).details.includes('1.2kg'));
+  assert.ok(presentation.presentRecord({ category_id: 'fishing', data: { weight: '1.2' } }).details.includes('1.2kg'));
+  assert.equal(presentation.numberText(0.0001), '0.0001');
+  assert.deepEqual(presentation.getDisplayData({ category_id: 'dining', data: { menuItems: ['국밥', '전'] } }).menuItems, [{ name: '국밥' }, { name: '전' }]);
+});
+
+test('category summaries show income, recorded savings, and counts without changing finance calculations', () => {
+  const records = [
+    { category_id: 'salary', occurred_on: '2026-10-05', amount: 0, income_amount: 3100000, data: {} },
+    { category_id: 'savings', occurred_on: '2026-10-06', amount: 0, data: { monthlyAmount: 500000 } },
+    { category_id: 'video', occurred_on: '2026-09-01', data: {} },
+  ];
+  const date = new Date('2026-10-10T12:00:00+09:00');
+  assert.equal(summaries.categorySummaryValues('salary', records, date)[1].value, '3,100,000원');
+  assert.equal(summaries.categorySummaryValues('savings', records, date)[0].value, '500,000원');
+  assert.deepEqual(summaries.categorySummaryValues('video', records, date).map(item => item.value), ['1건', '0건']);
+  assert.equal(utils.getRecordFinanceValue(records[1]).expense, 0);
+});
+
+test('detail fields format currency and disabled state, keep name-only items and foreign units', () => {
+  const render = (record) => renderToStaticMarkup(createElement(DetailFields, { record }));
+  assert.match(render({ category_id: 'subscription', data: { active: false, billingDay: 15 } }), /비활성/);
+  assert.match(render({ category_id: 'subscription', data: { billingDay: 15 } }), /매월 15일/);
+  assert.match(render({ category_id: 'fishing', data: { amount: 90000, catchCount: 8 } }), /90,000원/);
+  assert.match(render({ category_id: 'hospital', data: { medicalCost: 50000, insuranceRefund: 30000 } }), /50,000원/);
+  const local = render({ category_id: 'overseasTravel', data: { currency: 'JPY', localExpenses: [{ name: '라멘', amount: 1200, rating: 4.5 }] } });
+  assert.match(local, /JPY/);
+  assert.ok(!local.includes('1,200원'));
+  assert.match(local, /평점 4.5/);
+  const legacy = render({ category_id: 'shopping', data: { items: [{ name: '이름만', price: 0 }] } });
+  assert.match(legacy, /이름만/);
+  assert.match(legacy, /0원/);
+});
+
+test('annual leave separates grants, keeps each use and decimal days, and orders years and dates', () => {
+  const records = [
+    { id: 'grant', category_id: 'annual_leave', data: { recordType: 'grant', year: 2026, grantDays: 10.5 } },
+    { id: 'half', category_id: 'annual_leave', data: { recordType: 'use', date: '2026-10-01', days: 0.5 } },
+    { id: 'full', category_id: 'annual_leave', data: { recordType: 'use', date: '2026-10-03', days: 1 } },
+    { id: 'old', category_id: 'annual_leave', data: { recordType: 'use', date: '2025-10-03', days: 1 } },
+  ];
+  const before = structuredClone(records);
+  const groups = presentation.groupAnnualLeave(records);
+  assert.deepEqual(groups.map(group => group.year), ['2026', '2025']);
+  assert.deepEqual(groups[0].uses.map(record => record.id), ['full', 'half']);
+  const html = renderToStaticMarkup(createElement(LeaveGrid, { records }));
+  assert.equal((html.match(/class="leave-day-tile"/g) || []).length, 3);
+  assert.match(html, /연차 0.5일 사용/);
+  assert.match(html, /10.5일/);
+  assert.deepEqual(records, before);
+  assert.equal(utils.calcAnnualLeave(records, 2026).remainDays, 9);
 });
 
 test('amount-only edits override hidden stale unit prices in every line-item category', () => {

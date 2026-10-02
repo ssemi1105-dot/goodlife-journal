@@ -12,6 +12,7 @@ import '../src/styles.css';
 import { useRecords } from '../src/hooks/useRecords';
 import { useAppSettings } from '../src/hooks/useAppSettings';
 import RecordCardsFixture from './record-cards-fixture';
+import PresentationFixture from './presentation-fixture';
 
 function HooksFixture() {
   const [userId, setUserId] = useState('A');
@@ -71,4 +72,4 @@ function Fixture() {
   </div>;
 }
 
-createRoot(document.getElementById('root')).render(<React.StrictMode>{location.search.includes('cards') ? <RecordCardsFixture /> : location.search.includes('hooks') ? <HooksFixture /> : <Fixture />}</React.StrictMode>);
+createRoot(document.getElementById('root')).render(<React.StrictMode>{location.search.includes('presentation') ? <PresentationFixture /> : location.search.includes('cards') ? <RecordCardsFixture /> : location.search.includes('hooks') ? <HooksFixture /> : <Fixture />}</React.StrictMode>);

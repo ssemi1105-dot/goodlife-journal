@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { CATEGORY_ICONS, CATEGORY_MAP, getCategoryThemeStyle } from '../data/categoryDefinitions';
-import { buildInvestmentLedger, calcAnnualLeave, formatMoney, getInvestmentRecordType, getRecordFinanceValue, toNumber } from '../utils/recordUtils';
+import { buildInvestmentLedger, calcAnnualLeave, formatMoney, getInvestmentRecordType, toNumber } from '../utils/recordUtils';
 import { fetchKisPrice } from '../services/kisApiClient';
 import RecordCard from './RecordCard';
 import SearchModal from './SearchModal';
 import InvestmentMoodImage from './ui/InvestmentMoodImage';
 import { KpassMonthlyList, KpassSummary } from './KpassRecords';
+import AnnualLeaveGrid from './AnnualLeaveGrid';
+import CategoryRecordSummary from './CategoryRecordSummary';
 
 function InvestmentPortfolio({ records, onPriceUpdate, paused = false }) {
   const [loading, setLoading] = useState(false);
@@ -251,7 +253,7 @@ function InvestmentRecordSections({ records, onOpenRecord, onEdit, onDelete, onA
         <header><h2>관심종목</h2><span>{ledger.watchRecords.length}개</span></header>
         <div className="record-list investment-record-list">
           {ledger.watchRecords.map((record) => (
-            <RecordCard key={record.id} record={record} onOpen={onOpenRecord} onEdit={onEdit} onDelete={onDelete} />
+            <RecordCard key={record.id} record={record} onOpen={onOpenRecord} onEdit={onEdit} onDelete={onDelete} showCategory={false} />
           ))}
           {ledger.watchRecords.length === 0 && <p className="empty-text compact-empty">추적 중인 관심종목이 없습니다.</p>}
         </div>
@@ -261,7 +263,7 @@ function InvestmentRecordSections({ records, onOpenRecord, onEdit, onDelete, onA
         <header><h2>거래내역</h2><span>{ledger.transactions.length}개</span></header>
         <div className="record-list investment-record-list">
           {ledger.transactions.map((record) => (
-            <RecordCard key={record.id} record={record} onOpen={onOpenRecord} onEdit={onEdit} onDelete={onDelete} />
+            <RecordCard key={record.id} record={record} onOpen={onOpenRecord} onEdit={onEdit} onDelete={onDelete} showCategory={false} />
           ))}
           {ledger.transactions.length === 0 && <p className="empty-text compact-empty">매수·매도 기록이 없습니다.</p>}
         </div>
@@ -374,33 +376,6 @@ function BodyManagementSummary({ records }) {
   );
 }
 
-function CategorySummary({ records }) {
-  const now = new Date();
-  const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-  const totals = records.reduce(
-    (summary, record) => {
-      const value = getRecordFinanceValue(record, { [record.category_id]: 'expense' });
-      summary.total += value.expense;
-      if (record.occurred_on?.startsWith(currentMonth)) summary.month += value.expense;
-      return summary;
-    },
-    { total: 0, month: 0 },
-  );
-
-  return (
-    <section className="category-summary-strip">
-      <div>
-        <span>총 지출</span>
-        <strong>{formatMoney(totals.total)}</strong>
-      </div>
-      <div>
-        <span>이번 달 지출</span>
-        <strong>{formatMoney(totals.month)}</strong>
-      </div>
-    </section>
-  );
-}
-
 function AnnualLeaveSummary({ records, onAdd, onEdit }) {
   const year = new Date().getFullYear();
   const leave = calcAnnualLeave(records, year);
@@ -450,17 +425,6 @@ export default function CategoryView({ categoryId, records, onBack, onAdd, onOpe
   const isKpass = categoryId === 'kpass';
   const isAnnualLeave = categoryId === 'annual_leave';
   const isBodyManagement = categoryId === 'exercise';
-  const displayRecords = isAnnualLeave
-    ? [...categoryRecords].sort((a, b) => {
-      const aYear = String(a.data?.recordType === 'grant' ? a.data?.year : a.data?.date || a.occurred_on).slice(0, 4);
-      const bYear = String(b.data?.recordType === 'grant' ? b.data?.year : b.data?.date || b.occurred_on).slice(0, 4);
-      if (aYear !== bYear) return bYear.localeCompare(aYear);
-      const aGrant = a.data?.recordType === 'grant' ? 1 : 0;
-      const bGrant = b.data?.recordType === 'grant' ? 1 : 0;
-      if (aGrant !== bGrant) return bGrant - aGrant;
-      return `${b.occurred_on}${b.created_at}`.localeCompare(`${a.occurred_on}${a.created_at}`);
-    })
-    : categoryRecords;
   const hasSearch = Boolean(filters.query || filters.dateFrom || filters.dateTo || filters.minAmount || filters.maxAmount || filters.minRating);
 
   return (
@@ -480,7 +444,7 @@ export default function CategoryView({ categoryId, records, onBack, onAdd, onOpe
       {isKpass && <KpassSummary records={categoryRecords} />}
       {isAnnualLeave && <AnnualLeaveSummary records={categoryRecords} onAdd={onAdd} onEdit={onEdit} />}
       {isBodyManagement && <BodyManagementSummary records={categoryRecords} />}
-      {!isInvestment && !isKpass && !isAnnualLeave && !isBodyManagement && <CategorySummary records={categoryRecords} />}
+      {!isInvestment && !isKpass && !isAnnualLeave && !isBodyManagement && <CategoryRecordSummary categoryId={categoryId} records={categoryRecords} />}
 
       {isInvestment ? (
         <InvestmentRecordSections
@@ -492,10 +456,12 @@ export default function CategoryView({ categoryId, records, onBack, onAdd, onOpe
         />
       ) : isKpass ? (
         <KpassMonthlyList records={categoryRecords} onOpenMonth={onOpenKpassMonth} />
+      ) : isAnnualLeave ? (
+        <AnnualLeaveGrid records={categoryRecords} onOpenRecord={onOpenRecord} onEdit={onEdit} onDelete={onDelete} />
       ) : (
         <section className="record-list">
-          {displayRecords.map((record) => (
-            <RecordCard key={record.id} record={record} onOpen={onOpenRecord} onEdit={onEdit} onDelete={onDelete} />
+          {categoryRecords.map((record) => (
+            <RecordCard key={record.id} record={record} onOpen={onOpenRecord} onEdit={onEdit} onDelete={onDelete} showCategory={false} />
           ))}
           {categoryRecords.length === 0 && <p className="empty-text">이 카테고리에 기록이 없습니다.</p>}
         </section>
