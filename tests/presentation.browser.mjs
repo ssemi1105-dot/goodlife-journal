@@ -87,6 +87,16 @@ try {
     assert.equal(new Set(grid.boxes.slice(0, 4).map(b => b.y)).size, 1);
     assert.ok(grid.boxes[4].y > grid.boxes[0].y);
     assert.ok(grid.boxes.every(b => b.width >= 58 && b.height >= 70));
+    const typography = await tiles.first().evaluate(el => ({
+      dateSize: parseFloat(getComputedStyle(el.querySelector('time')).fontSize),
+      amountSize: parseFloat(getComputedStyle(el.querySelector('strong')).fontSize),
+      dateDivider: parseFloat(getComputedStyle(el.querySelector('time')).borderBottomWidth),
+      textFits: [...el.children].every(child => child.scrollWidth <= child.clientWidth + 1),
+    }));
+    assert.ok(typography.dateSize >= 16);
+    assert.ok(Math.abs(typography.amountSize - typography.dateSize) <= 2);
+    assert.ok(typography.dateDivider >= 1);
+    assert.ok(typography.textFits);
     assert.match(await tiles.nth(1).textContent(), /0.5/);
     assert.equal(await tiles.locator('.compact-record-weather,.record-actions,.rating-preview').count(), 0);
     await page.locator('.leave-year-section').screenshot({ path: `test-results/presentation-leave-${width}.png` });
@@ -124,10 +134,14 @@ try {
           columns: getComputedStyle(el).gridTemplateColumns.split(' ').length,
           overflow: el.scrollWidth > el.clientWidth,
           tops: [...el.children].map(child => child.getBoundingClientRect().top),
+          dividers: [...el.children].slice(1).map(child => parseFloat(getComputedStyle(child).borderLeftWidth)),
+          textFits: [...el.querySelectorAll('dd')].every(child => child.scrollWidth <= child.clientWidth + 1),
         }));
         assert.equal(stats.columns, 3);
         assert.equal(stats.overflow, false);
         assert.equal(new Set(stats.tops).size, 1);
+        assert.ok(stats.dividers.every(width => width >= 1));
+        assert.ok(stats.textFits);
         await page.locator('.annual-leave-panel').screenshot({ path: `test-results/leave-summary-${width}.png` });
       }
       await page.getByRole('button', { name: '부여 갱신', exact: true }).tap();
