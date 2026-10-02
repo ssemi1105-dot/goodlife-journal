@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { CATEGORY_MAP } from '../data/categoryDefinitions';
 import FieldInput from './FieldInput';
-import { calcDutchPay, calcInvestment, calcKpass, calcSoldInvestment, formatMoney, getInvestmentRecordType, getSalaryNet, toNumber, todayIso } from '../utils/recordUtils';
+import { calcDutchPay, calcInvestment, calcKpass, calcSoldInvestment, formatMoney, getInvestmentRecordType, getKpassMonth, getKpassRecordDate, getSalaryNet, toNumber, todayIso } from '../utils/recordUtils';
 import { searchKisSymbol } from '../services/kisApiClient';
 import { analyzeReceipt, toGoodlifeFormat } from '../services/receiptOcrClient';
 import {
@@ -86,7 +86,9 @@ function buildInitialForm(category, record, initialData = null) {
   if (category.id === 'kpass') {
     const currentMonth = todayIso().slice(0, 7);
     const kpass = calcKpass(data);
-    initial.yearMonth = data.yearMonth || currentMonth;
+    initial.date = record ? getKpassRecordDate(record) : data.date || initial.date;
+    const savedMonth = record ? getKpassMonth(record) : null;
+    initial.yearMonth = record ? (savedMonth === 'unknown' ? '' : savedMonth) : data.yearMonth || currentMonth;
     initial.netCost = data.netCost ?? (kpass.chargeAmount > 0 || kpass.refundAmount > 0 ? String(kpass.netCost) : '');
     initial.refundRate = data.refundRate ?? (kpass.chargeAmount > 0 ? String(kpass.refundRate) : '');
   }
@@ -384,6 +386,7 @@ export default function RecordModal({ categoryId, record, initialData = null, fi
       const kpass = calcKpass(currentForm);
       return {
         ...currentForm,
+        yearMonth: String(currentForm.yearMonth || '').trim(),
         netCost: String(kpass.netCost),
         refundRate: String(kpass.refundRate),
       };
@@ -639,6 +642,10 @@ export default function RecordModal({ categoryId, record, initialData = null, fi
     const missing = category.fields.find((field) => field.required && isFieldVisible(field) && !formRef.current[field.id]);
     if (missing) {
       setError(`${missing.label} 항목을 입력해주세요.`);
+      return;
+    }
+    if (categoryId === 'kpass' && !/^\d{4}-(0[1-9]|1[0-2])$/.test(String(formRef.current.yearMonth).trim())) {
+      setError('연월은 YYYY-MM 형식으로 입력해주세요. 예: 2026-10');
       return;
     }
 

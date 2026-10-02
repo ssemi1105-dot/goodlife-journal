@@ -68,6 +68,57 @@ export function calcKpass(data = {}) {
   return { chargeAmount, refundAmount, netCost, refundRate };
 }
 
+export function getKpassRecordDate(record = {}) {
+  const date = record.data?.date;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(date || '')) return date;
+  // Old K-pass rows used the month's first day as a synthetic occurred_on.
+  const occurred = record.occurred_on || '';
+  return /^\d{4}-\d{2}-\d{2}$/.test(occurred) && !occurred.endsWith('-01') ? occurred : '';
+}
+
+export function getKpassMonth(record = {}) {
+  const explicit = String(record.data?.yearMonth || '').trim();
+  if (/^\d{4}-(0[1-9]|1[0-2])$/.test(explicit)) return explicit;
+  for (const date of [record.data?.date, record.occurred_on]) {
+    const month = String(date || '').slice(0, 7);
+    if (/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) return month;
+  }
+  return 'unknown';
+}
+
+export function formatKpassMonth(month) {
+  return /^\d{4}-(0[1-9]|1[0-2])$/.test(month) ? `${month.slice(0, 4)}년 ${Number(month.slice(5))}월` : '연월 미지정';
+}
+
+export function summarizeKpass(records = []) {
+  const summary = records.reduce((total, record) => {
+    if (record.category_id !== 'kpass') return total;
+    const { chargeAmount, refundAmount } = calcKpass(record.data || {});
+    total.chargeAmount += chargeAmount;
+    total.refundAmount += refundAmount;
+    return total;
+  }, { chargeAmount: 0, refundAmount: 0 });
+  return { ...summary, refundRate: summary.chargeAmount > 0 ? (summary.refundAmount / summary.chargeAmount * 100).toFixed(1) : '0.0' };
+}
+
+export function groupKpassByMonth(records = []) {
+  const months = new Map();
+  for (const record of records) {
+    if (record.category_id !== 'kpass') continue;
+    const month = getKpassMonth(record);
+    if (!months.has(month)) months.set(month, []);
+    months.get(month).push(record);
+  }
+  return [...months].sort(([a], [b]) => a === 'unknown' ? 1 : b === 'unknown' ? -1 : b.localeCompare(a))
+    .map(([month, entries]) => ({
+      month,
+      ...summarizeKpass(entries),
+      records: [...entries].sort((a, b) => getKpassRecordDate(b).localeCompare(getKpassRecordDate(a))
+        || String(b.created_at || '').localeCompare(String(a.created_at || ''))
+        || String(b.id || '').localeCompare(String(a.id || ''))),
+    }));
+}
+
 export function calcAnnualLeave(records = [], year) {
   const targetYear = year || new Date().getFullYear();
   const yearStr = String(targetYear);
@@ -159,7 +210,7 @@ export function deriveRecordColumns(categoryId, formData = {}) {
   if (categoryId === 'investment' && getInvestmentRecordType(formData) === 'sell') {
     occurred_on = formData.sellDate || occurredOn;
   }
-  if (categoryId === 'kpass' && formData.yearMonth) occurred_on = `${formData.yearMonth}-01`;
+  if (categoryId === 'kpass') occurred_on = formData.date || (formData.yearMonth ? `${formData.yearMonth}-01` : occurredOn);
   if (categoryId === 'annual_leave') {
     occurred_on = formData.recordType === 'grant'
       ? `${formData.year || new Date().getFullYear()}-01-01`

@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { CATEGORY_ICONS, CATEGORY_MAP, getCategoryThemeStyle } from '../data/categoryDefinitions';
-import { buildInvestmentLedger, calcAnnualLeave, calcKpass, formatMoney, getInvestmentRecordType, getRecordFinanceValue, toNumber } from '../utils/recordUtils';
+import { buildInvestmentLedger, calcAnnualLeave, formatMoney, getInvestmentRecordType, getRecordFinanceValue, toNumber } from '../utils/recordUtils';
 import { fetchKisPrice } from '../services/kisApiClient';
 import RecordCard from './RecordCard';
 import SearchModal from './SearchModal';
 import InvestmentMoodImage from './ui/InvestmentMoodImage';
+import { KpassMonthlyList, KpassSummary } from './KpassRecords';
 
 function InvestmentPortfolio({ records, onPriceUpdate, paused = false }) {
   const [loading, setLoading] = useState(false);
@@ -400,41 +401,6 @@ function CategorySummary({ records }) {
   );
 }
 
-function KpassSummary({ records }) {
-  const summary = records.reduce(
-    (total, record) => {
-      const kpass = calcKpass(record.data || {});
-      total.chargeAmount += kpass.chargeAmount;
-      total.refundAmount += kpass.refundAmount;
-      total.netCost += kpass.netCost;
-      return total;
-    },
-    { chargeAmount: 0, refundAmount: 0, netCost: 0 },
-  );
-  const averageRate = summary.chargeAmount > 0 ? ((summary.refundAmount / summary.chargeAmount) * 100).toFixed(1) : '0.0';
-
-  return (
-    <section className="category-summary-strip kpass-summary-strip">
-      <div>
-        <span>총 충전</span>
-        <strong>{formatMoney(summary.chargeAmount)}</strong>
-      </div>
-      <div>
-        <span>총 환급</span>
-        <strong>{formatMoney(summary.refundAmount)}</strong>
-      </div>
-      <div>
-        <span>총 순비용</span>
-        <strong>{formatMoney(summary.netCost)}</strong>
-      </div>
-      <div>
-        <span>평균 환급률</span>
-        <strong>{averageRate}%</strong>
-      </div>
-    </section>
-  );
-}
-
 function AnnualLeaveSummary({ records, onAdd, onEdit }) {
   const year = new Date().getFullYear();
   const leave = calcAnnualLeave(records, year);
@@ -475,7 +441,7 @@ function AnnualLeaveSummary({ records, onAdd, onEdit }) {
   );
 }
 
-export default function CategoryView({ categoryId, records, onBack, onAdd, onOpenRecord, onEdit, onDelete, onUpdateRecord, quotesPaused = false }) {
+export default function CategoryView({ categoryId, records, onBack, onAdd, onOpenRecord, onOpenKpassMonth, onEdit, onDelete, onUpdateRecord, quotesPaused = false }) {
   const category = CATEGORY_MAP[categoryId];
   const [showSearch, setShowSearch] = useState(false);
   const [filters, setFilters] = useState({ query: '', dateFrom: '', dateTo: '', minAmount: '', maxAmount: '', minRating: '' });
@@ -524,6 +490,8 @@ export default function CategoryView({ categoryId, records, onBack, onAdd, onOpe
           onDelete={onDelete}
           onAdd={onAdd}
         />
+      ) : isKpass ? (
+        <KpassMonthlyList records={categoryRecords} onOpenMonth={onOpenKpassMonth} />
       ) : (
         <section className="record-list">
           {displayRecords.map((record) => (

@@ -379,10 +379,9 @@ export const CATEGORIES = [
     amountField: 'netCost',
     fields: [
       { id: 'yearMonth', label: '연월', type: 'text', required: true, placeholder: '예: 2026-05' },
-      { id: 'chargeAmount', label: '충전금액', type: 'money' },
-      { id: 'refundAmount', label: '환급금액', type: 'money' },
-      { id: 'netCost', label: '순비용', type: 'money', readOnly: true },
-      { id: 'refundRate', label: '환급률(%)', type: 'number', readOnly: true },
+      commonDate,
+      { id: 'chargeAmount', label: '충전비용', type: 'money' },
+      { id: 'refundAmount', label: '환급비용', type: 'money' },
       memo,
     ],
   },

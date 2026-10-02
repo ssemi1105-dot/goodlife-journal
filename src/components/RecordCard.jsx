@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { CATEGORY_ICONS, CATEGORY_MAP } from '../data/categoryDefinitions';
-import { calcInvestment, calcKpass, calcLineItemAmount, calcSoldInvestment, formatMoney, formatPeriod, getInvestmentRecordType, getRecordTitle, toNumber } from '../utils/recordUtils';
+import { calcInvestment, calcKpass, calcLineItemAmount, calcSoldInvestment, formatMoney, formatPeriod, getInvestmentRecordType, getKpassRecordDate, getRecordTitle, toNumber } from '../utils/recordUtils';
 import InvestmentMoodImage from './ui/InvestmentMoodImage';
 import RecordImagePreview from './ui/RecordImagePreview';
 import CompactRecordContent from './CompactRecordContent';
@@ -23,7 +23,7 @@ export default function RecordCard({ record, onOpen, onEdit, onDelete, onInvestm
   const dailyChange = toNumber(data.priceChange);
   const dailyChangeClass = dailyChangeRate > 0 || dailyChange > 0 ? 'is-up' : dailyChangeRate < 0 || dailyChange < 0 ? 'is-down' : 'is-flat';
   const kpass = record.category_id === 'kpass' ? calcKpass(data) : null;
-  const period = formatPeriod(data) || record.occurred_on;
+  const period = record.category_id === 'kpass' ? getKpassRecordDate(record) || '일자 미기록' : formatPeriod(data) || record.occurred_on;
   const showWeather = record.category_id !== 'investment' && record.category_id !== 'video' && record.category_id !== 'exercise';
   const shoppingItems = record.category_id === 'shopping'
     ? (Array.isArray(data.productItems) ? data.productItems : data.items || []).filter((item) => item?.name)
@@ -167,10 +167,8 @@ export default function RecordCard({ record, onOpen, onEdit, onDelete, onInvestm
           {toNumber(record.rating) > 0 && <span>평점 {record.rating}</span>}
           {record.category_id === 'kpass' && (
             <>
-              <span>순비용 {formatMoney(kpass.netCost)}</span>
-              <span>충전 {formatMoney(kpass.chargeAmount)}</span>
-              <span>환급 {formatMoney(kpass.refundAmount)}</span>
-              <span>환급률 {kpass.refundRate}%</span>
+              <span>충전비용 {formatMoney(kpass.chargeAmount)}</span>
+              <span>환급비용 {formatMoney(kpass.refundAmount)}</span>
             </>
           )}
           {record.category_id === 'annual_leave' && data.recordType === 'grant' && <span>부여 {toNumber(data.grantDays)}일</span>}

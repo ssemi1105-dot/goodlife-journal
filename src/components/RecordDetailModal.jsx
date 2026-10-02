@@ -1,5 +1,5 @@
 import { CATEGORY_ICONS, CATEGORY_MAP } from '../data/categoryDefinitions';
-import { formatMoney, formatPeriod, getRecordTitle, toNumber } from '../utils/recordUtils';
+import { formatMoney, formatPeriod, getKpassRecordDate, getRecordTitle, toNumber } from '../utils/recordUtils';
 import VideoFriendReactions from './VideoFriendReactions';
 import RecordImagePreview from './ui/RecordImagePreview';
 
@@ -59,9 +59,9 @@ export default function RecordDetailModal({ record, onClose, onEdit, onDelete })
         )}
 
         <div className="detail-meta-row">
-          <span>{formatPeriod(data) || record.occurred_on}</span>
+          <span>{record.category_id === 'kpass' ? getKpassRecordDate(record) || '일자 미기록' : formatPeriod(data) || record.occurred_on}</span>
           {toNumber(record.rating) > 0 && <span>평점 {Number(record.rating).toFixed(1)}</span>}
-          {toNumber(record.amount) > 0 && <span>{formatMoney(record.amount)}</span>}
+          {record.category_id !== 'kpass' && toNumber(record.amount) > 0 && <span>{formatMoney(record.amount)}</span>}
           {toNumber(record.income_amount) > 0 && <span className="income-text">수입 {formatMoney(record.income_amount)}</span>}
           {showWeather && record.weather_label && (
             <span>

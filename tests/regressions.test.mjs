@@ -6,7 +6,7 @@ import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 
 process.env.TZ = 'Asia/Seoul';
-let server, utils, storage, weather, exports, RecordCard;
+let server, utils, storage, weather, exports, RecordCard, kpassComponents;
 before(async () => {
   server = await createServer({ server: { middlewareMode: true }, appType: 'custom', logLevel: 'silent' });
   utils = await server.ssrLoadModule('/src/utils/recordUtils.js');
@@ -14,8 +14,57 @@ before(async () => {
   weather = await server.ssrLoadModule('/src/services/weatherClient.js');
   exports = await server.ssrLoadModule('/src/components/DataExportPanel.jsx');
   RecordCard = (await server.ssrLoadModule('/src/components/RecordCard.jsx')).default;
+  kpassComponents = await server.ssrLoadModule('/src/components/KpassRecords.jsx');
 });
 after(async () => { await server?.close(); });
+
+test('K-pass groups split charges/refunds by assigned month and sorts real transaction dates without mutation', () => {
+  const records = [
+    { id: 'charge', category_id: 'kpass', occurred_on: '2026-10-01', data: { yearMonth: '2026-10', date: '2026-10-02', chargeAmount: '50,000' } },
+    { id: 'refund', category_id: 'kpass', occurred_on: '2026-10-01', data: { yearMonth: '2026-10', date: '2026-11-05', refundAmount: '20000' } },
+    { id: 'charge2', category_id: 'kpass', data: { yearMonth: '2026-10', date: '2026-10-15', chargeAmount: 50000 } },
+    { id: 'lastYear', category_id: 'kpass', data: { yearMonth: '2025-10', chargeAmount: 30000, refundAmount: 3000 } },
+    { id: 'fallback', category_id: 'kpass', occurred_on: '2026-09-01', data: { chargeAmount: 10000 } },
+    { id: 'missing', category_id: 'kpass', data: { yearMonth: '2026-13', refundAmount: 1000 } },
+    { id: 'other', category_id: 'salary', data: { yearMonth: '2026-10', chargeAmount: 999999 } },
+  ];
+  const original = structuredClone(records);
+  const groups = utils.groupKpassByMonth(records);
+  assert.deepEqual(groups.map((group) => group.month), ['2026-10', '2026-09', '2025-10', 'unknown']);
+  assert.deepEqual(groups[0].records.map((record) => record.id), ['refund', 'charge2', 'charge']);
+  assert.equal(groups[0].chargeAmount, 100000);
+  assert.equal(groups[0].refundAmount, 20000);
+  assert.equal(groups[0].refundRate, '20.0');
+  assert.deepEqual(utils.summarizeKpass(records), { chargeAmount: 140000, refundAmount: 24000, refundRate: '17.1' });
+  assert.deepEqual(records, original);
+  assert.deepEqual(utils.summarizeKpass([]), { chargeAmount: 0, refundAmount: 0, refundRate: '0.0' });
+  assert.equal(utils.summarizeKpass([records[1]]).refundRate, '0.0');
+});
+
+test('K-pass preserves entered dates on new saves and does not invent a date for legacy month-only records', () => {
+  const data = { yearMonth: '2026-09', date: '2026-10-05', chargeAmount: 50000, refundAmount: 10000 };
+  const derived = utils.deriveRecordColumns('kpass', data);
+  assert.equal(derived.occurred_on, '2026-10-05');
+  assert.equal(derived.amount, 40000, 'existing expense calculation is unchanged');
+  assert.equal(utils.getKpassRecordDate({ occurred_on: '2026-09-01', data }), '2026-10-05');
+  assert.equal(utils.getKpassRecordDate({ occurred_on: '2026-09-01', data: { yearMonth: '2026-09' } }), '');
+  assert.equal(utils.getKpassRecordDate({ data: { date: '2026-09-01' } }), '2026-09-01');
+  assert.equal(utils.getKpassRecordDate({ occurred_on: '2026-09-15' }), '2026-09-15');
+  assert.equal(utils.deriveRecordColumns('kpass', { yearMonth: '2026-09' }).occurred_on, '2026-09-01');
+});
+
+test('K-pass presents only charge/refund cards and a three-value summary, with no net cost UI', () => {
+  const records = [{ id: 'a', category_id: 'kpass', amount: 40000, data: { yearMonth: '2026-10', chargeAmount: 50000, refundAmount: 10000 } }];
+  const summary = renderToStaticMarkup(createElement(kpassComponents.KpassSummary, { records }));
+  for (const text of ['총 충전비용', '총 환급비용', '환급률', '20.0%']) assert.ok(summary.includes(text));
+  const list = renderToStaticMarkup(createElement(kpassComponents.KpassMonthlyList, { records, onOpenMonth() {} }));
+  assert.match(list, /2026년 10월/);
+  assert.match(list, /50,000원/);
+  assert.match(list, /10,000원/);
+  assert.ok(!list.includes('환급률'));
+  const card = renderToStaticMarkup(createElement(RecordCard, { record: records[0] }));
+  assert.ok(!`${summary}${list}${card}`.includes('순비용'));
+});
 
 test('menu previews use real names, support legacy records, and never mutate stored data', () => {
   const data = Object.freeze({ menuItems: Object.freeze([null, { name: ' ' }, { name: ' 김치찌개 ', amount: 9000 }, { name: '계란말이' }]) });
