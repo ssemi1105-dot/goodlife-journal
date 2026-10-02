@@ -5338,3 +5338,185 @@ select:focus {
 
 .sync-error > button { flex-shrink: 0; padding: 8px; }
 
+/* Approved compact layout is limited to video and company-meal cards. */
+.record-card.is-compact-record {
+  display: block;
+  padding: 0;
+}
+
+.compact-record-content {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 5px 11px;
+}
+
+.compact-record-content.has-photo { grid-template-columns: 54px minmax(0, 1fr); }
+.compact-record-content.is-video { padding-block: 11px; }
+.compact-record-content.is-meal.has-photo { padding-block: 7px; }
+
+.compact-record-content .record-photo {
+  width: 54px;
+  height: 66px;
+  border-radius: 10px;
+  object-fit: cover;
+}
+
+.compact-record-content.is-video .record-photo { height: 72px; }
+
+.compact-record-body {
+  display: grid;
+  grid-template-rows: 24px 22px 16px;
+  min-width: 0;
+}
+
+.compact-record-content.is-video .compact-record-body { grid-template-rows: 24px 24px 24px; }
+.compact-record-content.is-meal.has-photo .compact-record-body { grid-template-rows: 24px 22px 14px 16px; }
+
+.compact-record-header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 28px;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+
+.compact-record-date-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  color: var(--text-muted);
+  font-size: 11px;
+  line-height: 16px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.compact-record-category { flex-shrink: 0; }
+.compact-record-date { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.compact-record-content.is-video .compact-record-date { margin-left: auto; }
+.compact-record-content.is-meal .compact-record-date { flex-shrink: 0; }
+.compact-record-weather { min-width: 0; overflow: hidden; color: var(--income); text-overflow: ellipsis; }
+
+.is-compact-record .record-menu-trigger {
+  width: 28px;
+  height: 24px;
+  padding: 0 0 6px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  box-shadow: none;
+}
+
+.is-compact-record .record-menu-trigger[aria-expanded="true"] { background: var(--accent-soft); }
+
+.compact-record-main {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) max-content;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.compact-record-main.has-menu { grid-template-columns: minmax(0, 1.12fr) minmax(0, .95fr) max-content; }
+.compact-record-content.is-meal:not(.has-photo) .compact-record-main.has-menu { grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr) max-content; gap: 10px; }
+.compact-record-content.is-video .compact-record-main { display: flex; gap: 12px; }
+
+.record-card .compact-record-title {
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  color: var(--text);
+  font-size: 17px;
+  line-height: 22px;
+  font-weight: 700;
+  letter-spacing: 0;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.compact-record-menu-name {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text);
+  font-size: 14px;
+  line-height: 20px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.compact-record-amount {
+  color: var(--accent-strong);
+  font-size: 15px;
+  line-height: 21px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.compact-record-status {
+  flex-shrink: 0;
+  max-width: 48%;
+  overflow: hidden;
+  color: var(--accent-strong);
+  font-size: 14px;
+  line-height: 20px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.compact-record-reaction {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: center;
+  min-width: 0;
+  gap: 8px;
+}
+
+.compact-record-reaction.has-rating { grid-template-columns: 76px minmax(0, 1fr); }
+.compact-record-rating-row { min-width: 0; display: flex; align-items: center; }
+
+.compact-record-memo {
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: 13px;
+  line-height: 16px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.compact-record-content.is-meal:not(.has-photo) .compact-record-memo { font-size: 14px; }
+
+.rating-preview {
+  display: inline-flex;
+  align-items: center;
+  gap: 1px;
+  color: oklch(56% .1 82);
+}
+
+.rating-preview-star {
+  display: block;
+  position: relative;
+  flex: 0 0 14px;
+  width: 14px;
+  height: 14px;
+  font: 400 14px/14px Arial, sans-serif;
+}
+
+.rating-preview-empty { display: block; width: 14px; color: oklch(84% .015 85); }
+.rating-preview-fill { position: absolute; top: 0; left: 0; height: 14px; overflow: hidden; }
+.rating-preview-fill > span { display: block; width: 14px; height: 14px; }
+
+@media (max-width: 350px) {
+  .compact-record-content { padding-inline: 8px; gap: 6px; }
+  .compact-record-main { gap: 4px; }
+  .compact-record-content.is-meal:not(.has-photo) .compact-record-main.has-menu { gap: 6px; }
+  .compact-record-reaction { gap: 6px; }
+}
+

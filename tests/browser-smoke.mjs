@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 import { mkdir, readFile } from 'node:fs/promises';
 import { createServer } from 'vite';
+import { APP_VERSION } from '../src/lib/appVersion.js';
 
 const require = createRequire(import.meta.url);
 const { chromium } = require(process.env.PLAYWRIGHT_PACKAGE || 'playwright');
@@ -31,7 +32,7 @@ page.on('pageerror', (error) => errors.push(error.message));
 await mkdir('test-results', { recursive: true });
 try {
   await page.goto(`${server.resolvedUrls.local[0]}tests/ui.html`);
-  await page.getByText('VERSION 0.2.2', { exact: true }).waitFor();
+  await page.getByText(`VERSION ${APP_VERSION}`, { exact: true }).waitFor();
   const navBox = await page.locator('.bottom-nav').boundingBox();
   assert.ok(Math.abs(navBox.y + navBox.height - 844) < 2);
   assert.ok(navBox.height < 100);

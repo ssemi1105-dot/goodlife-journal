@@ -40,6 +40,24 @@ export function formatMoney(value) {
   return `${Math.round(toNumber(value)).toLocaleString('ko-KR')}원`;
 }
 
+export function getMenuPreview(data = {}) {
+  // Older records may have a single menu string instead of line items.
+  for (const source of [data.menuItems, data.items, data.menu]) {
+    const rows = Array.isArray(source) ? source : [source];
+    const names = rows
+      .map((item) => typeof item === 'string' ? item : item?.name)
+      .filter((name) => typeof name === 'string' && name.trim())
+      .map((name) => name.trim());
+    if (names.length) {
+      return {
+        label: names.length > 1 ? `${names[0]} 외 ${names.length - 1}개` : names[0],
+        fullText: names.join(', '),
+      };
+    }
+  }
+  return { label: '', fullText: '' };
+}
+
 export function calcKpass(data = {}) {
   const chargeAmount = toNumber(data.chargeAmount);
   const refundAmount = toNumber(data.refundAmount);

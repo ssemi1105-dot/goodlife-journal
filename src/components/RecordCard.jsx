@@ -4,6 +4,7 @@ import { CATEGORY_ICONS, CATEGORY_MAP } from '../data/categoryDefinitions';
 import { calcInvestment, calcKpass, calcLineItemAmount, calcSoldInvestment, formatMoney, formatPeriod, getInvestmentRecordType, getRecordTitle, toNumber } from '../utils/recordUtils';
 import InvestmentMoodImage from './ui/InvestmentMoodImage';
 import RecordImagePreview from './ui/RecordImagePreview';
+import CompactRecordContent from './CompactRecordContent';
 
 export default function RecordCard({ record, onOpen, onEdit, onDelete, onInvestmentSell }) {
   const [menuOpen, setMenuOpen] = useState(false);
@@ -29,6 +30,7 @@ export default function RecordCard({ record, onOpen, onEdit, onDelete, onInvestm
     : [];
   const visibleShoppingItems = shoppingItems.slice(0, 10);
   const showSellAction = record.category_id === 'investment' && investmentType === 'buy' && onInvestmentSell;
+  const compact = record.category_id === 'video' || record.category_id === 'workMeal';
 
   useEffect(() => {
     if (!menuOpen) return undefined;
@@ -90,13 +92,36 @@ export default function RecordCard({ record, onOpen, onEdit, onDelete, onInvestm
     action();
   }
 
+  const actions = (
+    <div className="record-actions">
+      <div className="record-menu">
+        <button
+          ref={menuButtonRef}
+          type="button"
+          className="record-menu-trigger"
+          aria-label="기록 메뉴"
+          aria-haspopup="menu"
+          aria-expanded={menuOpen}
+          onClick={toggleMenu}
+          onPointerDown={(event) => event.stopPropagation()}
+          onKeyDown={(event) => {
+            if (event.key !== 'Escape') event.stopPropagation();
+          }}
+        >
+          ...
+        </button>
+      </div>
+    </div>
+  );
+
   return (
-    <article className={record.category_id === 'investment' ? 'record-card is-investment-record' : 'record-card'} role="button" tabIndex={0} onClick={(event) => onOpen?.(record, event.currentTarget)} onKeyDown={(event) => {
+    <article className={`record-card${record.category_id === 'investment' ? ' is-investment-record' : ''}${compact ? ' is-compact-record' : ''}`} role="button" tabIndex={0} onClick={(event) => onOpen?.(record, event.currentTarget)} onKeyDown={(event) => {
       if (event.key === 'Enter' || event.key === ' ') {
         event.preventDefault();
         onOpen?.(record, event.currentTarget);
       }
     }}>
+      {compact ? <CompactRecordContent record={record} actions={actions} /> : <>
       <RecordImagePreview record={record} />
       <div className="record-body">
         <div className="record-topline">
@@ -216,23 +241,8 @@ export default function RecordCard({ record, onOpen, onEdit, onDelete, onInvestm
         )}
         {data.memo && <p className="record-memo">{data.memo}</p>}
       </div>
-      <div className="record-actions">
-        <div className="record-menu">
-          <button
-            ref={menuButtonRef}
-            type="button"
-            className="record-menu-trigger"
-            aria-label="기록 메뉴"
-            aria-haspopup="menu"
-            aria-expanded={menuOpen}
-            onClick={toggleMenu}
-            onPointerDown={(event) => event.stopPropagation()}
-            onKeyDown={(event) => event.stopPropagation()}
-          >
-            ...
-          </button>
-        </div>
-      </div>
+      {actions}
+      </>}
       {menuOpen && createPortal(
         <div
           ref={menuPopoverRef}
@@ -241,7 +251,9 @@ export default function RecordCard({ record, onOpen, onEdit, onDelete, onInvestm
           style={{ top: menuPosition.top, left: menuPosition.left }}
           onPointerDown={(event) => event.stopPropagation()}
           onClick={(event) => event.stopPropagation()}
-          onKeyDown={(event) => event.stopPropagation()}
+          onKeyDown={(event) => {
+            if (event.key !== 'Escape') event.stopPropagation();
+          }}
         >
           {showSellAction && (
             <button type="button" role="menuitem" onClick={() => runMenuAction(() => onInvestmentSell(record))}>매도 기록</button>

@@ -2,17 +2,61 @@ import assert from 'node:assert/strict';
 import { after, before, test } from 'node:test';
 import { readFile } from 'node:fs/promises';
 import { createServer } from 'vite';
+import { createElement } from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
 
 process.env.TZ = 'Asia/Seoul';
-let server, utils, storage, weather, exports;
+let server, utils, storage, weather, exports, RecordCard;
 before(async () => {
   server = await createServer({ server: { middlewareMode: true }, appType: 'custom', logLevel: 'silent' });
   utils = await server.ssrLoadModule('/src/utils/recordUtils.js');
   storage = await server.ssrLoadModule('/src/services/recordStorage.js');
   weather = await server.ssrLoadModule('/src/services/weatherClient.js');
   exports = await server.ssrLoadModule('/src/components/DataExportPanel.jsx');
+  RecordCard = (await server.ssrLoadModule('/src/components/RecordCard.jsx')).default;
 });
 after(async () => { await server?.close(); });
+
+test('menu previews use real names, support legacy records, and never mutate stored data', () => {
+  const data = Object.freeze({ menuItems: Object.freeze([null, { name: ' ' }, { name: ' 김치찌개 ', amount: 9000 }, { name: '계란말이' }]) });
+  assert.deepEqual(utils.getMenuPreview(data), { label: '김치찌개 외 1개', fullText: '김치찌개, 계란말이' });
+  assert.equal(data.menuItems[2].name, ' 김치찌개 ');
+  assert.equal(utils.getMenuPreview({ menu: '비빔밥' }).label, '비빔밥');
+  assert.equal(utils.getMenuPreview({ menuItems: [], items: [{ name: '된장찌개' }] }).label, '된장찌개');
+  assert.deepEqual(utils.getMenuPreview({ menuItems: [null, { amount: 9000 }] }), { label: '', fullText: '' });
+});
+
+test('compact company-meal cards keep full menu and memo text and the authoritative total', () => {
+  const record = { category_id: 'workMeal', occurred_on: '2026-10-02', rating: 4.5, amount: 0,
+    data: { restaurant: '마당집', menuItems: [{ name: '김치찌개', amount: 9000 }, { name: '계란말이', amount: 3000 }], memo: '실제 저장된 메모' } };
+  const html = renderToStaticMarkup(createElement(RecordCard, { record }));
+  assert.match(html, /compact-record-menu-name/);
+  assert.match(html, /김치찌개 외 1개/);
+  assert.match(html, /title="김치찌개, 계란말이"/);
+  assert.match(html, /실제 저장된 메모/);
+  assert.match(html, /compact-record-amount">0원/);
+  assert.equal((html.match(/class="rating-preview-star"/g) || []).length, 5);
+  assert.equal((html.match(/width:50%/g) || []).length, 1);
+  assert.equal((html.match(/<button /g) || []).length, 1, 'stars are read-only; only the action menu is a button');
+});
+
+test('compact video cards preserve flat TMDB titles, period, status, genres and no-poster compatibility', () => {
+  const record = { category_id: 'video', rating: null, data: { tmdbTitle: '트로이', startDate: '2026-09-01', endDate: '2026-09-13',
+    watchStatus: '시청완료', episodeStart: 1, episodeEnd: 16, detailGenres: ['역사'], memo: '감독판' } };
+  const html = renderToStaticMarkup(createElement(RecordCard, { record }));
+  for (const text of ['트로이', '시청완료', '1~16화', '감독판', '역사', '2026.09.01', '2026.09.13']) assert.ok(html.includes(text), text);
+  assert.ok(!html.includes('has-photo'));
+  assert.ok(!html.includes('rating-preview'));
+  assert.ok(!html.includes('compact-record-menu-name'));
+});
+
+test('non-approved categories retain their existing record-card layout', () => {
+  for (const category_id of ['dining', 'delivery', 'shopping', 'investment', 'salary']) {
+    const html = renderToStaticMarkup(createElement(RecordCard, { record: { category_id, data: {}, amount: 1000 } }));
+    assert.ok(!html.includes('is-compact-record'), category_id);
+    assert.match(html, /record-body/);
+  }
+});
 
 test('amount-only edits override hidden stale unit prices in every line-item category', () => {
   for (const [category, field] of [['workMeal', 'menuItems'], ['delivery', 'menuItems'], ['vehicle', 'expenseItems'], ['overseasTravel', 'localExpenses']]) {
