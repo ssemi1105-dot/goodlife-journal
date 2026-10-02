@@ -99,6 +99,41 @@ try {
     results.push({ width, ...metrics, leaveColumns: grid.columns, testedDetails: ids.length });
     await select().selectOption('all');
   }
+  await select().selectOption('annual_leave');
+  for (const [grantDays, usedDays, expectedRate] of [[10.5, 6, 57], [10.5, 7, 67], [10.5, 0, 0], [10.5, 10.5, 100], [10.5, 11, 105], [0, 0, 0]]) {
+    await page.evaluate(({ grantDays, usedDays }) => {
+      const year = String(new Date().getFullYear());
+      window.presentationFixture.setRecords([
+        { id: 'test-grant', category_id: 'annual_leave', data: { recordType: 'grant', year, grantDays } },
+        { id: 'test-use', category_id: 'annual_leave', data: { recordType: 'use', date: `${year}-01-02`, days: usedDays } },
+      ]);
+    }, { grantDays, usedDays });
+    const progress = page.getByRole('progressbar', { name: '연차 사용률' });
+    await page.waitForFunction(rate => document.querySelector('.annual-leave-progress')?.getAttribute('aria-valuetext') === `${rate}%`, expectedRate);
+    assert.deepEqual(await page.locator('.annual-leave-stats dt').allTextContents(), ['부여', '사용', '잔여']);
+    assert.deepEqual(await page.locator('.annual-leave-stats dd').allTextContents(), [`${grantDays}일`, `${usedDays}일`, `${Math.max(0, grantDays - usedDays)}일`]);
+    assert.equal(await page.locator('.annual-leave-meta strong').textContent(), `${expectedRate}%`);
+    const expectedWidth = grantDays > 0 ? Math.min(100, usedDays / grantDays * 100) : 0;
+    const fill = await progress.locator('span').evaluate(el => parseFloat(el.style.width));
+    assert.ok(Math.abs(fill - expectedWidth) < 0.001);
+    assert.ok(Number(await progress.getAttribute('aria-valuenow')) <= 100);
+    if (usedDays === 6) {
+      for (const width of [320, 390, 768]) {
+        await page.setViewportSize({ width, height: 844 });
+        const stats = await page.locator('.annual-leave-stats').evaluate(el => ({
+          columns: getComputedStyle(el).gridTemplateColumns.split(' ').length,
+          overflow: el.scrollWidth > el.clientWidth,
+          tops: [...el.children].map(child => child.getBoundingClientRect().top),
+        }));
+        assert.equal(stats.columns, 3);
+        assert.equal(stats.overflow, false);
+        assert.equal(new Set(stats.tops).size, 1);
+        await page.locator('.annual-leave-panel').screenshot({ path: `test-results/leave-summary-${width}.png` });
+      }
+      await page.getByRole('button', { name: '부여 갱신', exact: true }).tap();
+      assert.equal(await page.getByTestId('presentation-action').textContent(), 'edit:test-grant');
+    }
+  }
   assert.deepEqual(errors, []);
   console.log(JSON.stringify({ passed: true, results, checks: 'All category details, full-width cards, no overlapping amounts, false/zero values, local currency, missing poster, 4-column leave dates/days and detail actions. Production network blocked.' }, null, 2));
 } catch (error) {

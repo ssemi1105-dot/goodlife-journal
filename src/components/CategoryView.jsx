@@ -385,15 +385,13 @@ function AnnualLeaveSummary({ records, onAdd, onEdit }) {
   const remainLabel = Number.isInteger(leave.remainDays) ? leave.remainDays : leave.remainDays.toFixed(1);
   const grantLabel = Number.isInteger(leave.grantDays) ? leave.grantDays : leave.grantDays.toFixed(1);
   const usedLabel = Number.isInteger(leave.usedDays) ? leave.usedDays : leave.usedDays.toFixed(1);
-  const remainingRate = leave.grantDays > 0 ? Math.max(0, Math.min(100, 100 - leave.usedRate)) : 0;
+  const usedRate = Math.max(0, leave.usedRate);
+  const filledRate = Math.min(100, usedRate);
 
   return (
     <section className="annual-leave-panel">
       <div className="annual-leave-head">
-        <div>
-          <span>{year}년 연차 현황</span>
-          <strong>잔여 {remainLabel}일</strong>
-        </div>
+        <span>{year}년 연차 현황</span>
         <button
           type="button"
           className="secondary-button compact"
@@ -405,12 +403,17 @@ function AnnualLeaveSummary({ records, onAdd, onEdit }) {
           {grantRecord ? '부여 갱신' : '연차 부여'}
         </button>
       </div>
+      <dl className="annual-leave-stats">
+        <div><dt>부여</dt><dd>{grantLabel}<small>일</small></dd></div>
+        <div><dt>사용</dt><dd>{usedLabel}<small>일</small></dd></div>
+        <div><dt>잔여</dt><dd>{remainLabel}<small>일</small></dd></div>
+      </dl>
       <div className="annual-leave-meta">
-        <span>부여 {grantLabel}일 / 사용 {usedLabel}일</span>
-        <span>{remainingRate.toFixed(0)}%</span>
+        <span>연차 사용률</span>
+        <strong>{usedRate.toFixed(0)}%</strong>
       </div>
-      <div className="annual-leave-progress" aria-label={`잔여 연차 ${remainingRate.toFixed(0)}%`}>
-        <span style={{ width: `${remainingRate}%` }} />
+      <div className="annual-leave-progress" role="progressbar" aria-label="연차 사용률" aria-valuemin={0} aria-valuemax={100} aria-valuenow={filledRate} aria-valuetext={`${usedRate.toFixed(0)}%`}>
+        <span style={{ width: `${filledRate}%` }} />
       </div>
     </section>
   );

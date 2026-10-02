@@ -2886,8 +2886,10 @@ body {
 }
 
 .annual-leave-head {
-  display: grid;
-  gap: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
 }
 
 .annual-leave-head span,
@@ -2897,11 +2899,27 @@ body {
   font-weight: 800;
 }
 
-.annual-leave-head strong {
-  color: #15803d;
-  font-size: 28px;
-  line-height: 1.05;
+.annual-leave-head > button { flex-shrink: 0; }
+
+.annual-leave-stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0;
 }
+
+.annual-leave-stats > div { min-width: 0; }
+.annual-leave-stats dt { color: var(--text-muted); font-size: 12px; }
+.annual-leave-stats dd {
+  margin: 4px 0 0;
+  color: var(--text);
+  font-size: 22px;
+  line-height: 28px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+.annual-leave-stats small { margin-left: 3px; font-size: 12px; font-weight: 500; }
 
 .annual-leave-meta {
   display: flex;
@@ -5272,15 +5290,6 @@ select:focus {
 
 .investment-position-values span { color: var(--text-muted); font-size: 9px; font-weight: 600; }
 .investment-position-values strong { margin-top: 3px; font-size: 11px; font-weight: 700; }
-
-.annual-leave-head {
-  flex-direction: row;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 10px;
-}
-
-.annual-leave-head > div { min-width: 0; }
 
 @keyframes favorite-scrim-in {
   from { opacity: 0; }
