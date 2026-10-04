@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { CATEGORY_MAP } from '../data/categoryDefinitions';
 import FieldInput from './FieldInput';
+import TcxImportPanel from './TcxImportPanel';
 import { calcDutchPay, calcInvestment, calcKpass, calcSoldInvestment, formatMoney, getInvestmentRecordType, getKpassMonth, getKpassRecordDate, getSalaryNet, toNumber, todayIso } from '../utils/recordUtils';
 import { searchKisSymbol } from '../services/kisApiClient';
 import { analyzeReceipt, toGoodlifeFormat } from '../services/receiptOcrClient';
@@ -135,7 +136,7 @@ function isMovieRecord(data = {}) {
   return data.mediaType === '영화' || data.tmdbMediaType === 'movie' || tmdbMediaType === 'movie';
 }
 
-export default function RecordModal({ categoryId, record, initialData = null, fieldSuggestions = {}, onClose, onSave }) {
+export default function RecordModal({ categoryId, record, initialData = null, fieldSuggestions = {}, onClose, onSave, onImportWorkout }) {
   const category = CATEGORY_MAP[categoryId];
   const [form, setForm] = useState(() => buildInitialForm(category, record, initialData));
   const formRef = useRef(form);
@@ -143,6 +144,7 @@ export default function RecordModal({ categoryId, record, initialData = null, fi
   const savingRef = useRef(false);
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
+  const [importingWorkout, setImportingWorkout] = useState(false);
   const [symbolSearching, setSymbolSearching] = useState(false);
   const [symbolResults, setSymbolResults] = useState([]);
   const [symbolMessage, setSymbolMessage] = useState('');
@@ -292,6 +294,7 @@ export default function RecordModal({ categoryId, record, initialData = null, fi
   }
 
   function isFieldVisible(field) {
+    if (categoryId === 'workout' && field.readOnly) return false;
     if (categoryId === 'video' && isMovieRecord(form) && ['watchPeriod', 'episodeStart', 'episodeEnd'].includes(field.id)) {
       return false;
     }
@@ -637,7 +640,7 @@ export default function RecordModal({ categoryId, record, initialData = null, fi
 
   async function submit(event) {
     event.preventDefault();
-    if (savingRef.current) return;
+    if (savingRef.current || importingWorkout) return;
     setError('');
     const missing = category.fields.find((field) => field.required && isFieldVisible(field) && !formRef.current[field.id]);
     if (missing) {
@@ -694,6 +697,7 @@ export default function RecordModal({ categoryId, record, initialData = null, fi
         </header>
 
         <div className="record-form-body">
+        {categoryId === 'workout' && !record && <TcxImportPanel onImport={onImportWorkout} onComplete={onClose} onBusyChange={setImportingWorkout} disabled={saving} />}
         <div className="field-grid">
           {category.fields.map((field) => {
             if (categoryId === 'salary' && field.id === 'bonusAmount' && !form.bonus) return null;
@@ -888,7 +892,7 @@ export default function RecordModal({ categoryId, record, initialData = null, fi
 
         <footer className="modal-actions">
           <button type="button" className="secondary-button" onClick={onClose} disabled={saving}>취소</button>
-          <button type="submit" className="primary-button" disabled={saving}>{saving ? '저장 중' : '저장'}</button>
+          <button type="submit" className="primary-button" disabled={saving || importingWorkout}>{saving ? '저장 중' : '저장'}</button>
         </footer>
       </form>
     </div>

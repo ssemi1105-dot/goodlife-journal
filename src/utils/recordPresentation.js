@@ -1,4 +1,5 @@
 import { CATEGORY_MAP } from '../data/categoryDefinitions';
+import { workoutDuration, workoutPace } from './workoutSummary';
 import { calcInvestment, calcKpass, calcSoldInvestment, formatMoney, formatPeriod, getInvestmentRecordType, getKpassRecordDate, getRecordTitle, getSalaryNet, toNumber } from './recordUtils';
 
 export const hasValue = (value) => value !== undefined && value !== null && value !== '';
@@ -51,7 +52,7 @@ export function getRecordPeriod(record) {
 }
 
 export function getRecordWeather(record) {
-  if (['investment', 'video', 'exercise'].includes(record.category_id) || !record.weather_label) return '';
+  if (['investment', 'video', 'exercise', 'workout'].includes(record.category_id) || !record.weather_label) return '';
   return `${record.weather_label}${hasValue(record.temperature_max) ? ` · 최고 ${record.temperature_max}°C` : ''}`;
 }
 
@@ -118,6 +119,12 @@ export function presentRecord(record) {
     case 'exercise':
       result.title = '체중관리'; primary('체중', withUnit(data.bodyWeight, 'kg'));
       for (const [key, label] of [['armCm', '팔'], ['waistCm', '허리'], ['thighCm', '허벅지'], ['calfCm', '종아리']]) if (hasValue(data[key])) metric(label, withUnit(data[key], 'cm'));
+      break;
+    case 'workout':
+      if (hasValue(data.distanceMeters)) primary('거리', `${(toNumber(data.distanceMeters) / 1000).toLocaleString('ko-KR', { maximumFractionDigits: 2 })}km`);
+      detail(workoutDuration(data.durationSeconds), withUnit(data.caloriesKcal, 'kcal'));
+      metric('평균 심박', withUnit(data.averageHeartRate, 'bpm'));
+      metric('평균 페이스', workoutPace(data.averagePaceSeconds));
       break;
     case 'annual_leave':
       result.title = data.recordType === 'grant' ? `${data.year || ''}년 연차 부여` : data.reason || '연차 사용';

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import { DEFAULT_WEATHER_LOCATION, fetchWeatherForDate, getWeatherTargetDate, isWeatherEnabledCategory, isValidWeatherCode } from '../services/weatherClient';
 import { fetchAllRecords, persistRecord, photoPaths, removeRecord } from '../services/recordStorage';
+import { persistWorkoutImport } from '../services/workoutImportStorage';
 
 function deriveWeatherColumns(formData = {}) {
   const weather = formData.weather || {};
@@ -101,6 +102,14 @@ export function useRecords(userId) {
     patchState(record, true);
   }
 
+  async function importWorkout(summary) {
+    if (!userId || activeUser.current !== userId) throw new Error('로그인 후 다시 시도해주세요.');
+    const result = await persistWorkoutImport(supabase, userId, summary);
+    if (activeUser.current !== userId) throw new Error('사용자가 변경되었습니다. 다시 로그인해주세요.');
+    patchState(result.record);
+    return result;
+  }
+
   async function exportRecords() {
     const data = await fetchAllRecords(supabase, userId);
     if (activeUser.current !== userId) throw new Error('사용자가 변경되었습니다. 다시 시도해주세요.');
@@ -143,5 +152,5 @@ export function useRecords(userId) {
     return { total: candidates.length, updated, failed };
   }
 
-  return { records, loading, error, saveRecord, deleteRecord, exportRecords, reloadRecords: loadRecords, backfillMissingWeather };
+  return { records, loading, error, saveRecord, deleteRecord, importWorkout, exportRecords, reloadRecords: loadRecords, backfillMissingWeather };
 }

@@ -5669,6 +5669,34 @@ select:focus {
 .presented-detail .detail-photo-grid { margin-bottom: 14px; }
 .presented-detail .detail-photo-grid .detail-photo { flex: 0 0 82px; width: 82px; height: 82px; margin: 0; }
 
+.tcx-import-panel { padding: 0 0 12px; margin: 0 0 8px; border-bottom: 1px solid var(--border); }
+.tcx-import-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.tcx-import-actions > button { min-height: 40px; }
+.tcx-import-status, .tcx-import-error { margin: 8px 0 0; font-size: 12px; line-height: 1.5; overflow-wrap: anywhere; }
+.tcx-import-status { color: var(--text-muted); }
+.tcx-import-error { color: var(--expense); }
+
+.workout-chart { min-width: 0; padding: 14px 0; border-block: 1px solid var(--border); margin-bottom: 12px; }
+.workout-chart h3 { margin: 0; font-size: 15px; }
+.workout-chart > header { display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 4px 8px; margin-bottom: 12px; }
+.workout-chart > header > span, .workout-chart.is-empty p { color: var(--text-muted); font-size: 11px; }
+.workout-chart-caption, .workout-chart-axis { display: flex; justify-content: space-between; gap: 8px; font-size: 11px; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+.workout-chart-caption { margin-bottom: 8px; }
+.workout-chart-caption output { color: var(--text); }
+.workout-chart-plot { display: block; width: 100%; height: 180px; overflow: hidden; touch-action: pan-y; }
+.workout-chart-grid { stroke: var(--border); stroke-width: 1; vector-effect: non-scaling-stroke; }
+.workout-chart-cursor { stroke: var(--text-muted); stroke-width: 1; stroke-dasharray: 3 3; }
+.workout-chart-axis { margin-top: 4px; }
+.workout-chart-slider { width: 100%; height: 28px; padding: 0; margin: 4px 0; accent-color: var(--accent); touch-action: pan-y; box-shadow: none; }
+.workout-chart-legend { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+.workout-chart-legend button { display: grid; align-content: start; min-width: 0; padding: 8px 4px; gap: 6px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); text-align: left; color: var(--text); box-shadow: none; }
+.workout-chart-legend button.is-muted { opacity: .5; background: var(--surface-pressed); }
+.workout-chart-legend-name { display: flex; align-items: center; gap: 4px; font-size: 12px; }
+.workout-chart-legend-name i { width: 12px; height: 3px; background: var(--series-color); }
+.workout-chart-legend strong { font-size: 15px; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.workout-chart-legend small { font-size: 10px; font-weight: 500; margin-left: 3px; }
+.workout-chart-range { font-size: 10px; line-height: 1.4; color: var(--text-muted); overflow-wrap: anywhere; }
+
 .leave-year-list { display: grid; gap: 20px; }
 .leave-year-section > header { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
 .leave-year-section h2 { margin: 0; font-size: 16px; }

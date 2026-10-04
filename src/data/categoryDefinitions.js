@@ -1,3 +1,5 @@
+import { WORKOUT_TYPES } from '../utils/workoutSummary';
+
 export const FINANCE_MODES = {
   expense: '지출 포함',
   income: '수입 포함',
@@ -30,6 +32,7 @@ export const DEFAULT_FINANCE_MODES = {
   overseasTravel: 'expense',
   vehicle: 'expense',
   culture: 'expense',
+  workout: 'excluded',
 };
 
 const commonDate = { id: 'date', label: '날짜', type: 'date', required: true };
@@ -63,6 +66,7 @@ export const CATEGORY_ICONS = {
   overseasTravel: '✈️',
   vehicle: '🚘',
   culture: '🎭',
+  workout: '🏃',
 };
 
 export const CATEGORIES = [
@@ -517,6 +521,27 @@ export const CATEGORIES = [
       { id: 'amount', label: '총비용', type: 'money' },
       rating,
       photo,
+      memo,
+    ],
+  },
+  {
+    id: 'workout',
+    label: '운동기록',
+    color: '#0284c7',
+    titleField: 'activityName',
+    fields: [
+      commonDate,
+      { id: 'activityName', label: '운동명', type: 'text', required: true },
+      { id: 'activityType', label: '운동 종류', type: 'choice', options: WORKOUT_TYPES },
+      { id: 'durationSeconds', label: '운동 시간(초)', type: 'number', min: 0, step: 1 },
+      { id: 'distanceMeters', label: '거리(m)', type: 'number', min: 0, step: 0.01 },
+      { id: 'caloriesKcal', label: '칼로리', type: 'number', min: 0 },
+      { id: 'averageHeartRate', label: '평균 심박', type: 'number', min: 0 },
+      { id: 'maxHeartRate', label: '최대 심박', type: 'number', min: 0 },
+      { id: 'startedAt', label: '시작 시각(한국)', type: 'text', readOnly: true },
+      { id: 'endedAt', label: '종료 시각(한국)', type: 'text', readOnly: true },
+      { id: 'averageSpeedKmh', label: '평균 속도', type: 'number', readOnly: true },
+      { id: 'averagePaceSeconds', label: '평균 페이스', type: 'number', readOnly: true },
       memo,
     ],
   },

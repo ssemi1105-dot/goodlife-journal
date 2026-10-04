@@ -110,7 +110,7 @@ function CategoryPicker({ settings, onSelect, onClose }) {
 export default function App() {
   const auth = useAuth();
   const { settings, saveSettings, error: settingsError, reloadSettings } = useAppSettings(auth.userId);
-  const { records, loading: recordsLoading, error: recordsError, saveRecord, deleteRecord, backfillMissingWeather, exportRecords, reloadRecords } = useRecords(auth.userId);
+  const { records, loading: recordsLoading, error: recordsError, saveRecord, deleteRecord, importWorkout, backfillMissingWeather, exportRecords, reloadRecords } = useRecords(auth.userId);
   const [view, setView] = useState('home');
   const [activeCategory, setActiveCategory] = useState(null);
   const [modalCategory, setModalCategory] = useState(null);
@@ -407,6 +407,8 @@ export default function App() {
 
       {view === 'category' && activeCategory && (
         <CategoryView
+          key={`${auth.userId}:${activeCategory}`}
+          onImportWorkout={importWorkout}
           categoryId={activeCategory}
           records={records}
           onBack={() => navigateBack({ view: 'home' })}
@@ -493,6 +495,7 @@ export default function App() {
 
       {modalCategory && (
         <RecordModal
+          onImportWorkout={importWorkout}
           categoryId={modalCategory}
           record={editingRecord}
           initialData={modalInitialData}

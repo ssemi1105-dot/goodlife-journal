@@ -14,6 +14,10 @@ export function categorySummaryValues(categoryId, records, date = new Date()) {
     { label: '기록된 납입액', value: formatMoney(sum(own, (r) => r.data?.monthlyAmount)) },
     { label: '이번 달 납입 기록', value: formatMoney(sum(monthly, (r) => r.data?.monthlyAmount)) },
   ];
+  if (categoryId === 'workout') return [
+    { label: '이번 달 운동', value: `${monthly.length}회` },
+    { label: '이번 달 거리', value: `${(sum(monthly, r => r.data?.distanceMeters) / 1000).toLocaleString('ko-KR', { maximumFractionDigits: 2 })}km` },
+  ];
   if (['video', 'recipe', 'game', 'dream', 'idea'].includes(categoryId)) return [
     { label: '전체 기록', value: `${own.length}건` }, { label: '이번 달 기록', value: `${monthly.length}건` },
   ];

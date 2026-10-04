@@ -5,6 +5,7 @@ import VideoFriendReactions from './VideoFriendReactions';
 import RecordDetailFields from './RecordDetailFields';
 import RecordImagePreview, { getRecordImageUrl } from './ui/RecordImagePreview';
 import RatingPreview from './ui/RatingPreview';
+import WorkoutChart from './WorkoutChart';
 
 export default function RecordDetailModal({ record, onClose, onEdit, onDelete }) {
   if (!record) return null;
@@ -46,6 +47,7 @@ export default function RecordDetailModal({ record, onClose, onEdit, onDelete })
           {photos.length > 0 && <div className="detail-photo-grid">
             {photos.map((url) => <RecordImagePreview record={record} large url={url} key={url} />)}
           </div>}
+          {record.category_id === 'workout' && <WorkoutChart key={record.id} data={data.chart} />}
           <RecordDetailFields record={record} />
           <VideoFriendReactions record={record} />
         </>}

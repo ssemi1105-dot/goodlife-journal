@@ -2,6 +2,7 @@ import { CATEGORY_MAP } from '../data/categoryDefinitions';
 import { calcLineItemAmount, formatMoney, getInvestmentRecordType, toNumber } from '../utils/recordUtils';
 import { displayText, getDisplayData, hasValue, isEnabled, numberText } from '../utils/recordPresentation';
 import RatingPreview from './ui/RatingPreview';
+import { workoutDuration, workoutPace, workoutTimestamp } from '../utils/workoutSummary';
 
 const UNITS = { interestRate: '%', refundRate: '%', profitLossRate: '%', realizedProfitRate: '%', quantity: '주', soldQuantity: '주', catchCount: '마리', weight: 'kg', bodyWeight: 'kg', armCm: 'cm', waistCm: 'cm', thighCm: 'cm', calfCm: 'cm', odometerKm: 'km', nextServiceKm: 'km', days: '일', grantDays: '일', peopleCount: '명' };
 
@@ -36,6 +37,13 @@ function visibleField(record, field, data) {
 }
 
 function DetailValue({ field, value, data }) {
+  if (field.id === 'durationSeconds') return workoutDuration(value);
+  if (field.id === 'distanceMeters') return `${numberText(toNumber(value) / 1000)}km`;
+  if (['startedAt', 'endedAt'].includes(field.id)) return workoutTimestamp(value);
+  if (field.id === 'averagePaceSeconds') return workoutPace(value);
+  if (['averageHeartRate', 'maxHeartRate'].includes(field.id)) return `${numberText(value)}bpm`;
+  if (field.id === 'caloriesKcal') return `${numberText(value)}kcal`;
+  if (field.id === 'averageSpeedKmh') return `${numberText(value)}km/h`;
   if (field.type === 'lineItems') {
     const items = Array.isArray(value) ? value.filter(Boolean) : [];
     if (!items.length) return null;
@@ -69,7 +77,7 @@ export default function RecordDetailFields({ record }) {
       if (!visibleField(record, field, data) || !hasValue(value) || (Array.isArray(value) && value.length === 0)) return null;
       const wide = ['textarea', 'lineItems', 'tags'].includes(field.type) || ['memo', 'content', 'steps', 'analysis'].includes(field.id);
       return <div className={`record-detail-field${wide ? ' is-wide' : ''}`} key={field.id}>
-        <span>{field.label}</span><div><DetailValue field={field} value={value} data={data} /></div>
+        <span>{field.id === 'durationSeconds' ? '운동 시간' : field.id === 'distanceMeters' ? '거리' : field.label}</span><div><DetailValue field={field} value={value} data={data} /></div>
       </div>;
     })}
   </div>;

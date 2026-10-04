@@ -1,10 +1,12 @@
 import { CATEGORY_MAP } from '../data/categoryDefinitions';
+import { cleanWorkoutData } from '../utils/workoutSummary';
 import { calcLineItemAmount, deriveRecordColumns, getSalaryNet, normalizeLineItem, toNumber } from '../utils/recordUtils';
 
 const uploadIds = new WeakMap();
 const isFile = (value) => typeof File !== 'undefined' && value instanceof File;
 
 export function cleanRecordData(categoryId, formData) {
+  if (categoryId === 'workout') return cleanWorkoutData(formData);
   const data = { ...formData };
   delete data.photo;
   delete data.weather;
@@ -103,15 +105,17 @@ export async function persistRecord(client, { userId, recordId, categoryId, form
   }
   // Finish uploads before writing a record. A retry reuses the same record and file IDs.
   try {
-    data.photoPath = isFile(formData.photo) ? await upload(formData.photo) : formData.photoPath || existingRecord?.data?.photoPath || null;
-    data.photos = [];
-    for (const photo of (formData.photos ?? existingRecord?.data?.photos ?? []).slice(0, 3)) {
-      if (isFile(photo.file)) {
-        data.photos.push({ path: await upload(photo.file), width: photo.width || null, height: photo.height || null, size: photo.file.size, type: photo.file.type });
-      } else if (photo.path) {
-        const { signedUrl, url, previewUrl, file, tooLarge, ...stored } = photo;
-        if (!photo.path.startsWith(`${userId}/`)) throw new Error('사진 소유자를 확인하지 못했습니다.');
-        data.photos.push(stored);
+    if (categoryId !== 'workout') {
+      data.photoPath = isFile(formData.photo) ? await upload(formData.photo) : formData.photoPath || existingRecord?.data?.photoPath || null;
+      data.photos = [];
+      for (const photo of (formData.photos ?? existingRecord?.data?.photos ?? []).slice(0, 3)) {
+        if (isFile(photo.file)) {
+          data.photos.push({ path: await upload(photo.file), width: photo.width || null, height: photo.height || null, size: photo.file.size, type: photo.file.type });
+        } else if (photo.path) {
+          const { signedUrl, url, previewUrl, file, tooLarge, ...stored } = photo;
+          if (!photo.path.startsWith(`${userId}/`)) throw new Error('사진 소유자를 확인하지 못했습니다.');
+          data.photos.push(stored);
+        }
       }
     }
   } catch (error) {
