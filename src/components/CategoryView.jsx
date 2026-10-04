@@ -9,6 +9,7 @@ import { KpassMonthlyList, KpassSummary } from './KpassRecords';
 import AnnualLeaveGrid from './AnnualLeaveGrid';
 import CategoryRecordSummary from './CategoryRecordSummary';
 import TcxImportPanel from './TcxImportPanel';
+import { WorkoutMonthlyList } from './WorkoutRecords';
 
 function InvestmentPortfolio({ records, onPriceUpdate, paused = false }) {
   const [loading, setLoading] = useState(false);
@@ -420,7 +421,7 @@ function AnnualLeaveSummary({ records, onAdd, onEdit }) {
   );
 }
 
-export default function CategoryView({ categoryId, records, onBack, onAdd, onOpenRecord, onOpenKpassMonth, onEdit, onDelete, onUpdateRecord, onImportWorkout, quotesPaused = false }) {
+export default function CategoryView({ categoryId, records, onBack, onAdd, onOpenRecord, onOpenKpassMonth, onOpenWorkoutMonth, onEdit, onDelete, onUpdateRecord, onImportWorkout, quotesPaused = false }) {
   const category = CATEGORY_MAP[categoryId];
   const [showSearch, setShowSearch] = useState(false);
   const [filters, setFilters] = useState({ query: '', dateFrom: '', dateTo: '', minAmount: '', maxAmount: '', minRating: '' });
@@ -461,6 +462,8 @@ export default function CategoryView({ categoryId, records, onBack, onAdd, onOpe
         />
       ) : isKpass ? (
         <KpassMonthlyList records={categoryRecords} onOpenMonth={onOpenKpassMonth} />
+      ) : categoryId === 'workout' ? (
+        <WorkoutMonthlyList records={categoryRecords} onOpenMonth={onOpenWorkoutMonth} />
       ) : isAnnualLeave ? (
         <AnnualLeaveGrid records={categoryRecords} onOpenRecord={onOpenRecord} onEdit={onEdit} onDelete={onDelete} />
       ) : (

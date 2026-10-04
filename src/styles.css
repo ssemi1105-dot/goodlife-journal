@@ -5676,6 +5676,33 @@ select:focus {
 .tcx-import-status { color: var(--text-muted); }
 .tcx-import-error { color: var(--expense); }
 
+.workout-month-list { display: grid; gap: 10px; }
+.workout-month-card { width: 100%; min-width: 0; padding: 12px 14px; border: 1px solid var(--border); border-radius: 16px; background: var(--surface); color: var(--text); text-align: left; box-shadow: var(--shadow-card); transition: transform 130ms ease, box-shadow 130ms ease; -webkit-tap-highlight-color: transparent; }
+.workout-month-card:active { transform: translateY(2px); box-shadow: 0 1px 0 var(--card-base); }
+.workout-month-heading { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 12px; }
+.workout-month-heading > strong { font-size: 16px; }
+.workout-month-heading > span { color: var(--text-muted); font-size: 12px; }
+.workout-month-heading > span > span { margin-left: 8px; font-size: 18px; }
+.workout-month-totals { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.workout-month-totals > div { display: grid; align-content: start; gap: 5px; min-width: 0; }
+.workout-month-totals span { font-size: 11px; color: var(--text-muted); font-weight: 500; }
+.workout-month-totals strong { font-size: 14px; line-height: 1.5; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
+.workout-month-backdrop { z-index: 100; }
+.workout-month-modal.detail-modal { display: flex; flex-direction: column; width: min(520px, calc(100vw - 28px)); max-height: 78dvh; overflow: hidden; padding: 16px; background: var(--surface); }
+.workout-month-modal .modal-header { flex-shrink: 0; margin-bottom: 12px; }
+.workout-month-modal > .workout-month-totals { flex-shrink: 0; padding-bottom: 12px; border-bottom: 1px solid var(--border); }
+.workout-month-entries { min-height: 0; overflow-y: auto; overscroll-behavior: contain; touch-action: pan-y; }
+.workout-month-entry { display: grid; grid-template-columns: minmax(0, 1fr) minmax(60px, 28%) 10px; align-items: center; gap: 8px; width: 100%; padding: 12px 0; border: 0; border-bottom: 1px solid var(--border); border-radius: 0; background: transparent; color: var(--text); text-align: left; box-shadow: none; -webkit-tap-highlight-color: transparent; }
+.workout-month-entry:last-child { border-bottom: 0; }
+.workout-month-entry:active { background: var(--accent-soft); }
+.workout-month-card:focus-visible, .workout-month-entry:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.workout-entry-main { display: grid; gap: 4px; min-width: 0; }
+.workout-entry-main time { font-size: 12px; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+.workout-entry-main > strong { font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.workout-entry-main > span { font-size: 11px; line-height: 1.5; color: var(--text-muted); overflow-wrap: anywhere; }
+.workout-entry-distance { font-size: 16px; line-height: 1.5; text-align: right; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
+.workout-entry-arrow { color: var(--text-muted); }
+
 .workout-chart { min-width: 0; padding: 14px 0; border-block: 1px solid var(--border); margin-bottom: 12px; }
 .workout-chart h3 { margin: 0; font-size: 15px; }
 .workout-chart > header { display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 4px 8px; margin-bottom: 12px; }

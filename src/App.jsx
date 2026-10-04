@@ -4,6 +4,7 @@ import CategoryView from './components/CategoryView';
 import Dashboard from './components/Dashboard';
 import FavoriteCategoryNav from './components/FavoriteCategoryNav';
 import { KpassMonthModal } from './components/KpassRecords';
+import { WorkoutMonthModal } from './components/WorkoutRecords';
 import RecordDetailModal from './components/RecordDetailModal';
 import RecordModal from './components/RecordModal';
 import SettingsScreen from './components/SettingsScreen';
@@ -118,6 +119,7 @@ export default function App() {
   const [modalInitialData, setModalInitialData] = useState(null);
   const [viewingRecord, setViewingRecord] = useState(null);
   const [viewingKpassMonth, setViewingKpassMonth] = useState(null);
+  const [viewingWorkoutMonth, setViewingWorkoutMonth] = useState(null);
   const [showPicker, setShowPicker] = useState(false);
   const [filters, setFilters] = useState(EMPTY_FILTERS);
   const recordsRef = useRef(records);
@@ -142,6 +144,7 @@ export default function App() {
     setShowPicker(nextLayer === 'picker');
     setViewingRecord(nextLayer === 'record' ? targetRecord : null);
     setViewingKpassMonth(nextLayer === 'kpass-month' ? navigationState?.kpassMonth || null : null);
+    setViewingWorkoutMonth(nextLayer === 'workout-month' ? navigationState?.workoutMonth || null : null);
     setModalCategory(nextLayer === 'form' ? navigationState?.modalCategory || null : null);
     setEditingRecord(nextLayer === 'form' ? targetRecord : null);
     setModalInitialData(nextLayer === 'form' ? navigationState?.initialData || null : null);
@@ -157,6 +160,7 @@ export default function App() {
       recordId: navigationState.recordId || null,
       initialData: navigationState.initialData || null,
       kpassMonth: navigationState.kpassMonth || null,
+      workoutMonth: navigationState.workoutMonth || null,
     };
     const method = replace ? 'replaceState' : 'pushState';
     window.history[method](nextState, '', window.location.href);
@@ -180,7 +184,7 @@ export default function App() {
   }
 
   function navigateToView(nextView) {
-    if (view === nextView && !showPicker && !viewingRecord && !viewingKpassMonth && !modalCategory) return;
+    if (view === nextView && !showPicker && !viewingRecord && !viewingKpassMonth && !viewingWorkoutMonth && !modalCategory) return;
     setNavigationState({ view: nextView });
   }
 
@@ -418,6 +422,7 @@ export default function App() {
           onDelete={confirmDelete}
           onUpdateRecord={updateRecordData}
           onOpenKpassMonth={(month) => setNavigationState({ ...currentBaseNavigation(), layer: 'kpass-month', kpassMonth: month })}
+          onOpenWorkoutMonth={(month) => setNavigationState({ ...currentBaseNavigation(), layer: 'workout-month', workoutMonth: month })}
           quotesPaused={Boolean(modalCategory || viewingRecord)}
         />
       )}
@@ -479,6 +484,15 @@ export default function App() {
         <KpassMonthModal
           records={records}
           month={viewingKpassMonth}
+          onClose={() => navigateBack(currentBaseNavigation())}
+          onOpenRecord={openRecord}
+        />
+      )}
+
+      {viewingWorkoutMonth && (
+        <WorkoutMonthModal
+          records={records}
+          month={viewingWorkoutMonth}
           onClose={() => navigateBack(currentBaseNavigation())}
           onOpenRecord={openRecord}
         />

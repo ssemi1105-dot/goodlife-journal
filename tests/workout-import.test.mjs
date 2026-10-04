@@ -4,7 +4,7 @@ import { readFile } from 'node:fs/promises';
 import { createServer } from 'vite';
 import { activity, chartActivity, tcx, fakeDatabase, NS } from './helpers/tcxFixture.mjs';
 
-let server, parser, summary, storage, records, utils, categories, chartUtils;
+let server, parser, summary, storage, records, utils, categories, chartUtils, months;
 before(async () => {
   server = await createServer({ server: { middlewareMode: true }, appType: 'custom', logLevel: 'silent' });
   parser = await server.ssrLoadModule('/src/utils/tcxParser.js');
@@ -14,8 +14,35 @@ before(async () => {
   utils = await server.ssrLoadModule('/src/utils/recordUtils.js');
   categories = await server.ssrLoadModule('/src/data/categoryDefinitions.js');
   chartUtils = await server.ssrLoadModule('/src/utils/workoutChartData.js');
+  months = await server.ssrLoadModule('/src/utils/workoutMonths.js');
 });
 after(async () => { await server?.close(); });
+
+test('monthly workouts keep years separate, total only known metrics and preserve every original record', () => {
+  const entries = [
+    { id: 'a', category_id: 'workout', occurred_on: '2026-10-04', data: { date: '2026-09-30', distanceMeters: 7006, durationSeconds: 5354, caloriesKcal: 442 } },
+    { id: 'b', category_id: 'workout', data: { date: '2026-10-01', distanceMeters: '1000', durationSeconds: '600', caloriesKcal: '50' } },
+    { id: 'c', category_id: 'workout', data: { startedAt: '2026-09-30T23:00:00Z', distanceMeters: 0, durationSeconds: 0, caloriesKcal: 0 } },
+    { id: 'old', category_id: 'workout', data: { date: '2025-10-01', distanceMeters: 1000 } },
+    { id: 'unknown', category_id: 'workout', data: { date: '2026-02-30', durationSeconds: '' } },
+    { id: 'other', category_id: 'exercise', data: { date: '2026-10-04', distanceMeters: 99999 } },
+  ];
+  const original = structuredClone(entries);
+  const groups = months.groupWorkoutsByMonth(entries);
+  assert.deepEqual(groups.map(group => group.month), ['2026-10', '2025-10', 'unknown']);
+  assert.deepEqual(groups[0].records.map(record => record.id), ['a', 'c', 'b']);
+  assert.equal(groups[0].count, 3);
+  assert.equal(groups[0].distanceMeters, 8006);
+  assert.equal(groups[0].durationSeconds, 5954);
+  assert.equal(groups[0].caloriesKcal, 492);
+  assert.equal(groups[2].durationSeconds, null, 'missing measurements are not presented as zero');
+  assert.equal(groups[1].durationSeconds, null);
+  assert.equal(months.summarizeWorkouts([]).durationSeconds, 0);
+  assert.equal(months.summarizeWorkouts([entries[0], entries[4]]).measured.durationSeconds, 1);
+  assert.deepEqual(entries, original);
+  assert.equal(months.formatWorkoutMonth('2026-10'), '2026년 10월');
+  assert.equal(months.formatWorkoutMonth('unknown'), '날짜 미지정');
+});
 async function parse(xml, chunkSize = 137) {
   const reader = parser.createTcxSummaryParser();
   for (let i = 0; i < xml.length; i += chunkSize) reader.write(xml.slice(i, i + chunkSize));
