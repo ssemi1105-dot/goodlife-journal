@@ -47,7 +47,7 @@ export default function JapaneseTutor({ userId, onBack }) {
     const target = area.querySelector('.tutor-turn:last-of-type .japanese-feedback');
     if (target) area.scrollTop += target.getBoundingClientRect().top - area.getBoundingClientRect().top;
   }, [tutor.turns.length, tutor.busy, tutor.session?.id, tab, choosing]);
-  const locked = tutor.busy || !!tutor.pending || speech.listening;
+  const locked = tutor.busy || !!tutor.pending || speech.busy;
   const showTopics = choosing || !tutor.session;
   const speak = text => speech.speak(text, speed);
   function practice(phrase) {
@@ -78,7 +78,8 @@ export default function JapaneseTutor({ userId, onBack }) {
         <button type="button" className="tutor-icon" title="대화 삭제" aria-label="일본어 대화 삭제" disabled={locked || !tutor.session} onClick={async () => { if (window.confirm('이 일본어 대화와 복습 기록을 삭제할까요? 사용량은 유지됩니다.')) { speech.stop(); await tutor.deleteSession(tutor.session.id); close(); } }}>×</button></div>}
     </TutorHeader>
     {tutor.loading && <p className="tutor-state" role="status">학습 기록 불러오는 중…</p>}
-    {(tutor.error || speech.error) && <div className="tutor-error" role="alert">{tutor.error || speech.error}<button type="button" disabled={tutor.busy} onClick={() => { speech.clearError(); tutor.reload(); }}>다시 확인</button></div>}
+    {tutor.error && <div className="tutor-error" role="alert"><span>{tutor.error}</span><button type="button" disabled={locked} onClick={() => tutor.reload()}>다시 확인</button></div>}
+    {speech.error && <div className="tutor-error" role="alert"><span>{speech.error}</span><button type="button" disabled={locked || !speech.supported} onClick={() => speech.start(language)}>다시 말하기</button><button type="button" onClick={speech.clearError}>닫기</button></div>}
     {!tutor.data && !tutor.loading && <div className="tutor-state"><h2>아직 연결되지 않았어요</h2><p>관리자에게 일본어 튜터 사용 허가를 요청해 주세요. 최초 사용 시 서버 설정도 필요합니다.</p></div>}
     {tutor.data && tab === 'chat' && <section className="tutor-chat" role="tabpanel" aria-label="일본어 말하기">
       <div className="tutor-conversation" ref={scroll} aria-label="일본어 대화 내역" aria-busy={tutor.busy}>
@@ -87,7 +88,7 @@ export default function JapaneseTutor({ userId, onBack }) {
           <p className="tutor-note">한글 발음은 근사치이며 장음·억양을 완전히 나타내지 못합니다. 일본어 음성도 함께 확인하세요.</p>
         </section> : <>
           {tutor.session?.opening && <section className="tutor-opening" aria-label="일본어 시작 질문"><span className="tutor-speaker">HARU · {tutor.session.title}</span>
-            <JapanesePhrase phrase={tutor.session.opening.question_reading} onSpeak={speak} label="첫 질문" disabled={speech.listening} />
+            <JapanesePhrase phrase={tutor.session.opening.question_reading} onSpeak={speak} label="첫 질문" disabled={speech.busy} />
             <details className="japanese-example"><summary>대답이 막힐 때</summary><JapanesePhrase phrase={tutor.session.opening.example} label="대답 예시" onSpeak={speak} onPractice={practice} disabled={locked} /></details>
           </section>}
           {tutor.turns.map(turn => <article className="tutor-turn" key={turn.id}>
@@ -100,9 +101,9 @@ export default function JapaneseTutor({ userId, onBack }) {
         {tutor.busy && <p className="tutor-note" role="status">처리 중…</p>}
       </div>
       <TutorComposer id="japanese-message" inputRef={input} draft={draft} onDraftChange={setDraft} onSubmit={send} hidden={showTopics}
-        busy={tutor.busy} pending={!!tutor.pending} listening={speech.listening} supported={speech.supported} onVoice={() => speech.start(language)} onStop={speech.stop}
+        busy={tutor.busy} pending={!!tutor.pending} listening={speech.listening} voiceStarting={speech.starting} voiceStopping={speech.stopping} supported={speech.supported} onVoice={() => speech.start(language)} onStop={speech.stop}
         language={language} onLanguageChange={setLanguage} languages={[[ 'ja-JP', '일본어' ], ['ko-KR', '한국어']]} languageLabel="말하기 언어" submitLabel="일본어 메시지 제출하기" placeholder="일본어 또는 한국어로 답해 보세요">
-        {practicePhrase && <div className="japanese-practice-target"><div><span>따라 말하기</span><button type="button" className="tutor-icon" title="연습 닫기" aria-label="연습 닫기" disabled={speech.listening} onClick={() => setPracticePhrase(null)}>×</button></div><p lang="ja">{practicePhrase.sentence}</p><small>{practicePhrase.pronunciation_ko}</small></div>}
+        {practicePhrase && <div className="japanese-practice-target"><div><span>따라 말하기</span><button type="button" className="tutor-icon" title="연습 닫기" aria-label="연습 닫기" disabled={speech.busy} onClick={() => setPracticePhrase(null)}>×</button></div><p lang="ja">{practicePhrase.sentence}</p><small>{practicePhrase.pronunciation_ko}</small></div>}
         {tutor.pending && <div className="tutor-pending">이전 요청 확인이 필요합니다.<button type="button" disabled={tutor.busy} onClick={async () => { const text = tutor.pending.content; if (await tutor.resolvePending()) clearSubmitted(text); }}>저장 상태 확인</button></div>}
       </TutorComposer>
     </section>}

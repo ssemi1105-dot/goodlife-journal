@@ -113,3 +113,28 @@ git diff --check
 브라우저 검증은 Playwright와 Edge가 있는 환경에서 `node tests/browser-smoke.mjs`로 실행합니다. 필요하면 `PLAYWRIGHT_PACKAGE` 환경변수에 설치된 Playwright 모듈 경로를 지정합니다. 테스트가 Vite 서버를 켰다가 종료하고 결과를 Git 제외 경로 `test-results/`에 저장합니다. 외부 API 요청을 모두 가로채므로 운영 데이터는 사용/수정하지 않습니다. Android 실기기의 키보드 검증은 별도로 필요합니다.
 
 날씨 API의 최근 과거 날짜 조회는 Open-Meteo 공식 문서(https://open-meteo.com/en/docs)의 날짜 범위를 사용합니다. 7일 이전은 Archive API를 사용합니다.
+
+## 로컬 작업 폴더 정리 (2026-10-19)
+
+앱 동작과 운영 데이터는 변경하지 않고, 다시 생성할 수 있는 로컬 산출물만 정리했습니다.
+
+- `dist/`: 빌드 검증 후 삭제. `npm run build`로 다시 생성됩니다. Vercel 배포는 자체 빌드합니다.
+- `test-results/*.png`: 자동 검증용 화면 이미지 삭제. 해당 브라우저 테스트를 실행하면 다시 생성됩니다.
+- `node_modules/.vite/deps_temp_*`: 종료된 테스트가 남긴 임시 의존성 캐시 삭제. 검증 후 개발 서버를 다시 실행해 필요한 `deps/` 캐시만 재생성했습니다.
+- 사용 중이지 않은 로그 파일 삭제. 실행 중인 미리보기의 로그는 보존했습니다.
+- 상위 폴더의 `.tutor-test-runtime/node_modules/`: 고급 튜터 DB/브라우저 검증용 PGlite 설치본만 삭제. 앱 실행과 `npm test`, `npm run build`에는 필요하지 않습니다.
+
+앱의 `node_modules`, 소스, 테스트 코드, SQL, `.env`, `.git`, 이미지, 기존 ZIP 백업, 이전 앱 및 지도 원본은 보존했습니다. 캐시와 테스트 산출물은 이미 `.gitignore` 대상이므로 정리만으로 운영 사이트나 Supabase 용량이 줄어드는 것은 아닙니다.
+
+### 고급 튜터 DB 검증 도구 재설치
+
+프로젝트 폴더에서 아래 순서로 실행합니다. 마지막으로 검증한 PGlite 버전은 `0.5.10`입니다.
+
+```powershell
+cd "C:\Users\ssemi\Documents\Goodlife\goodlife-journal"
+npm install --prefix "..\.tutor-test-runtime" --no-save --package-lock=false --ignore-scripts @electric-sql/pglite@0.5.10
+$env:PGLITE_PACKAGE = (Resolve-Path "..\.tutor-test-runtime\node_modules\@electric-sql\pglite").Path
+node --test tests/tutor-database.test.mjs tests/japanese-tutor-database.test.mjs
+```
+
+브라우저 테스트에는 별도로 Playwright와 Edge가 필요합니다. 기존 `PLAYWRIGHT_PACKAGE` 경로 설정을 사용합니다. 일반 개발을 계속하려면 앱 폴더에서 `npm run dev`만 실행하면 됩니다.

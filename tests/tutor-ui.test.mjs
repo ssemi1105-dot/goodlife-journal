@@ -95,4 +95,10 @@ test('shared tutor composer labels both actions and requires voice confirmation 
   assert.match(unsupported, /음성 입력 미지원/); assert.match(unsupported, /class="tutor-voice-button" disabled=""/);
   assert.doesNotMatch(unsupported, /<textarea[^>]*disabled/);
   assert.doesNotMatch(unsupported, /type="submit"[^>]*disabled/);
+  const starting = renderToStaticMarkup(createElement(Composer, { ...props, listening: false, voiceStarting: true }));
+  assert.match(starting, /준비 취소/); assert.match(starting, /마이크 연결 중/);
+  assert.match(starting, /aria-pressed="false"/); assert.doesNotMatch(starting, /말하기 종료/);
+  assert.match(starting, /type="submit"[^>]*disabled/);
+  const stopping = renderToStaticMarkup(createElement(Composer, { ...props, voiceStopping: true }));
+  assert.match(stopping, /인식 마무리/); assert.match(stopping, /class="tutor-voice-button" disabled=""/);
 });
