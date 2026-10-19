@@ -195,6 +195,15 @@ export default function Dashboard({
           <button className="primary-button compact" onClick={(event) => onAdd(null, null, event.currentTarget)}>기록 추가</button>
         </div>
         <div className="category-grid">
+          {onOpenTutor && (
+            <button type="button" className="category-tile tutor-category-tile" style={{ '--category-hue': '250' }} onClick={onOpenTutor} aria-label="영어 튜터 열기">
+              <span className="tile-icon" aria-hidden="true">📖</span>
+              <span className="category-tile-copy">
+                <strong>영어 튜터</strong>
+                <small>Mina</small>
+              </span>
+            </button>
+          )}
           {visibleCategories.map(({ category, count }) => (
             <button className="category-tile" style={getCategoryThemeStyle(category.id)} key={category.id} onClick={(event) => onOpenCategory(category.id, event.currentTarget)}>
               <span className="tile-icon">{CATEGORY_ICONS[category.id]}</span>

@@ -60,14 +60,24 @@ const page = await context.newPage(); page.setDefaultTimeout(12000);
 page.on('pageerror', error => errors.push(error.message));
 await mkdir('test-results', { recursive: true });
 const releaseRateLimit = () => db.pg.exec('update tutor_usage set last_request_at=now()-interval \'10 seconds\'');
-const openTutor = async () => {
-  await page.getByRole('button', { name: /영어 튜터/ }).click();
+const openTutor = async (entry = 'category') => {
+  await (entry === 'category' ? page.getByRole('button', { name: '영어 튜터 열기', exact: true }) : page.locator('.tutor-launch-button')).click();
   await page.getByRole('tab', { name: '대화', exact: true }).waitFor();
   await page.waitForFunction(() => !document.querySelector('.tutor-state[role="status"]'));
 };
 try {
   await page.goto(server.resolvedUrls.local[0]);
   await page.getByText('VERSION 0.2.9', { exact: true }).waitFor();
+  assert.equal(await page.locator('.category-grid > button').first().getAttribute('aria-label'), '영어 튜터 열기');
+  assert.equal(calls, 0, 'showing the shortcut does not call Hive');
+  for (const width of [320, 390, 768, 1440]) {
+    await page.setViewportSize({ width, height: 844 });
+    await page.locator('.tutor-category-tile').scrollIntoViewIfNeeded();
+    assert.ok(await page.locator('.tutor-category-tile strong').evaluate(el => el.scrollWidth <= el.clientWidth && el.scrollHeight <= el.clientHeight), `tutor label fits ${width}`);
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false, `home overflow ${width}`);
+    await page.screenshot({ path: `test-results/tutor-category-${width}.png` });
+  }
+  await page.setViewportSize({ width: 390, height: 844 });
   await openTutor();
   await page.getByText('How was your day?', { exact: true }).waitFor();
   const input = page.getByRole('textbox', { name: /메시지/ });
@@ -78,7 +88,7 @@ try {
   await input.dispatchEvent('compositionend', { data: '오늘은 좋아요' });
   assert.equal(await input.inputValue(), '오늘은 좋아요');
   assert.ok(await original.evaluate(element => element === document.activeElement && element.isConnected));
-  await page.reload(); await openTutor();
+  await page.reload(); await openTutor('header');
   await input.waitFor(); assert.equal(await input.inputValue(), '오늘은 좋아요');
   await input.fill('I ate apple. 오늘은 좋아요'); await send.click();
   await page.locator('.tutor-correction p').waitFor();
@@ -153,7 +163,7 @@ try {
   assert.equal((await db.pg.query('select count(*)::int as n from tutor_turns where user_id=$1', [USER_A])).rows[0].n, 0);
   assert.equal((await db.pg.query('select sum(requests)::int as n from tutor_usage where user_id=$1', [USER_A])).rows[0].n, used);
   await db.pg.query('update tutor_access set enabled=false where user_id=$1', [USER_A]);
-  await page.reload(); await page.getByRole('button', { name: /영어 튜터/ }).click(); await page.getByText('아직 연결되지 않았어요', { exact: true }).waitFor();
+  await page.reload(); await page.getByRole('button', { name: '영어 튜터 열기', exact: true }).click(); await page.getByText('아직 연결되지 않았어요', { exact: true }).waitFor();
   assert.equal(await input.count(), 0);
 
   // The admin can manage access with their own tutor OFF, but cannot read another learner's history.
@@ -176,7 +186,7 @@ try {
   await learner.getByRole('navigation').getByRole('button', { name: '설정', exact: true }).click();
   assert.equal(await learner.getByRole('button', { name: /회원관리/ }).count(), 0);
   await learner.getByRole('navigation').getByRole('button', { name: '홈', exact: true }).click();
-  await learner.getByRole('button', { name: /영어 튜터/ }).click();
+  await learner.getByRole('button', { name: '영어 튜터 열기', exact: true }).click();
   await learner.getByText('아직 연결되지 않았어요', { exact: true }).waitFor();
   await learnerSwitch.click();
   await page.waitForFunction(() => document.querySelectorAll('.admin-user-list article [role="switch"]')[1].getAttribute('aria-checked') === 'true');
