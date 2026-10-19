@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { buildTutorMessages, cleanTutorFeedback, cleanPhrase, learningSummary } from '../supabase/functions/japanese-tutor/core.mjs';
 import { JAPANESE_TOPICS, LEVELS, makeTopicOpening } from '../supabase/functions/japanese-tutor/topics.mjs';
 import { japaneseFeedback } from './helpers/japaneseFeedback.mjs';
+import { TUTOR_PERSONA } from '../supabase/functions/japanese-tutor/persona.mjs';
 
 test('all ten Japanese topics have usable Japanese, kana, Hangul and meaning at every level', () => {
   assert.equal(JAPANESE_TOPICS.length, 10);
@@ -99,4 +100,38 @@ test('Japanese tips remain compatible, bounded and absent for Japanese-only or u
   assert.throws(() => cleanTutorFeedback({ ...raw, expression_tips: Array(3).fill(raw.expression_tips[0]) }, { content, inputMode: 'text' }), /INVALID_MODEL_OUTPUT/);
   assert.deepEqual(cleanTutorFeedback({ ...raw, expression_tips: [{ ...raw.expression_tips[0], source: '없는 원문' }] }, { content, inputMode: 'text' }).expression_tips, []);
   assert.deepEqual(cleanTutorFeedback(raw, { content: 'コーヒーをください。', inputMode: 'text' }).expression_tips, []);
+});
+
+test('Haru persona reaches every level and topic with short optional practice and all reading safeguards', () => {
+  for (const level of LEVELS) for (const topic of [null, ...JAPANESE_TOPICS]) {
+    const session = { title: topic?.label || '일상', topic_id: topic?.id, opening: topic && makeTopicOpening(topic.id, level), summary: '가'.repeat(600) };
+    const messages = buildTutorMessages({ profile: { level }, session, turns: [], content: '나'.repeat(1000), inputMode: 'voice' });
+    const system = messages[0].content;
+    assert.ok(system.includes(TUTOR_PERSONA));
+    assert.match(system, /adult-to-adult speaking coach/);
+    assert.match(system, /without a new question in the same turn/);
+    assert.match(system, /continue without demanding another retry/);
+    assert.match(system, /follow that intent instead/);
+    assert.match(system, /approximate Korean phonetic/);
+    assert.match(system, /no audio is provided/);
+    assert.match(system, /Do not automatically raise level/);
+    assert.equal(messages.filter(message => message.role === 'system').length, 1);
+    assert.equal(messages.at(-1).content, '나'.repeat(1000));
+    assert.ok(Buffer.byteLength(JSON.stringify(messages)) <= 18000);
+  }
+});
+
+test('Haru receives the actual practice phrase and unchanged inputs for retry, skipping, explanation and goodbye', () => {
+  const reference = 'コーヒーをください。';
+  const turns = [{ content: '커피 주세요', feedback: { natural: { sentence: reference }, tutor_reply: '一度言ってみませんか。' } }];
+  for (const content of [reference, 'コーヒーをお願いします。', '설명해줘', '다음으로 넘어가자', 'さようなら。']) {
+    const messages = buildTutorMessages({ profile: { level: 'starter' }, session: { title: '카페', unrelatedJournal: 'PRIVATE_JOURNAL' }, turns, content, inputMode: 'text' });
+    const prior = JSON.parse(messages.at(-2).content);
+    assert.equal(prior.reference, reference);
+    assert.equal(prior.reply, turns[0].feedback.tutor_reply);
+    assert.equal(messages.at(-1).content, content);
+    assert.match(messages[0].content, /accept a correct equivalent rather than exact copying/);
+    assert.match(messages[0].content, /Never claim to hear pronunciation, remember another session/);
+    assert.ok(!JSON.stringify(messages).includes('PRIVATE_JOURNAL'));
+  }
 });

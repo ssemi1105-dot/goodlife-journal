@@ -5,6 +5,7 @@ import { createTutorHandler, readSmallJson } from '../supabase/functions/english
 import { feedbackFor } from './helpers/tutorDatabase.mjs';
 import { HIVE_MODEL, hiveConfiguration, readHiveCompletion, requestHiveCompletion } from '../supabase/functions/english-tutor/hiveProvider.mjs';
 import { TUTOR_TOPICS, getTutorTopic, makeTopicOpening } from '../supabase/functions/english-tutor/topics.mjs';
+import { TUTOR_PERSONA } from '../supabase/functions/english-tutor/persona.mjs';
 
 test('Hive uses only V3 secret/approved endpoints and documented model parameters', async () => {
   assert.throws(() => hiveConfiguration(name => name === 'DEEPSEEK_API_KEY' ? 'wrong-provider-key' : undefined), /API_KEY_MISSING/);
@@ -201,4 +202,37 @@ test('expression coaching rejects invented mappings, bounds payloads, and suppre
   const two = { ...raw, expression_tips: [raw.expression_tips[0], second] };
   assert.equal(cleanTutorFeedback(two, { ...options, content }).expression_tips.length, 1);
   assert.equal(cleanTutorFeedback(two, { ...options, content, level: 'B1' }).expression_tips.length, 2);
+});
+
+test('Mina persona reaches every level and topic without overriding coaching, safety or output bounds', () => {
+  for (const level of ['A2', 'B1', 'B1+']) for (const topic of [null, ...TUTOR_TOPICS]) {
+    const session = { title: topic?.label || '일상', topic_id: topic?.id, opening: topic && makeTopicOpening(topic.id, level), summary: '가'.repeat(600) };
+    const messages = buildTutorMessages({ profile: { level, improvements: false }, session, turns: [], content: '나'.repeat(1000), inputMode: 'voice' });
+    const system = messages[0].content;
+    assert.ok(system.includes(TUTOR_PERSONA));
+    assert.match(system, /adult-to-adult conversation coach/);
+    assert.match(system, /A retry invitation replaces the new question/);
+    assert.match(system, /continue without demanding another retry/);
+    assert.match(system, /follow that intent instead/);
+    assert.match(system, /Korean expression coaching is ALWAYS enabled/);
+    assert.match(system, /observed_level=null and confidence=low/);
+    assert.equal(messages.filter(message => message.role === 'system').length, 1);
+    assert.equal(messages.at(-1).content, '나'.repeat(1000));
+    assert.ok(Buffer.byteLength(JSON.stringify(messages)) <= 18000);
+  }
+});
+
+test('Mina receives the actual retry context and learner choice, not fabricated long-term memory', () => {
+  const reference = 'I was really busy at work today.';
+  const turns = [{ content: '오늘 회사에서 너무 바빴어.', feedback: { english_version: reference, tutor_reply: 'Would you like to try that sentence once?' } }];
+  for (const content of [reference, 'I was very busy at work today.', '설명해줘', '다음으로 넘어가자', 'Goodbye.']) {
+    const messages = buildTutorMessages({ profile: { level: 'A2' }, session: { title: '일상', summary: '', unrelatedJournal: 'PRIVATE_JOURNAL' }, turns, content, inputMode: 'text' });
+    const prior = JSON.parse(messages.at(-2).content);
+    assert.equal(prior.practice_reference, reference);
+    assert.equal(prior.tutor_reply, turns[0].feedback.tutor_reply);
+    assert.equal(messages.at(-1).content, content);
+    assert.match(messages[0].content, /Accept a correct equivalent/);
+    assert.match(messages[0].content, /Never claim to hear pronunciation, remember another session/);
+    assert.ok(!JSON.stringify(messages).includes('PRIVATE_JOURNAL'));
+  }
 });
