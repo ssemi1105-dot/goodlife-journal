@@ -1,5 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { SUPABASE_ANON_KEY, SUPABASE_URL, supabase } from '../lib/supabaseClient';
+import { callTutor } from '../services/tutorClient';
+import CompactToggle from './ui/CompactToggle';
 
 function describeAdminError(status, payload, error) {
   const serverMessage = payload?.error || error?.message || '';
@@ -66,6 +68,37 @@ export default function AdminUserList({ enabled, embedded = false }) {
   const [users, setUsers] = useState([]);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [tutorAccess, setTutorAccess] = useState(null), [tutorError, setTutorError] = useState('');
+  const [savingIds, setSavingIds] = useState([]), [accessLoading, setAccessLoading] = useState(false);
+  const active = useRef(false), saving = useRef(new Set()), accessLoad = useRef(0);
+
+  async function loadTutorAccess() {
+    const ticket = ++accessLoad.current;
+    setAccessLoading(true); setTutorError('');
+    try {
+      const result = await callTutor('admin-access-list');
+      if (active.current && ticket === accessLoad.current) setTutorAccess(Object.fromEntries(result.access.map(item => [item.user_id, item])));
+    } catch (err) { if (active.current && ticket === accessLoad.current) setTutorError(err.message); }
+    finally { if (active.current && ticket === accessLoad.current) setAccessLoading(false); }
+  }
+
+  async function setTutorPermission(userId, nextEnabled) {
+    if (saving.current.size || accessLoading) return;
+    saving.current.add(userId); setSavingIds([...saving.current]); setTutorError('');
+    try {
+      const result = await callTutor('admin-set-access', { targetUserId: userId, enabled: nextEnabled });
+      if (active.current) setTutorAccess(current => ({ ...current, [userId]: result.access }));
+    } catch (err) {
+      // A lost response may have saved the change. Read authoritative access, without repeating the write.
+      if (active.current) { await loadTutorAccess(); if (active.current) setTutorError(`${err.message} 현재 상태를 다시 확인해 주세요.`); }
+    } finally { saving.current.delete(userId); if (active.current) setSavingIds([...saving.current]); }
+  }
+
+  useEffect(() => {
+    active.current = enabled;
+    if (enabled && supabase) loadTutorAccess();
+    return () => { active.current = false; accessLoad.current++; };
+  }, [enabled]);
 
   useEffect(() => {
     if (!enabled || !supabase) return undefined;
@@ -95,6 +128,8 @@ export default function AdminUserList({ enabled, embedded = false }) {
     <>
       {loading && <p className="muted">회원 목록을 확인하는 중입니다.</p>}
       {error && <p className="form-error">{error}</p>}
+      {tutorError && <p className="form-error" role="alert">{tutorError} <button type="button" className="secondary-button compact" disabled={accessLoading || !!savingIds.length} onClick={loadTutorAccess}>권한 다시 확인</button></p>}
+      {accessLoading && <p className="muted" role="status">튜터 사용 권한 확인 중</p>}
 
       {!loading && !error && users.length === 0 && (
         <p className="empty-text">표시할 회원이 아직 없습니다.</p>
@@ -108,6 +143,12 @@ export default function AdminUserList({ enabled, embedded = false }) {
             <small>
               {user.role || 'member'} · {user.createdAt ? new Date(user.createdAt).toLocaleDateString('ko-KR') : '가입일 미상'}
             </small>
+            <div className="admin-tutor-access">
+              <CompactToggle label="영어 튜터" checked={tutorAccess?.[user.id]?.enabled === true}
+                disabled={!tutorAccess || accessLoading || !!savingIds.length}
+                onChange={value => setTutorPermission(user.id, value)} />
+              <small role="status">{savingIds.includes(user.id) ? '저장 중' : !tutorAccess ? '연결 필요' : tutorAccess[user.id]?.enabled ? `허용 · 하루 ${tutorAccess[user.id].daily_limit}회` : '사용 안 함'}</small>
+            </div>
           </article>
         ))}
       </div>

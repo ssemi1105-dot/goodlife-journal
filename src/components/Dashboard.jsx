@@ -77,6 +77,7 @@ export default function Dashboard({
   onOpenRecord,
   onEdit,
   onDelete,
+  onOpenTutor,
 }) {
   const [showSearch, setShowSearch] = useState(false);
   const [periodIndex, setPeriodIndex] = useState(1);
@@ -150,6 +151,8 @@ export default function Dashboard({
           </button>
         </div>
       </section>
+
+      {onOpenTutor && <div className="tutor-entry-bar"><button type="button" className="tutor-launch-button" onClick={onOpenTutor}>영어 튜터 <span aria-hidden="true">↗</span></button></div>}
 
       <section className="section-block quick-record-section">
         <div className="section-title">

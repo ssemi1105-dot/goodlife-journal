@@ -420,7 +420,7 @@ export default function SettingsScreen({
           onToggle={toggleSettingsSection}
           className="admin-panel"
         >
-          <AdminUserList enabled={isOwner} embedded />
+          <AdminUserList key={userId} enabled={isOwner} embedded />
         </SettingsSection>
       )}
 

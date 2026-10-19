@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import AuthScreen from './components/AuthScreen';
 import CategoryView from './components/CategoryView';
 import Dashboard from './components/Dashboard';
@@ -17,6 +17,7 @@ import { deriveRecordColumns, getInvestmentAssetKey, validateInvestmentLedger } 
 
 const EMPTY_FILTERS = { query: '', dateFrom: '', dateTo: '', minAmount: '', maxAmount: '', minRating: '' };
 const APP_HISTORY_KEY = 'goodlifeNavigation';
+const EnglishTutor = lazy(() => import('./components/EnglishTutor'));
 
 const REMINDER_DEFINITIONS = [
   {
@@ -131,7 +132,7 @@ export default function App() {
   }, [records]);
 
   function applyNavigationState(navigationState) {
-    const nextView = ['home', 'category', 'settings'].includes(navigationState?.view)
+    const nextView = ['home', 'category', 'settings', 'tutor'].includes(navigationState?.view)
       ? navigationState.view
       : 'home';
     const nextLayer = navigationState?.layer || '';
@@ -398,6 +399,7 @@ export default function App() {
           onOpenRecord={openRecord}
           onEdit={openEdit}
           onDelete={confirmDelete}
+          onOpenTutor={() => navigateToView('tutor')}
         />
       )}
 
@@ -441,6 +443,12 @@ export default function App() {
           onBackfillWeather={backfillMissingWeather}
           onExportRecords={exportRecords}
         />
+      )}
+
+      {view === 'tutor' && (
+        <Suspense fallback={<main className="screen" role="status">영어 튜터 불러오는 중…</main>}>
+          <EnglishTutor key={auth.userId} userId={auth.userId} onBack={() => navigateBack({ view: 'home' })} />
+        </Suspense>
       )}
 
       {recordsLoading && <div className="sync-indicator">동기화 중</div>}

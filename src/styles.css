@@ -5676,6 +5676,11 @@ select:focus {
 .tcx-import-status { color: var(--text-muted); }
 .tcx-import-error { color: var(--expense); }
 
+.tutor-entry-bar { display: flex; justify-content: flex-end; margin-top: 8px; }
+.admin-tutor-access { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; padding-top: 8px; }
+.admin-tutor-access small { color: var(--text-muted); font-size: 11px; }
+.tutor-launch-button { display: inline-flex; align-items: center; gap: 8px; border: 0; padding: 8px 4px; background: transparent; box-shadow: none; color: var(--accent); font-size: 13px; font-weight: 700; }
+
 .workout-month-list { display: grid; gap: 10px; }
 .workout-month-card { width: 100%; min-width: 0; padding: 12px 14px; border: 1px solid var(--border); border-radius: 16px; background: var(--surface); color: var(--text); text-align: left; box-shadow: var(--shadow-card); transition: transform 130ms ease, box-shadow 130ms ease; -webkit-tap-highlight-color: transparent; }
 .workout-month-card:active { transform: translateY(2px); box-shadow: 0 1px 0 var(--card-base); }
