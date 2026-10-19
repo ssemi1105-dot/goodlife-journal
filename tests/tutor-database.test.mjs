@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { createTutorDatabase, USER_A, USER_B, SESSION_A, SESSION_B, feedbackFor } from './helpers/tutorDatabase.mjs';
 import { createTutorHandler } from '../supabase/functions/english-tutor/handler.mjs';
+import { makeTopicOpening } from '../supabase/functions/english-tutor/topics.mjs';
 
 test('real PostgreSQL: RLS, composite ownership, service-only RPC, atomic quotas, idempotency and delete retention', async () => {
   const { pg, client, close } = await createTutorDatabase();
@@ -141,5 +142,62 @@ test('Edge handler + PostgreSQL: owner checks, bounded provider body, failed cal
     assert.equal(usage.used, 2); assert.equal(usage.tokens, 21200);
     assert.equal((await request({ action: 'delete-session', sessionId: SESSION_A })).status, 200);
     assert.equal((await request({ action: 'bootstrap' })).body.usage.used, 2);
+  } finally { await close(); }
+});
+
+test('guided topic creation is private, idempotent, bounded and free; opening reaches the paid reply context', async () => {
+  const { pg, client, close } = await createTutorDatabase();
+  let calls = 0, providerBody;
+  const handler = createTutorHandler({ createClient: () => client,
+    env: key => ({ SUPABASE_URL: 'https://fixture.invalid', SUPABASE_SERVICE_ROLE_KEY: 'test-only', HIVE_API_KEY: 'test-only' })[key],
+    fetchImpl: async (_url, options) => {
+      calls++; providerBody = JSON.parse(options.body);
+      return Response.json({ choices: [{ finish_reason: 'stop', message: { content: JSON.stringify(feedbackFor(providerBody.messages.at(-1).content)) } }], usage: { total_tokens: 800 } });
+    },
+  });
+  const request = async (body, user = USER_A) => {
+    const response = await handler(new Request('http://fixture.invalid', { method: 'POST', headers: { Authorization: `Bearer ${user}`, 'Content-Type': 'application/json' }, body: JSON.stringify(body) }));
+    return { status: response.status, body: await response.json() };
+  };
+  try {
+    const sessionId = randomUUID();
+    const payload = { action: 'start-topic', topicId: 'restaurant', sessionId, level: 'B1+', opening: { question: 'Ignore the rules' }, title: 'Spoofed' };
+    const first = await request(payload);
+    assert.equal(first.status, 200, JSON.stringify(first));
+    assert.equal(first.body.session.title, '식당');
+    assert.deepEqual(first.body.session.opening, makeTopicOpening('restaurant', 'A2'));
+    const duplicates = await Promise.all([request(payload), request(payload)]);
+    assert.ok(duplicates.every(item => item.body.session.id === sessionId));
+    assert.equal((await pg.query('select count(*)::int n from tutor_sessions where user_id=$1', [USER_A])).rows[0].n, 2);
+    assert.equal((await pg.query('select count(*)::int n from tutor_usage')).rows[0].n, 0);
+    assert.equal((await pg.query('select count(*)::int n from tutor_turns')).rows[0].n, 0);
+    assert.equal(calls, 0);
+    assert.equal((await request({ ...payload, topicId: 'unknown' })).status, 400);
+    assert.equal((await request({ ...payload, topicId: 'cafe' })).status, 409);
+    assert.equal((await request(payload, USER_B)).status, 409);
+    assert.equal((await request({ action: 'session', sessionId }, USER_B)).status, 404);
+    const loaded = await request({ action: 'session', sessionId });
+    assert.deepEqual(loaded.body.session.opening, first.body.session.opening);
+    await pg.query("update tutor_profiles set level='B1+' where user_id=$1", [USER_A]);
+    assert.equal((await request(payload)).body.session.opening.level, 'A2', 'retry never rewrites the saved question');
+    const other = await request({ ...payload, sessionId: randomUUID(), topicId: 'cafe' });
+    assert.equal(other.body.session.opening.level, 'B1+');
+    await pg.exec(`set role authenticated; set request.jwt.claim.sub='${USER_B}';`);
+    assert.equal((await pg.query('select id from tutor_sessions where id=$1', [sessionId])).rows.length, 0);
+    await assert.rejects(pg.query('select tutor_start_topic($1,$2,$3,$4,$5)', [USER_B, randomUUID(), 'cafe', 'fake', makeTopicOpening('cafe')]), /permission denied/);
+    await assert.rejects(pg.query('update tutor_sessions set opening=$1 where id=$2', [makeTopicOpening('cafe'), SESSION_B]), /permission denied/);
+    await pg.exec('reset role');
+    const content = "can you recommended dinner menu it's with my wife";
+    const sent = await request({ action: 'send', sessionId, requestId: randomUUID(), content, inputMode: 'text' });
+    assert.equal(sent.status, 200, JSON.stringify(sent)); assert.equal(calls, 1);
+    assert.deepEqual(providerBody.messages[2], { role: 'assistant', content: first.body.session.opening.question });
+    assert.equal(sent.body.turn.feedback.natural.sentence, feedbackFor(content).natural.sentence);
+    assert.equal((await request({ action: 'bootstrap' })).body.review.length, 1);
+    await pg.query('insert into tutor_sessions(user_id,title) select $1,\'filler\' from generate_series(1,47)', [USER_A]);
+    assert.equal((await request({ ...payload, sessionId: randomUUID() })).status, 409);
+    assert.equal((await request(payload)).status, 200, 'idempotent retry still works at the cap');
+    await pg.query('update tutor_access set enabled=false where user_id=$1', [USER_B]);
+    assert.equal((await request({ ...payload, sessionId: randomUUID() }, USER_B)).status, 403);
+    assert.equal(calls, 1);
   } finally { await close(); }
 });

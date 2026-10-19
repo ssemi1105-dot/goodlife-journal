@@ -24,19 +24,46 @@
 .tutor-answer { position: relative; padding-right: 40px; }
 .tutor-answer .tutor-icon { position: absolute; top: 16px; right: 0; width: 30px; height: 30px; font-size: 18px; }
 .tutor-feedback h3 { font-size: 11px; color: var(--text-muted); margin: 0; }
-.tutor-correction, .tutor-translation { margin-top: 12px; padding-top: 10px; border-top: 1px dashed var(--border); }
-.tutor-correction p { color: var(--accent-dark, var(--accent)); font-weight: 600; }
+.tutor-correction { margin-top: 12px; padding-top: 10px; border-top: 1px dashed var(--border); }
+.tutor-correction li p { color: var(--text-muted); font-size: 12px; font-weight: 500; }
 .tutor-correction ul { margin: 8px 0 0; padding: 0; list-style: none; }
 .tutor-correction li { margin-top: 6px; font-size: 12px; line-height: 1.6; overflow-wrap: anywhere; }
-.tutor-correction li span { display: inline-block; padding: 1px 6px; margin-right: 4px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); font-size: 10px; }
+.tutor-correction .tutor-error-type { display: inline-block; padding: 1px 6px; margin-right: 4px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); font-size: 10px; }
+.tutor-correction-pair { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; margin-top: 4px; font-size: 13px; }
+.tutor-correction-pair del { color: var(--text-muted); }
+.tutor-correction-pair strong { color: var(--accent-dark, var(--accent)); }
+.tutor-correction details summary { padding-top: 8px; font-size: 12px; cursor: pointer; color: var(--text-muted); }
+.tutor-expression { padding: 12px; border-radius: 8px; background: var(--surface); border: 1px solid var(--border); }
+.tutor-expression > p { font-size: 16px; font-weight: 600; color: var(--text); }
+.tutor-expression-note { margin-top: 8px; font-size: 12px; line-height: 1.6; color: var(--text-muted); overflow-wrap: anywhere; }
+.tutor-expression-note > span { font-weight: 700; color: var(--accent); }
+.tutor-expression-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 10px; }
+.tutor-expression-actions > button:not(.tutor-icon) { min-height: 36px; border: 1px solid var(--border); border-radius: 8px; background: transparent; color: var(--accent); padding: 6px 10px; font-size: 12px; box-shadow: none; }
+.tutor-feedback > .tutor-answer { margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--border); }
+.tutor-feedback > .tutor-answer:only-child { margin-top: 0; padding-top: 0; border-top: 0; }
 .tutor-improvements { margin-top: 12px; font-size: 12px; }
 .tutor-improvements summary { cursor: pointer; color: var(--text-muted); padding: 4px 0; }
 .tutor-improvements small { color: var(--text-muted); }
 .tutor-welcome { padding: 28px 4px; }
 .tutor-welcome h2 { margin: 8px 0 20px; font-size: 24px; }
-.tutor-topics { display: flex; flex-wrap: wrap; gap: 8px; }
-.tutor-topics button { border: 1px solid var(--border); border-radius: 999px; padding: 8px 12px; background: var(--surface); color: var(--text); font-size: 12px; box-shadow: none; }
+.tutor-topic-picker { padding: 12px 0; }
+.tutor-topic-picker header { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 12px; }
+.tutor-topic-picker h2 { font-size: 17px; line-height: 1.4; margin: 0; }
+.tutor-topic-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.tutor-topic-grid button { display: flex; flex-direction: column; justify-content: center; gap: 5px; min-width: 0; min-height: 66px; padding: 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); color: var(--text); text-align: left; box-shadow: none; }
+.tutor-topic-grid button:active:not(:disabled) { background: var(--accent-soft); }
+.tutor-topic-grid strong { font-size: 14px; }
+.tutor-topic-grid span { font-size: 11px; color: var(--text-muted); overflow-wrap: anywhere; }
+.tutor-free-chat { margin-top: 12px; padding: 8px 12px; min-height: 36px; border: 1px solid var(--border); border-radius: 8px; background: transparent; color: var(--accent); font-size: 12px; box-shadow: none; }
+.tutor-opening { padding: 14px 0; border-bottom: 1px solid var(--border); }
+.tutor-opening-role { margin: 6px 0; font-size: 11px; line-height: 1.5; color: var(--text-muted); }
+.tutor-opening .tutor-answer p { margin: 8px 0 0; font-size: 16px; line-height: 1.6; overflow-wrap: anywhere; }
+.tutor-practice-target { margin-bottom: 8px; padding: 8px; background: var(--accent-soft); border-radius: 6px; }
+.tutor-practice-target > div { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 11px; color: var(--accent); }
+.tutor-practice-target p { margin: 4px 0 0; max-height: 64px; overflow-y: auto; overflow-wrap: anywhere; font-size: 13px; line-height: 1.5; }
+.tutor-practice-target .tutor-icon { width: 28px; height: 28px; background: transparent; border: 0; }
 .tutor-composer { flex-shrink: 0; padding-top: 10px; border-top: 1px solid var(--border); }
+.tutor-composer[hidden] { display: none; }
 .tutor-input-label { display: flex; justify-content: space-between; margin: 0 0 6px; color: var(--text-muted); font-size: 11px; }
 .tutor-input-row { display: flex; align-items: flex-end; gap: 8px; }
 .tutor-input-row textarea { flex: 1; min-width: 0; height: 70px; min-height: 70px; max-height: 120px; resize: vertical; margin: 0; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; color: var(--text); background: var(--surface); font-size: 16px; line-height: 1.45; }
@@ -59,10 +86,7 @@
 .tutor-review-heading span { font-size: 11px; color: var(--text-muted); }
 .tutor-review-item { margin-bottom: 12px; padding: 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); }
 .tutor-review-item > time { font-size: 10px; color: var(--text-muted); }
-.tutor-review-pair { display: grid; gap: 5px; margin: 10px 0; overflow-wrap: anywhere; }
-.tutor-review-pair del { font-size: 12px; color: var(--text-muted); }
-.tutor-review-pair strong { font-size: 16px; color: var(--accent); }
-.tutor-review-pair p { font-size: 12px; margin: 0; line-height: 1.6; }
+.tutor-review-item .tutor-expression { padding: 10px 0 0; border: 0; background: transparent; }
 .tutor-review-item > button { border: 1px solid var(--border); border-radius: 6px; padding: 7px 12px; background: transparent; color: var(--text); font-size: 12px; box-shadow: none; }
 .tutor-review-item.is-reviewed > button { background: var(--accent-soft); color: var(--accent); }
 .tutor-setting-section { padding: 18px 0; border-bottom: 1px solid var(--border); }
@@ -73,3 +97,10 @@
 .tutor-stat-row strong { font-size: 13px; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
 .tutor-recommendation { display: flex; gap: 12px; align-items: center; font-size: 12px; color: var(--accent); }
 @media (prefers-reduced-motion: reduce) { .tutor-screen *, .tutor-launch-button { transition: none !important; } }
+@media (max-height: 500px) {
+  .tutor-header { padding-bottom: 6px; }
+  .tutor-tabs button { padding-block: 6px; }
+  .tutor-session-bar { padding-block: 6px; }
+  .tutor-practice-target { max-height: 64px; overflow-y: auto; }
+  .tutor-input-row textarea { height: 54px; min-height: 54px; }
+}

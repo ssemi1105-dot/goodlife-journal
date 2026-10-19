@@ -8,6 +8,7 @@ export function useEnglishTutor(userId) {
   const [data, setData] = useState(null), [session, setSession] = useState(null), [turns, setTurns] = useState([]);
   const [loading, setLoading] = useState(true), [busy, setBusy] = useState(false), [error, setError] = useState('');
   const pendingKey = `goodlife-tutor-pending-${userId}`, lastKey = `goodlife-tutor-session-${userId}`;
+  const topicKey = `goodlife-tutor-topic-request-${userId}`;
   const [pending, setPending] = useState(() => read(pendingKey));
   const lock = useRef(false), mounted = useRef(false), active = useRef(null), sequence = useRef(0), pendingRef = useRef(pending);
   function keepPending(value) { pendingRef.current = value; write(pendingKey, value); if (mounted.current) setPending(value); }
@@ -73,10 +74,25 @@ export function useEnglishTutor(userId) {
     if (!completed && mounted.current) setError(tutorErrorMessage(response.turn.error_code));
     return completed;
   }
+  async function startTopic(topicId) {
+    if (pendingRef.current) throw new Error('먼저 진행 중인 요청의 저장 상태를 확인해 주세요.');
+    const saved = read(topicKey);
+    const request = saved?.topicId === topicId ? saved : { sessionId: crypto.randomUUID(), topicId };
+    write(topicKey, request);
+    const result = await callTutor('start-topic', request);
+    write(topicKey, null);
+    if (mounted.current) {
+      active.current = result.session.id; setSession(result.session); setTurns([]); write(lastKey, active.current);
+    }
+    try { await refresh(false); }
+    catch { if (mounted.current) setError('대화는 시작됐습니다. 최신 목록은 다시 확인해 주세요.'); }
+    return result.session.id;
+  }
   return { data, session, turns, loading, busy, error, pending,
     reload: () => run(() => refresh()),
     selectSession: id => run(() => loadSession(id)),
     createSession: title => run(() => create(title)),
+    startTopic: topicId => run(() => startTopic(topicId)),
     send: (content, inputMode, voiceConfirmed) => run(async () => {
       if (pendingRef.current) throw new Error('먼저 진행 중인 요청의 저장 상태를 확인해 주세요.');
       const id = active.current || await create();

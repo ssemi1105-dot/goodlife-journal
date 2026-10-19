@@ -2,8 +2,9 @@ import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 import { mkdir } from 'node:fs/promises';
 import { createServer } from 'vite';
-import { createTutorDatabase, USER_A, USER_B, feedbackFor } from './helpers/tutorDatabase.mjs';
+import { createTutorDatabase, USER_A, USER_B, SESSION_A, feedbackFor } from './helpers/tutorDatabase.mjs';
 import { createTutorHandler } from '../supabase/functions/english-tutor/handler.mjs';
+import { APP_VERSION } from '../src/lib/appVersion.js';
 const require = createRequire(import.meta.url);
 const { chromium } = require(process.env.PLAYWRIGHT_PACKAGE || 'playwright');
 const db = await createTutorDatabase();
@@ -50,6 +51,15 @@ const server = await createServer({ logLevel: 'silent', server: { host: '127.0.0
 await server.listen();
 const browser = await chromium.launch({ headless: true, channel: 'msedge' });
 const context = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, deviceScaleFactor: 1 });
+await context.addInitScript(() => {
+  // Exercise the speech workflow without microphones or external recognition services.
+  class FakeRecognition {
+    start() { this.onstart?.(); queueMicrotask(() => { this.onresult?.({ results: [[{ transcript: window.__testSpeechText || 'I would like pasta.' }]] }); this.onend?.(); }); }
+    stop() { this.onend?.(); }
+    abort() { this.onend?.(); }
+  }
+  Object.defineProperty(window, 'SpeechRecognition', { configurable: true, value: FakeRecognition });
+});
 const network = [], errors = [];
 await context.route('**/*', route => {
   const url = new URL(route.request().url());
@@ -67,7 +77,7 @@ const openTutor = async (entry = 'category') => {
 };
 try {
   await page.goto(server.resolvedUrls.local[0]);
-  await page.getByText('VERSION 0.2.9', { exact: true }).waitFor();
+  await page.getByText(`VERSION ${APP_VERSION}`, { exact: true }).waitFor();
   assert.equal(await page.locator('.category-grid > button').first().getAttribute('aria-label'), '영어 튜터 열기');
   assert.equal(calls, 0, 'showing the shortcut does not call Hive');
   for (const width of [320, 390, 768, 1440]) {
@@ -79,6 +89,32 @@ try {
   }
   await page.setViewportSize({ width: 390, height: 844 });
   await openTutor();
+  await page.getByText('How was your day?', { exact: true }).waitFor();
+  await page.getByRole('button', { name: '새 주제 선택', exact: true }).click();
+  assert.equal(await page.locator('.tutor-topic-grid button').count(), 12);
+  for (const width of [320, 390, 768, 1440]) {
+    await page.setViewportSize({ width, height: 844 });
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
+    await page.screenshot({ path: `test-results/tutor-topics-${width}.png` });
+  }
+  await page.setViewportSize({ width: 390, height: 844 });
+  let lostTopic = false;
+  await page.route('**/tutor-fixture/functions/v1/english-tutor', async route => {
+    if (route.request().postDataJSON().action === 'start-topic' && !lostTopic) { await route.fetch(); lostTopic = true; return route.abort(); }
+    return route.continue();
+  });
+  await page.getByRole('button', { name: '식당 주제 시작', exact: true }).click();
+  await page.getByRole('alert').filter({ hasText: '서버에 연결하지 못했습니다' }).waitFor();
+  await page.getByRole('button', { name: '식당 주제 시작', exact: true }).click();
+  await page.getByRole('region', { name: '튜터 시작 질문' }).waitFor();
+  assert.equal(await page.locator('.tutor-opening .tutor-answer p').textContent(), 'Welcome! What would you like to eat?');
+  assert.equal((await db.pg.query('select count(*)::int n from tutor_sessions where user_id=$1', [USER_A])).rows[0].n, 2);
+  assert.equal(calls, 0);
+  await page.unroute('**/tutor-fixture/functions/v1/english-tutor');
+  await page.reload(); await openTutor();
+  assert.equal(await page.locator('.tutor-opening .tutor-answer p').textContent(), 'Welcome! What would you like to eat?');
+  assert.equal(calls, 0);
+  await page.getByLabel('대화 선택').selectOption(SESSION_A);
   await page.getByText('How was your day?', { exact: true }).waitFor();
   const input = page.getByRole('textbox', { name: /메시지/ });
   const send = page.getByRole('button', { name: '메시지 전송', exact: true });
@@ -93,9 +129,9 @@ try {
   await input.fill('I ate apple. 오늘은 좋아요'); await send.click();
   await page.locator('.tutor-correction p').waitFor();
   await page.waitForFunction(() => document.querySelector('#tutor-message').value === '');
-  assert.equal(await page.locator('.tutor-correction p').textContent(), 'I ate an apple. 오늘은 좋아요');
+  assert.equal(await page.locator('.tutor-correction-pair strong').textContent(), 'an apple');
   assert.equal(await input.inputValue(), ''); assert.equal(calls, 1);
-  await page.locator('.tutor-translation p').waitFor();
+  assert.equal(await page.locator('.tutor-expression > p').textContent(), 'I had a nice day today.');
   await page.screenshot({ path: 'test-results/tutor-chat-mobile.png' });
   await page.getByRole('tab', { name: /복습/ }).click();
   await page.getByRole('button', { name: '복습 완료', exact: true }).click();
@@ -104,7 +140,7 @@ try {
   await page.getByRole('button', { name: 'B1', exact: true }).click();
   await page.waitForFunction(() => document.querySelector('.tutor-header').textContent.includes('B1'));
   assert.equal((await db.pg.query('select level from tutor_profiles where user_id=$1', [USER_B])).rows[0].level, 'A2');
-  await page.getByRole('switch', { name: '자연스러운 표현 제안' }).click();
+  await page.getByRole('switch', { name: '다른 표현도 함께 보기' }).click();
   await page.waitForFunction(() => document.querySelector('[role="switch"]').getAttribute('aria-checked') === 'true');
   await page.screenshot({ path: 'test-results/tutor-settings-mobile.png' });
   await page.getByRole('tab', { name: '대화', exact: true }).click();
@@ -154,12 +190,12 @@ try {
     await page.screenshot({ path: `test-results/tutor-${width}.png` });
   }
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.goBack(); await page.getByText('VERSION 0.2.9', { exact: true }).waitFor();
+  await page.goBack(); await page.getByText(`VERSION ${APP_VERSION}`, { exact: true }).waitFor();
   await openTutor();
   await page.waitForFunction(() => document.querySelectorAll('.tutor-turn').length === 5);
   const used = (await db.pg.query('select sum(requests)::int as n from tutor_usage where user_id=$1', [USER_A])).rows[0].n;
   page.once('dialog', dialog => dialog.accept()); await page.getByRole('button', { name: '대화 삭제', exact: true }).click();
-  await page.getByText('How was your day?', { exact: true }).waitFor();
+  await page.getByRole('region', { name: '튜터 시작 질문' }).waitFor();
   assert.equal((await db.pg.query('select count(*)::int as n from tutor_turns where user_id=$1', [USER_A])).rows[0].n, 0);
   assert.equal((await db.pg.query('select sum(requests)::int as n from tutor_usage where user_id=$1', [USER_A])).rows[0].n, used);
   await db.pg.query('update tutor_access set enabled=false where user_id=$1', [USER_A]);
@@ -208,9 +244,44 @@ try {
   await learner.getByRole('alert').filter({ hasText: '사용 허가' }).waitFor();
   assert.equal(calls, beforeRevoke);
   await learner.close();
+  await page.getByRole('navigation').getByRole('button', { name: '홈', exact: true }).click();
+  await openTutor(); await releaseRateLimit();
+  await input.fill("can you recommended dinner menu it's with my wife"); await send.click();
+  await page.getByText('이렇게 말해보세요', { exact: true }).waitFor();
+  const naturalSentence = "Can you recommend something for dinner? I'm having dinner with my wife.";
+  assert.equal(await page.locator('.tutor-expression > p').textContent(), naturalSentence);
+  assert.equal(await page.locator('.tutor-correction-pair').count(), 2);
+  assert.ok(await page.locator('.tutor-feedback').evaluate(element => element.querySelector('.tutor-expression').compareDocumentPosition(element.querySelector('.tutor-answer')) & Node.DOCUMENT_POSITION_FOLLOWING));
+  for (const [width, height] of [[320, 568], [390, 844], [768, 900], [1440, 900]]) {
+    await page.setViewportSize({ width, height });
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
+    await page.screenshot({ path: `test-results/tutor-coaching-${width}.png` });
+  }
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.evaluate(text => { window.__testSpeechText = text; }, naturalSentence);
+  const beforePractice = calls;
+  page.once('dialog', dialog => dialog.accept());
+  await page.getByRole('button', { name: '다시 말해보기', exact: true }).click();
+  await page.getByRole('checkbox', { name: '인식된 문장을 확인했습니다' }).waitFor();
+  assert.equal(await input.inputValue(), naturalSentence);
+  assert.equal(await send.isDisabled(), true);
+  assert.equal(calls, beforePractice, 'practice does not submit automatically');
+  await page.getByRole('checkbox', { name: '인식된 문장을 확인했습니다' }).check();
+  await releaseRateLimit(); await send.click();
+  await page.waitForFunction(() => document.querySelector('#tutor-message').value === '');
+  const repeated = (await db.pg.query('select feedback from tutor_turns where user_id=$1 and content=$2', [USER_A, naturalSentence])).rows[0];
+  assert.equal(repeated.feedback.assessment_eligible, false);
+  assert.equal(calls, beforePractice + 1);
+  await input.fill('Keep this draft.');
+  await page.getByRole('button', { name: '새 주제 선택', exact: true }).click();
+  page.once('dialog', dialog => dialog.accept());
+  await page.getByRole('button', { name: '카페 주제 시작', exact: true }).click();
+  await page.getByRole('region', { name: '튜터 시작 질문' }).waitFor();
+  assert.equal(await input.inputValue(), 'Keep this draft.');
+  assert.equal(calls, beforePractice + 1);
   assert.ok(network.every(origin => origin === 'https://cdn.jsdelivr.net'), 'only the existing font CDN was requested, and was intercepted');
   assert.deepEqual(errors, []);
-  console.log('Tutor browser passed: App navigation, IME focus, drafts, correction/review, SSE, recovery/idempotency, 4 viewports, nav, usage, admin toggles/failures, two-account isolation, revocation. No production network.');
+  console.log('Tutor browser passed: topics/first questions, recovery without charge, coaching/practice, mock speech confirmation, legacy review, IME, 4 viewports, admin permissions and account isolation. No production network.');
 } catch (error) {
   await page.screenshot({ path: 'test-results/tutor-failure.png' });
   console.error(await page.locator('body').innerText()); throw error;

@@ -4,6 +4,7 @@ import { buildTutorMessages, cleanTutorFeedback, learningSummary, validateSend }
 import { createTutorHandler, readSmallJson } from '../supabase/functions/english-tutor/handler.mjs';
 import { feedbackFor } from './helpers/tutorDatabase.mjs';
 import { HIVE_MODEL, hiveConfiguration, readHiveCompletion, requestHiveCompletion } from '../supabase/functions/english-tutor/hiveProvider.mjs';
+import { TUTOR_TOPICS, getTutorTopic, makeTopicOpening } from '../supabase/functions/english-tutor/topics.mjs';
 
 test('Hive uses only V3 secret/approved endpoints and documented model parameters', async () => {
   assert.throws(() => hiveConfiguration(name => name === 'DEEPSEEK_API_KEY' ? 'wrong-provider-key' : undefined), /API_KEY_MISSING/);
@@ -101,4 +102,59 @@ test('tutor rejects missing/invalid auth before any paid call', async () => {
     assert.equal(response.status, 401);
   }
   assert.equal(calls, 0);
+});
+
+test('complete coaching is always available, distinct from literal grammar corrections and optional alternatives', () => {
+  const content = "can you recommended dinner menu it's with my wife";
+  const result = cleanTutorFeedback(feedbackFor(content), { ...options, content });
+  assert.equal(result.errors.length, 2);
+  assert.equal(result.corrected, "can you recommend a dinner menu it's with my wife");
+  assert.equal(result.natural.sentence, "Can you recommend something for dinner? I'm having dinner with my wife.");
+  assert.deepEqual(result.improvements, [], 'the OFF preference only affects additional alternatives');
+  const legacy = feedbackFor(content); delete legacy.natural;
+  assert.equal(cleanTutorFeedback(legacy, { ...options, content }).natural, null);
+  const invalid = feedbackFor(content); invalid.natural.sentence = 'x'.repeat(1001);
+  assert.throws(() => cleanTutorFeedback(invalid, { ...options, content }), /INVALID_MODEL_OUTPUT/);
+  const unchanged = feedbackFor(content); unchanged.natural.sentence = content;
+  assert.equal(cleanTutorFeedback(unchanged, { ...options, content }).natural, null);
+  for (const flag of ['stt_suspected', 'off_topic', 'sensitive']) {
+    const raw = feedbackFor(content); raw.flags[flag] = true;
+    raw.improvements = [{ original: 'dinner menu', suggestion: 'dinner ideas', reason_ko: '대안 표현' }];
+    const safe = cleanTutorFeedback(raw, { ...options, content, inputMode: 'voice', improvements: true });
+    assert.equal(safe.natural, null); assert.deepEqual(safe.errors, []); assert.deepEqual(safe.improvements, []);
+  }
+  const mixed = '오늘은 I ate apple.';
+  const raw = feedbackFor(mixed); raw.natural = feedbackFor(content).natural;
+  assert.equal(cleanTutorFeedback(raw, { ...options, content: mixed }).natural, null);
+});
+
+test('all topics have level-specific openings; context keeps the first question while bounding history', () => {
+  assert.equal(TUTOR_TOPICS.length, 12);
+  assert.equal(new Set(TUTOR_TOPICS.map(item => item.id)).size, 12);
+  assert.equal(makeTopicOpening('unknown'), null);
+  for (const topic of TUTOR_TOPICS) for (const level of ['A2', 'B1', 'B1+']) {
+    const opening = makeTopicOpening(topic.id, level);
+    assert.equal(opening.level, level); assert.ok(opening.question.endsWith('?'));
+    assert.ok(opening.question.length < 600); assert.equal(getTutorTopic(topic.id), topic);
+  }
+  const opening = makeTopicOpening('restaurant', 'A2');
+  const messages = buildTutorMessages({ profile: { level: 'A2', improvements: false }, session: { title: '식당', topic_id: 'restaurant', opening },
+    turns: Array.from({ length: 30 }, () => ({ content: '가'.repeat(1000), feedback: { tutor_reply: 'x'.repeat(600) } })), content: 'Pasta, please.', inputMode: 'text' });
+  assert.match(messages[0].content, /Mina는 직원/);
+  assert.match(messages[0].content, /Natural coaching is ALWAYS enabled/);
+  assert.match(messages[0].content, /A2 means simple explanations, NOT overlooking real errors/);
+  assert.deepEqual(messages[2], { role: 'assistant', content: opening.question });
+  assert.equal(messages.at(-1).content, 'Pasta, please.');
+  assert.ok(new TextEncoder().encode(JSON.stringify(messages)).length <= 18000);
+  assert.equal(messages.filter(message => message.role === 'system').length, 1);
+});
+
+test('repeating a reference sentence is practice, not evidence for a level upgrade', () => {
+  const content = 'Can you recommend something for dinner? I am having dinner with my wife.';
+  const raw = feedbackFor(content);
+  raw.level_signal = { observed_level: 'B1+', confidence: 'high', evidence_ko: '문장을 반복했어요.' };
+  const result = cleanTutorFeedback(raw, { ...options, content, referenceSentences: [content.toUpperCase()] });
+  assert.equal(result.assessment_eligible, false);
+  assert.equal(result.level_signal.observed_level, null);
+  assert.equal(result.level_signal.confidence, 'low');
 });

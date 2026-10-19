@@ -22,6 +22,9 @@ export async function createTutorDatabase() {
   const migration = await readFile(new URL('../../supabase/migrations/202610190001_english_tutor.sql', import.meta.url), 'utf8');
   await pg.exec(migration);
   await pg.exec(migration); // The documented SQL can safely be re-run.
+  const coachingMigration = await readFile(new URL('../../supabase/migrations/202610190002_tutor_coaching.sql', import.meta.url), 'utf8');
+  await pg.exec(coachingMigration);
+  await pg.exec(coachingMigration);
   await pg.exec(`insert into tutor_access(user_id,enabled) values('${USER_A}',true),('${USER_B}',true);
     insert into tutor_profiles(user_id) values('${USER_A}'),('${USER_B}');
     insert into tutor_sessions(id,user_id,title) values('${SESSION_A}','${USER_A}','오늘 하루'),('${SESSION_B}','${USER_B}','다른 사용자');`);
@@ -79,9 +82,19 @@ export async function createTutorDatabase() {
 }
 
 export function feedbackFor(content = 'I ate apple.') {
+  if (content === "can you recommended dinner menu it's with my wife") return {
+    ...feedbackFor('Hello!'), corrected: "can you recommend a dinner menu it's with my wife",
+    errors: [
+      { type: 'verb_form', original: 'recommended', corrected: 'recommend', explanation_ko: 'can 뒤에는 동사원형을 씁니다.' },
+      { type: 'article', original: 'dinner menu', corrected: 'a dinner menu', explanation_ko: '단수 명사 menu 앞에 관사가 필요합니다.' },
+    ],
+    natural: { sentence: "Can you recommend something for dinner? I'm having dinner with my wife.", explanation_ko: '먹을 음식은 something for dinner가 자연스럽고, 누구와 식사하는지 별도 문장으로 밝히면 명확합니다.' },
+    tutor_reply: 'What kind of food do you and your wife enjoy?',
+  };
   const error = content.includes('ate apple') ? [{ type: 'article', original: 'apple', corrected: 'an apple', explanation_ko: '셀 수 있는 단수 명사 앞에 관사가 필요해요.' }] : [];
   return { spec_version: '1.0', corrected: error.length ? content.replace('apple', 'an apple') : content,
     english_version: /[가-힣]/.test(content) ? 'I had a nice day today.' : null, errors: error, improvements: [],
+    natural: error.length && !/[가-힣]/.test(content) ? { sentence: content.replace('apple', 'an apple'), explanation_ko: '관사를 넣으면 완성된 문장이 됩니다.' } : null,
     tutor_reply: 'That sounds nice. What did you enjoy most today?',
     level_signal: { observed_level: null, confidence: 'low', evidence_ko: '짧은 문장이라 판단을 보류해요.' },
     flags: { korean_input: /[가-힣]/.test(content), stt_suspected: false, off_topic: false, sensitive: false }, memory: 'Talked about today.' };

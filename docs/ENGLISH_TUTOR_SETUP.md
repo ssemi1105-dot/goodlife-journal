@@ -1,10 +1,38 @@
-# Goodlife 영어 튜터 설치 안내: TheHive API (v0.2.9)
+# Goodlife 영어 튜터 설치 안내: TheHive API (v0.2.10)
 
 코드는 준비되어 있지만, 실제 사용 전에는 아래 1~5단계가 필요합니다.
 기존 카테고리, records, 친구 공유, 사진 저장, KIS/TMDB/영수증 함수는 수정하지 않습니다.
 **이번 연결은 DeepSeek 공식 API가 아니라 TheHive에서 제공하는 DeepSeek 모델입니다.**
 이전 안내의 DEEPSEEK_API_KEY, DEEPSEEK_MODEL 및 이메일로 사용 허가하는 SQL은 필요 없습니다.
 **Hive 키를 채팅, GitHub, Vercel 프론트 환경변수, 앱 입력칸에 넣지 마세요.**
+
+## 이미 0.2.9를 사용 중인 경우: 이번 업데이트
+
+기존 권한 토글과 Hive 키는 그대로 사용합니다. 다음 순서만 진행하세요.
+
+1. Supabase의 **SQL Editor → New query**에서 [주제 대화 SQL](C:/Users/ssemi/Documents/Goodlife/goodlife-journal/supabase/migrations/202610190002_tutor_coaching.sql) 파일의 전체 내용을 실행합니다.
+   파일: `C:\Users\ssemi\Documents\Goodlife\goodlife-journal\supabase\migrations\202610190002_tutor_coaching.sql`
+   `tutor_sessions`에 `topic_id`, `opening`을 추가하고, 서버 전용 주제 시작 함수를 만듭니다. 기존 기록과 대화는 지우지 않습니다.
+2. PowerShell에서 다음을 실행합니다. 기존에 CLI 로그인한 상태라면 다시 로그인할 필요가 없습니다.
+
+```powershell
+cd "C:\Users\ssemi\Documents\Goodlife\goodlife-journal"
+npx supabase functions deploy english-tutor --project-ref "jllhaavazvyjjfqgnylb" --no-verify-jwt --use-api
+```
+
+3. 로컬 확인 후 아래 6단계의 빌드·커밋·푸시를 진행합니다. Vercel 배포가 Ready이면 홈에서 `VERSION 0.2.10`을 확인합니다.
+
+사용법: 영어 튜터에서 **+ (새 주제 선택)** → 식당/카페/여행 등 선택 → Mina의 첫 질문에 답하기.
+처음 사용하는 계정은 주제 선택 화면부터 표시됩니다. **자유 대화**를 선택하면 먼저 말을 걸 수도 있습니다.
+
+- 12개 주제, A2/B1/B1+ 각각의 첫 질문 총 36개. 첫 질문은 준비된 질문으로 **Hive 호출과 일일 횟수 차감 없이** 즉시 시작합니다.
+- 답변을 전송하면 완성 문장 → 핵심 교정 → Mina의 후속 질문 순서로 표시합니다. 적절한 문장을 억지로 고치지는 않습니다.
+- 완성 문장 코칭은 기본 제공. 학습 설정의 **다른 표현도 함께 보기**는 추가 대안 표현만 켜고 끕니다. 기존 개인 설정값은 유지됩니다.
+- **추천 문장 듣기**, **다시 말해보기** 지원. 인식된 문장은 확인 후 직접 전송하며 자동 제출하지 않습니다. 발음 평가 기능은 아닙니다.
+- 기존 답변은 재호출하거나 일괄 재작성하지 않습니다. 새로 전송한 문장부터 개선된 코칭을 받습니다.
+- 이전 대화·수준·사용량은 그대로 유지합니다. 0.2.9 화면으로 돌아가도 새 컬럼은 무시되므로 기존 대화를 계속 읽을 수 있습니다.
+
+아래는 처음 설치하는 경우의 전체 안내입니다.
 
 ## 1. 튜터 전용 저장공간 만들기
 
@@ -25,6 +53,7 @@ C:\Users\ssemi\Documents\Goodlife\goodlife-journal\supabase\migrations\202610190
 튜터 테이블 5개, 사용자별 읽기 정책, 서버 전용 저장·권한 변경 함수를 만듭니다.
 기존 profiles.role을 읽어 관리자인지 판별하지만, 기존 프로필이나 역할을 변경하지 않습니다.
 이 SQL은 다시 실행해도 튜터 기록을 지우지 않습니다.
+이어서 [주제 대화 SQL](C:/Users/ssemi/Documents/Goodlife/goodlife-journal/supabase/migrations/202610190002_tutor_coaching.sql)도 별도 쿼리에서 실행합니다. 순서는 `...0001_english_tutor.sql` 다음 `...0002_tutor_coaching.sql`입니다.
 **기존 schema.sql 전체 실행, db reset, 모든 migration 일괄 push는 필요 없습니다.**
 
 ## 2. TheHive API 키 등록하기
@@ -113,7 +142,7 @@ OFF는 대화 삭제가 아닙니다. 나중에 다시 ON하면 이전 수준·�
 ## 5. 앱에서 시험하기
 
 1. 로컬 앱에 기존 계정으로 로그인합니다.
-2. 홈에 `VERSION 0.2.9`가 보이는지 확인합니다.
+2. 홈에 `VERSION 0.2.10`가 보이는지 확인합니다.
 3. 홈 **전체 카테고리** 맨 앞의 **영어 튜터** 카드를 누릅니다. 요약 영역 아래의 작은 **영어 튜터 ↗** 버튼으로도 들어갈 수 있습니다.
 4. `I ate apple yesterday.`처럼 짧은 문장을 보냅니다. 이 단계부터 실제 Hive API 비용이 발생합니다.
 5. 영어 답변, 교정, 한국어 설명이 표시되는지 확인합니다. 교정 품질은 AI 특성상 매번 동일하지 않습니다.
@@ -142,7 +171,7 @@ npm test
 npm run build
 git status
 git add .
-git commit -m "0.2.9 Hive 영어 튜터 및 계정별 사용 권한 추가"
+git commit -m "0.2.10 영어 튜터 교정 강화 및 주제별 질문 대화 추가"
 git push
 ```
 
@@ -152,10 +181,10 @@ Vercel과 GitHub 자동 배포가 연결되어 있다면 새 배포가 완료된
 ## 사용하는 기능
 
 - 대화: A2/B1/B1+ 난이도의 짧은 영어 대화, 한국어 교정 설명.
-- 정확한 문장을 일부러 고치지 않도록 설계. 실제 교정과 선택적인 자연스러운 표현 제안을 분리.
+- 정확한 문장을 일부러 고치지 않도록 설계. 실제 문법 교정과 자연스러운 완성 문장 제안을 분리.
 - 한국어·혼합 문장은 영어 표현 예시를 별도로 표시하고, 한국어 자체를 문법 오류로 집계하지 않음.
-- 복습: 최근 완료 대화 200회에서 교정된 표현 모음과 복습 완료 표시.
-- 학습 설정: 수준 수동 변경, 자연스러운 표현 제안 ON/OFF, 오류 유형과 사용량 확인.
+- 복습: 최근 완료 대화 200회에서 교정·완성 문장·번역 예시 모음과 복습 완료 표시.
+- 학습 설정: 수준 수동 변경, 추가 대안 표현 ON/OFF, 오류 유형과 사용량 확인.
 - 수준 추천: 같은 수준에서 평가 가능한 대화 20회와 한국 날짜 5일 이상 필요. 문장 길이·오류 밀도·모델 관측을 함께 확인. 추천만 하며 자동 변경하지 않음. CEFR 공인 진단이 아님.
 - 음성: 지원 브라우저에서 음성 인식 후 문장을 직접 확인하고 전송. 영어 답변 읽어주기 지원.
 - 브라우저 음성 인식은 별도 외부 서비스에 음성이 전송될 수 있음. 허락 확인 후 사용. 앱은 녹음 파일을 저장하지 않으며 발음 점수도 계산하지 않음.
@@ -176,7 +205,7 @@ Vercel과 GitHub 자동 배포가 연결되어 있다면 새 배포가 완료된
 - 120초 이상 불확실한 요청은 실패로 정리. 사용자 판단으로 다시 보낼 때만 새 호출 가능.
 - 대화를 지워도 사용량은 초기화되지 않음.
 - 학습 데이터는 `tutor_*` 전용 테이블에 저장. 관리자 권한 확인에만 기존 profiles.role을 읽음. `records`, 프로필, 병원, 투자, 사진, 친구 기록은 Hive에 보내지 않음.
-- Hive에는 해당 계정·해당 대화방의 최근 최대 6회 대화, 기존 대화 요약, 현재 문장, 학습 수준만 전송. 사용자 ID·이메일을 API 메시지에 넣지 않음.
+- Hive에는 해당 계정·해당 대화방의 주제·첫 질문, 최근 최대 6회 대화와 연습용 예문, 기존 대화 요약, 현재 문장, 학습 수준만 전송. 사용자 ID·이메일을 API 메시지에 넣지 않음.
 - API 키 하나를 서버에서 공유하지만 사용자별 학습 수준, 표현 제안 설정, 대화방, 대화 요약, 교정, 복습 완료, 추천과 사용량은 각각 분리. 공유하는 것은 공급자 결제 계정과 앱 전체 요청 한도뿐임.
 - 모든 테이블은 본인만 읽도록 RLS 설정. 쓰기는 JWT 검증된 서버 함수만 수행. 앱 관리자도 다른 사람 튜터 기록을 읽는 권한은 추가하지 않음.
 - Supabase 프로젝트 관리자는 DB 관리 권한으로 접근할 수 있음. 종단간 암호화 서비스는 아님.
@@ -209,17 +238,21 @@ Vercel과 GitHub 자동 배포가 연결되어 있다면 새 배포가 완료된
 | 파일 | 역할 |
 | --- | --- |
 | `src/components/EnglishTutor.jsx` / `.css` | 튜터 전용 대화·복습·학습 설정 화면 |
+| `src/components/TutorFeedback.jsx` / `TutorTopics.jsx` | 완성 문장·수정 전후·듣기·연습, 주제 선택 |
 | `src/hooks/useEnglishTutor.js` | 계정별 상태, 전송 잠금, 초안·결과 복구 |
 | `src/services/tutorClient.js` | 로그인 토큰을 붙인 함수 호출, 구체적인 오류 표시 |
 | `supabase/functions/english-tutor/index.ts` | Supabase 함수 진입점 |
 | `supabase/functions/english-tutor/handler.mjs` | 인증, 소유권, 요청 제한, 관리자 권한 관리 |
 | `supabase/functions/english-tutor/hiveProvider.mjs` | Hive V3 인증·요청·SSE 처리, 크기/시간 제한 |
 | `supabase/functions/english-tutor/core.mjs` | 레벨별 프롬프트, 응답 검증, 교정·통계·추천 규칙 |
+| `supabase/functions/english-tutor/topics.mjs` | 클라이언트/서버 공통 공개 주제·레벨별 첫 질문. 키·설정 없음 |
 | `supabase/migrations/202610190001_english_tutor.sql` | 테이블 5개, RLS, 원자적 저장·사용량 예약 |
+| `supabase/migrations/202610190002_tutor_coaching.sql` | 주제·첫 질문 저장, 멱등 주제 생성. 기존 RLS 유지 |
 | `src/App.jsx` / `Dashboard.jsx` / `styles.css` | 홈 진입 버튼과 별도 화면 연결만 추가 |
 | `src/components/AdminUserList.jsx` / `SettingsScreen.jsx` | 회원별 영어 튜터 토글, 저장/실패/재조회 상태, 계정 전환 분리 |
 
 DB 저장 구조: tutor_access(허가), tutor_profiles(수준·설정), tutor_sessions(대화방·요약), tutor_turns(사용자 문장·검증된 답변·교정·상태), tutor_usage(날짜별 요청·토큰).
+추가 저장: `tutor_sessions.topic_id`, `tutor_sessions.opening={question,situation,role,level}`. `tutor_turns.feedback.natural={sentence,explanation_ko}`는 기존 JSON에 추가되며, 과거 답변에는 없거나 null일 수 있습니다. 문법 교정 `errors/corrected`와 분리하며, 추가 문법 오류로 집계하지 않습니다.
 
 `npm test`에 교정/한국어 분리, 입력·응답 제한, 수준 추천 조건, 인증 실패 테스트가 포함됩니다.
 DB 통합 테스트는 PGlite PostgreSQL로 SQL을 실제 실행하며, 브라우저 테스트는 실제 React 화면과 서버 함수를 연결합니다. 공급자 답변과 계정만 테스트용으로 대체하고 운영 네트워크는 차단합니다.

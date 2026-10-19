@@ -1,12 +1,13 @@
 import { buildTutorMessages, cleanTutorFeedback, learningSummary, LEVELS, requireId, TutorError, validateSend } from './core.mjs';
 import { hiveConfiguration, requestHiveCompletion } from './hiveProvider.mjs';
+import { getTutorTopic, makeTopicOpening } from './topics.mjs';
 
 const cors = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type', 'Access-Control-Allow-Methods': 'POST, OPTIONS' };
 const json = (body, status = 200) => new Response(JSON.stringify(body), { status, headers: { ...cors, 'Content-Type': 'application/json', 'Cache-Control': 'no-store' } });
-const statuses = { ADMIN_REQUIRED: 403, TARGET_USER_NOT_FOUND: 404, TUTOR_FORBIDDEN: 403, SESSION_NOT_FOUND: 404, REQUEST_NOT_FOUND: 404, REQUEST_CONFLICT: 409, REQUEST_BUSY: 409, REQUEST_EXPIRED: 409, SESSION_FULL: 409, TOO_MANY_SESSIONS: 409, DAILY_LIMIT: 429, GLOBAL_LIMIT: 429, RATE_LIMIT: 429 };
+const statuses = { INVALID_INPUT: 400, ADMIN_REQUIRED: 403, TARGET_USER_NOT_FOUND: 404, TUTOR_FORBIDDEN: 403, SESSION_NOT_FOUND: 404, REQUEST_NOT_FOUND: 404, REQUEST_CONFLICT: 409, REQUEST_BUSY: 409, REQUEST_EXPIRED: 409, SESSION_FULL: 409, TOO_MANY_SESSIONS: 409, DAILY_LIMIT: 429, GLOBAL_LIMIT: 429, RATE_LIMIT: 429 };
 function checked(result) {
   if (!result.error) return result.data;
-  if (['42P01', 'PGRST202', 'PGRST205'].includes(result.error.code)) throw new TutorError('SETUP_REQUIRED', 503);
+  if (['42P01', '42703', 'PGRST202', 'PGRST205'].includes(result.error.code)) throw new TutorError('SETUP_REQUIRED', 503);
   const code = Object.keys(statuses).find(key => result.error.message?.includes(key));
   throw new TutorError(code || 'DATABASE_ERROR', statuses[code] || 503);
 }
@@ -82,7 +83,16 @@ export function createTutorHandler({ createClient, env, fetchImpl = fetch }) {
         const usage = checked(await db.from('tutor_usage').select('requests,tokens').eq('user_id', userId).eq('day', day).maybeSingle());
         const turns = checked(await db.from('tutor_turns').select('*').eq('user_id', userId).eq('state', 'completed').order('created_at', { ascending: false }).order('id').limit(200));
         return json({ profile, sessions, usage: { day, used: usage?.requests || 0, tokens: usage?.tokens || 0, limit: access.daily_limit, tokenLimit: access.daily_token_limit },
-          learning: learningSummary(turns, profile.level), review: turns.filter(turn => turn.feedback?.errors?.length).map(publicTurn) });
+          learning: learningSummary(turns, profile.level), review: turns.filter(turn => turn.feedback?.errors?.length || turn.feedback?.natural || turn.feedback?.english_version).map(publicTurn) });
+      }
+      if (body.action === 'start-topic') {
+        requireId(body.sessionId);
+        const topic = getTutorTopic(body.topicId);
+        if (!topic) throw new TutorError('INVALID_INPUT');
+        const profile = checked(await db.from('tutor_profiles').select('level').eq('user_id', userId).maybeSingle());
+        const session = checked(await db.rpc('tutor_start_topic', { p_user_id: userId, p_session_id: body.sessionId,
+          p_topic_id: topic.id, p_title: topic.label, p_opening: makeTopicOpening(topic.id, profile?.level) }));
+        return json({ session });
       }
       if (body.action === 'create-session') {
         const title = typeof body.title === 'string' ? body.title.trim() : '일상 대화';
@@ -98,7 +108,7 @@ export function createTutorHandler({ createClient, env, fetchImpl = fetch }) {
           checked(await db.rpc('tutor_fail_turn', { p_user_id: userId, p_request_id: turn.id, p_code: 'REQUEST_EXPIRED' }));
           turn.state = 'failed'; turn.error_code = 'REQUEST_EXPIRED';
         }
-        return json({ session: { id: session.id, title: session.title }, turns: turns.map(publicTurn) });
+        return json({ session: { id: session.id, title: session.title, topic_id: session.topic_id || null, opening: session.opening || null }, turns: turns.map(publicTurn) });
       }
       if (body.action === 'preferences') {
         if (!LEVELS.includes(body.level) || typeof body.improvements !== 'boolean') throw new TutorError('INVALID_INPUT');
@@ -133,7 +143,8 @@ export function createTutorHandler({ createClient, env, fetchImpl = fetch }) {
         if (completion.choices?.[0]?.finish_reason !== 'stop') throw new TutorError('INVALID_MODEL_OUTPUT', 502);
         let feedback;
         try { feedback = JSON.parse(completion.choices[0].message.content); } catch { throw new TutorError('INVALID_MODEL_OUTPUT', 502); }
-        feedback = cleanTutorFeedback(feedback, { ...input, improvements: begin.turn.improvements, level: begin.turn.level });
+        feedback = cleanTutorFeedback(feedback, { ...input, improvements: begin.turn.improvements, level: begin.turn.level,
+          referenceSentences: previous.map(turn => turn.feedback?.natural?.sentence || turn.feedback?.english_version || (turn.feedback?.errors?.length ? turn.feedback.corrected : '')) });
         const tokenCount = completion.usage?.total_tokens;
         const finished = checked(await db.rpc('tutor_finish_turn', { p_user_id: userId, p_request_id: body.requestId, p_feedback: feedback,
           p_tokens: Number.isInteger(tokenCount) && tokenCount > 0 && tokenCount < 1000000 ? tokenCount : null }));
