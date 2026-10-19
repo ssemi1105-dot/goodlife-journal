@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { SUPABASE_ANON_KEY, SUPABASE_URL, supabase } from '../lib/supabaseClient';
-import { callTutor } from '../services/tutorClient';
+import { callTutor, callJapaneseTutor } from '../services/tutorClient';
+import { useTutorAdmin } from '../hooks/useTutorAdmin';
 import CompactToggle from './ui/CompactToggle';
 import TutorUsageSummary, { TutorUsageNote, totalTutorUsage } from './TutorUsageSummary';
 
@@ -69,41 +70,8 @@ export default function AdminUserList({ enabled, embedded = false }) {
   const [users, setUsers] = useState([]);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const [tutorAccess, setTutorAccess] = useState(null), [tutorError, setTutorError] = useState('');
-  const [savingIds, setSavingIds] = useState([]), [accessLoading, setAccessLoading] = useState(false);
-  const [tutorUsage, setTutorUsage] = useState(null);
-  const active = useRef(false), saving = useRef(new Set()), accessLoad = useRef(0);
-
-  async function loadTutorAccess() {
-    const ticket = ++accessLoad.current;
-    setAccessLoading(true); setTutorError('');
-    try {
-      const result = await callTutor('admin-access-list');
-      if (active.current && ticket === accessLoad.current) {
-        setTutorAccess(Object.fromEntries(result.access.map(item => [item.user_id, item])));
-        setTutorUsage(result.usage);
-      }
-    } catch (err) { if (active.current && ticket === accessLoad.current) setTutorError(err.message); }
-    finally { if (active.current && ticket === accessLoad.current) setAccessLoading(false); }
-  }
-
-  async function setTutorPermission(userId, nextEnabled) {
-    if (saving.current.size || accessLoading) return;
-    saving.current.add(userId); setSavingIds([...saving.current]); setTutorError('');
-    try {
-      const result = await callTutor('admin-set-access', { targetUserId: userId, enabled: nextEnabled });
-      if (active.current) setTutorAccess(current => ({ ...current, [userId]: result.access }));
-    } catch (err) {
-      // A lost response may have saved the change. Read authoritative access, without repeating the write.
-      if (active.current) { await loadTutorAccess(); if (active.current) setTutorError(`${err.message} 현재 상태를 다시 확인해 주세요.`); }
-    } finally { saving.current.delete(userId); if (active.current) setSavingIds([...saving.current]); }
-  }
-
-  useEffect(() => {
-    active.current = enabled;
-    if (enabled && supabase) loadTutorAccess();
-    return () => { active.current = false; accessLoad.current++; };
-  }, [enabled]);
+  const { tutorAccess, tutorError, savingIds, accessLoading, tutorUsage, loadTutorAccess, setTutorPermission } = useTutorAdmin(enabled && !!supabase, callTutor);
+  const japanese = useTutorAdmin(enabled && !!supabase, callJapaneseTutor);
 
   useEffect(() => {
     if (!enabled || !supabase) return undefined;
@@ -140,6 +108,11 @@ export default function AdminUserList({ enabled, embedded = false }) {
         <TutorUsageSummary usage={tutorUsage ? totalTutorUsage(tutorUsage.users) : null} />
         <TutorUsageNote />
       </section>
+      <section className="admin-tutor-usage admin-japanese-usage" aria-label="전체 회원 일본어 사용량" aria-busy={japanese.accessLoading}>
+        <div className="admin-tutor-usage-heading"><h3>일본어 튜터 전체 사용량</h3><button type="button" className="icon-button" title="일본어 사용량 새로고침" aria-label="일본어 사용량 새로고침" disabled={japanese.accessLoading || !!japanese.savingIds.length} onClick={japanese.loadTutorAccess}>↻</button></div>
+        {japanese.tutorError && <p className="form-error" role="alert">{japanese.tutorError}</p>}
+        <TutorUsageSummary usage={japanese.tutorUsage ? totalTutorUsage(japanese.tutorUsage.users) : null} />
+      </section>
 
       {!loading && !error && users.length === 0 && (
         <p className="empty-text">표시할 회원이 아직 없습니다.</p>
@@ -160,6 +133,13 @@ export default function AdminUserList({ enabled, embedded = false }) {
               <small role="status">{savingIds.includes(user.id) ? '저장 중' : !tutorAccess ? '연결 필요' : tutorAccess[user.id]?.enabled ? '허용 · 일일 제한 없음' : '사용 안 함'}</small>
             </div>
             <TutorUsageSummary compact usage={tutorUsage ? tutorUsage.users.find(item => item.user_id === user.id) || totalTutorUsage() : null} />
+            <div className="admin-tutor-access admin-japanese-access">
+              <CompactToggle label="일본어 튜터" checked={japanese.tutorAccess?.[user.id]?.enabled === true}
+                disabled={!japanese.tutorAccess || japanese.accessLoading || !!japanese.savingIds.length}
+                onChange={value => japanese.setTutorPermission(user.id, value)} />
+              <small role="status">{japanese.savingIds.includes(user.id) ? '저장 중' : !japanese.tutorAccess ? '연결 필요' : japanese.tutorAccess[user.id]?.enabled ? '허용 · 일일 제한 없음' : '사용 안 함'}</small>
+            </div>
+            <div className="admin-japanese-user-usage"><TutorUsageSummary compact usage={japanese.tutorUsage ? japanese.tutorUsage.users.find(item => item.user_id === user.id) || totalTutorUsage() : null} /></div>
           </article>
         ))}
       </div>

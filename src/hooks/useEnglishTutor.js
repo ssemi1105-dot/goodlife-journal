@@ -4,17 +4,19 @@ import { callTutor, tutorErrorMessage } from '../services/tutorClient';
 function read(key) { try { return JSON.parse(sessionStorage.getItem(key) || 'null'); } catch { return null; } }
 function write(key, value) { try { if (value === null) sessionStorage.removeItem(key); else sessionStorage.setItem(key, JSON.stringify(value)); } catch { /* Storage can be unavailable in private browsing. */ } }
 
-export function useEnglishTutor(userId) {
+export function useEnglishTutor(userId) { return useTutor(userId); }
+
+export function useTutor(userId, { call = callTutor, storagePrefix = 'goodlife-tutor' } = {}) {
   const [data, setData] = useState(null), [session, setSession] = useState(null), [turns, setTurns] = useState([]);
   const [loading, setLoading] = useState(true), [busy, setBusy] = useState(false), [error, setError] = useState('');
-  const pendingKey = `goodlife-tutor-pending-${userId}`, lastKey = `goodlife-tutor-session-${userId}`;
-  const topicKey = `goodlife-tutor-topic-request-${userId}`;
+  const pendingKey = `${storagePrefix}-pending-${userId}`, lastKey = `${storagePrefix}-session-${userId}`;
+  const topicKey = `${storagePrefix}-topic-request-${userId}`;
   const [pending, setPending] = useState(() => read(pendingKey));
   const lock = useRef(false), mounted = useRef(false), active = useRef(null), sequence = useRef(0), pendingRef = useRef(pending);
   function keepPending(value) { pendingRef.current = value; write(pendingKey, value); if (mounted.current) setPending(value); }
   async function loadSession(id) {
     const ticket = ++sequence.current;
-    const result = await callTutor('session', { sessionId: id });
+    const result = await call('session', { sessionId: id });
     if (!mounted.current || sequence.current !== ticket) return;
     active.current = id; write(lastKey, id); setSession(result.session); setTurns(result.turns);
     const inFlight = result.turns.find(turn => turn.state === 'pending');
@@ -24,7 +26,7 @@ export function useEnglishTutor(userId) {
     return result;
   }
   async function refresh(withSession = true) {
-    const result = await callTutor('bootstrap');
+    const result = await call('bootstrap');
     if (!mounted.current) return;
     setData(result);
     const current = active.current || pendingRef.current?.sessionId || read(lastKey) || result.sessions[0]?.id;
@@ -46,7 +48,7 @@ export function useEnglishTutor(userId) {
     finally { lock.current = false; if (mounted.current) setBusy(false); }
   }
   async function create(title = '일상 대화') {
-    const result = await callTutor('create-session', { title });
+    const result = await call('create-session', { title });
     if (mounted.current) { active.current = result.session.id; setSession(result.session); setTurns([]); write(lastKey, active.current); }
     await refresh(false);
     return result.session.id;
@@ -54,7 +56,7 @@ export function useEnglishTutor(userId) {
   async function submit(payload) {
     keepPending(payload);
     let response;
-    try { response = await callTutor('send', payload); }
+    try { response = await call('send', payload); }
     catch (err) {
       // Resolve uncertain results from the server; do not make a second paid request automatically.
       if (['UNAUTHORIZED', 'TUTOR_FORBIDDEN', 'API_KEY_MISSING', 'MODEL_NOT_CONFIGURED', 'PROVIDER_REGION_INVALID', 'DAILY_LIMIT', 'GLOBAL_LIMIT', 'RATE_LIMIT', 'REQUEST_BUSY', 'SESSION_FULL', 'SESSION_NOT_FOUND', 'INVALID_INPUT', 'VOICE_CONFIRMATION_REQUIRED', 'FUNCTION_MISSING', 'SETUP_REQUIRED'].includes(err.code)) keepPending(null);
@@ -79,7 +81,7 @@ export function useEnglishTutor(userId) {
     const saved = read(topicKey);
     const request = saved?.topicId === topicId ? saved : { sessionId: crypto.randomUUID(), topicId };
     write(topicKey, request);
-    const result = await callTutor('start-topic', request);
+    const result = await call('start-topic', request);
     write(topicKey, null);
     if (mounted.current) {
       active.current = result.session.id; setSession(result.session); setTurns([]); write(lastKey, active.current);
@@ -99,10 +101,10 @@ export function useEnglishTutor(userId) {
       return submit({ requestId: crypto.randomUUID(), sessionId: id, content: content.trim(), inputMode, voiceConfirmed });
     }),
     resolvePending: () => run(async () => { const value = pendingRef.current; return value ? submit(value) : false; }),
-    savePreferences: (level, improvements) => run(async () => { await callTutor('preferences', { level, improvements }); await refresh(false); return true; }),
-    markReviewed: (turnId, reviewed) => run(async () => { await callTutor('review', { turnId, reviewed }); await refresh(false); }),
+    savePreferences: (level, improvements) => run(async () => { await call('preferences', { level, improvements }); await refresh(false); return true; }),
+    markReviewed: (turnId, reviewed) => run(async () => { await call('review', { turnId, reviewed }); await refresh(false); }),
     deleteSession: id => run(async () => {
-      await callTutor('delete-session', { sessionId: id });
+      await call('delete-session', { sessionId: id });
       if (active.current === id) { active.current = null; write(lastKey, null); }
       await refresh();
     }),

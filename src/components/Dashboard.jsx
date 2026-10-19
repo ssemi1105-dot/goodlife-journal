@@ -78,6 +78,7 @@ export default function Dashboard({
   onEdit,
   onDelete,
   onOpenTutor,
+  onOpenJapaneseTutor,
 }) {
   const [showSearch, setShowSearch] = useState(false);
   const [periodIndex, setPeriodIndex] = useState(1);
@@ -152,7 +153,10 @@ export default function Dashboard({
         </div>
       </section>
 
-      {onOpenTutor && <div className="tutor-entry-bar"><button type="button" className="tutor-launch-button" onClick={onOpenTutor}>영어 튜터 <span aria-hidden="true">↗</span></button></div>}
+      {(onOpenTutor || onOpenJapaneseTutor) && <div className="tutor-entry-bar">
+        {onOpenTutor && <button type="button" className="tutor-launch-button" onClick={onOpenTutor}>영어 튜터 <span aria-hidden="true">↗</span></button>}
+        {onOpenJapaneseTutor && <button type="button" className="tutor-launch-button" onClick={onOpenJapaneseTutor}>일본어 튜터 <span aria-hidden="true">↗</span></button>}
+      </div>}
 
       <section className="section-block quick-record-section">
         <div className="section-title">
@@ -202,6 +206,12 @@ export default function Dashboard({
                 <strong>영어 튜터</strong>
                 <small>Mina</small>
               </span>
+            </button>
+          )}
+          {onOpenJapaneseTutor && (
+            <button type="button" className="category-tile tutor-category-tile" style={{ '--category-hue': '15' }} onClick={onOpenJapaneseTutor} aria-label="일본어 튜터 열기">
+              <span className="tile-icon" aria-hidden="true">あ</span>
+              <span className="category-tile-copy"><strong>일본어 튜터</strong><small>Haru · 말하기</small></span>
             </button>
           )}
           {visibleCategories.map(({ category, count }) => (

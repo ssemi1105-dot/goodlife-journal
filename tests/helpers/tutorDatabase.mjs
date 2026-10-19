@@ -8,7 +8,7 @@ export const SESSION_B = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
 export async function applyTutorUsageMigration(pg) {
   await pg.exec(await readFile(new URL('../../supabase/migrations/202610190003_tutor_usage.sql', import.meta.url), 'utf8'));
 }
-export async function createTutorDatabase({ usageMigration = true } = {}) {
+export async function createTutorDatabase({ usageMigration = true, japanese = false } = {}) {
   const { PGlite } = require(process.env.PGLITE_PACKAGE || '@electric-sql/pglite');
   const pg = new PGlite();
   await pg.exec(`create role anon; create role authenticated; create role service_role bypassrls;
@@ -29,6 +29,10 @@ export async function createTutorDatabase({ usageMigration = true } = {}) {
   await pg.exec(coachingMigration);
   await pg.exec(coachingMigration);
   if (usageMigration) { await applyTutorUsageMigration(pg); await applyTutorUsageMigration(pg); }
+  if (japanese) {
+    const sql = await readFile(new URL('../../supabase/migrations/202610190004_japanese_tutor.sql', import.meta.url), 'utf8');
+    await pg.exec(sql); await pg.exec(sql);
+  }
   await pg.exec(`insert into tutor_access(user_id,enabled) values('${USER_A}',true),('${USER_B}',true);
     insert into tutor_profiles(user_id) values('${USER_A}'),('${USER_B}');
     insert into tutor_sessions(id,user_id,title) values('${SESSION_A}','${USER_A}','오늘 하루'),('${SESSION_B}','${USER_B}','다른 사용자');`);

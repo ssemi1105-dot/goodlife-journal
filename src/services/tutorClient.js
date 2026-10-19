@@ -37,13 +37,18 @@ const messages = {
   FUNCTION_MISSING: 'english-tutor Edge Function이 아직 배포되지 않았습니다.',
 };
 export const tutorErrorMessage = code => messages[code] || messages.SERVER_ERROR;
-export async function callTutor(action, body = {}) {
+export const callTutor = (action, body) => callTutorEndpoint('english-tutor', action, body);
+export async function callJapaneseTutor(action, body) {
+  try { return await callTutorEndpoint('japanese-tutor', action, body); }
+  catch (error) { error.message = error.message.replaceAll('영어 튜터', '일본어 튜터').replaceAll('english-tutor', 'japanese-tutor'); throw error; }
+}
+async function callTutorEndpoint(endpoint, action, body = {}) {
   if (!supabase || !SUPABASE_URL) throw Object.assign(new Error(messages.SETUP_REQUIRED), { code: 'SETUP_REQUIRED' });
   const { data, error } = await supabase.auth.getSession();
   if (error || !data?.session?.access_token) throw Object.assign(new Error(messages.UNAUTHORIZED), { code: 'UNAUTHORIZED' });
   const controller = new AbortController(), timeout = setTimeout(() => controller.abort(), 60000);
   try {
-    const response = await fetch(`${SUPABASE_URL}/functions/v1/english-tutor`, {
+    const response = await fetch(`${SUPABASE_URL}/functions/v1/${endpoint}`, {
       method: 'POST', signal: controller.signal,
       headers: { Authorization: `Bearer ${data.session.access_token}`, apikey: SUPABASE_ANON_KEY, 'Content-Type': 'application/json' },
       body: JSON.stringify({ ...body, action }),

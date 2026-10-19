@@ -5,13 +5,15 @@ import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { feedbackFor } from './helpers/tutorDatabase.mjs';
 
-let server, Feedback, Topics, Usage, totalUsage;
+let server, Feedback, Topics, Usage, totalUsage, JapanesePhrase, Composer;
 before(async () => {
   server = await createServer({ server: { middlewareMode: true, hmr: false }, appType: 'custom', logLevel: 'silent' });
   Feedback = (await server.ssrLoadModule('/src/components/TutorFeedback.jsx')).default;
   Topics = (await server.ssrLoadModule('/src/components/TutorTopics.jsx')).default;
   const usage = await server.ssrLoadModule('/src/components/TutorUsageSummary.jsx');
   Usage = usage.default; totalUsage = usage.totalTutorUsage;
+  JapanesePhrase = (await server.ssrLoadModule('/src/components/JapanesePhrase.jsx')).default;
+  Composer = (await server.ssrLoadModule('/src/components/TutorComposer.jsx')).default;
 });
 after(async () => { await server?.close(); });
 
@@ -68,4 +70,29 @@ test('usage presents known tokens and missing reports separately, without daily 
   assert.deepEqual(sum.total, { requests: 400, tokens: 91356, unreported: 14 });
   assert.match(renderToStaticMarkup(createElement(Usage, { usage: null })), /아직 확인하지 못했습니다/);
   assert.doesNotMatch(renderToStaticMarkup(createElement(Usage, { usage: totalUsage() })), /사용량 미확인/);
+});
+
+test('Japanese speaking phrases show original, Hangul, meaning and collapsible kana with escaped text', () => {
+  const phrase = { sentence: 'コーヒーをください。', reading_kana: 'こーひーをください。', pronunciation_ko: '코오히이오 쿠다사이.', meaning_ko: '커피 주세요.' };
+  const html = renderToStaticMarkup(createElement(JapanesePhrase, { phrase, label: '추천 문장', onSpeak() {}, onPractice() {}, disabled: true }));
+  assert.match(html, /lang="ja">コーヒーをください。/);
+  assert.match(html, /한글 발음/); assert.match(html, /코오히이오 쿠다사이/); assert.match(html, /커피 주세요/);
+  assert.match(html, /<details/); assert.match(html, /따라 말하기/); assert.match(html, /disabled=""/);
+  const unsafe = renderToStaticMarkup(createElement(JapanesePhrase, { phrase: { ...phrase, meaning_ko: '<script>alert(1)</script>' } }));
+  assert.doesNotMatch(unsafe, /<script>/); assert.match(unsafe, /&lt;script&gt;/);
+});
+
+test('shared tutor composer labels both actions and requires voice confirmation without hiding text input', () => {
+  const props = { id: 'message', draft: { text: 'Hello', mode: 'voice', confirmed: false }, supported: true,
+    language: 'en-US', languages: [['en-US', '영어']], languageLabel: '음성 인식 언어', submitLabel: '메시지 제출하기' };
+  const pending = renderToStaticMarkup(createElement(Composer, props));
+  assert.match(pending, /<span>말하기<\/span>/); assert.match(pending, /<span>제출하기<\/span>/);
+  assert.match(pending, /type="submit"[^>]*disabled=""/);
+  assert.match(pending, /인식된 문장을 확인했습니다/);
+  const confirmed = renderToStaticMarkup(createElement(Composer, { ...props, draft: { ...props.draft, confirmed: true } }));
+  assert.doesNotMatch(confirmed, /type="submit"[^>]*disabled=""/);
+  const unsupported = renderToStaticMarkup(createElement(Composer, { ...props, supported: false, draft: { text: 'Hi', mode: 'text' } }));
+  assert.match(unsupported, /음성 입력 미지원/); assert.match(unsupported, /class="tutor-voice-button" disabled=""/);
+  assert.doesNotMatch(unsupported, /<textarea[^>]*disabled/);
+  assert.doesNotMatch(unsupported, /type="submit"[^>]*disabled/);
 });

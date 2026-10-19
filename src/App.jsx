@@ -18,6 +18,7 @@ import { deriveRecordColumns, getInvestmentAssetKey, validateInvestmentLedger } 
 const EMPTY_FILTERS = { query: '', dateFrom: '', dateTo: '', minAmount: '', maxAmount: '', minRating: '' };
 const APP_HISTORY_KEY = 'goodlifeNavigation';
 const EnglishTutor = lazy(() => import('./components/EnglishTutor'));
+const JapaneseTutor = lazy(() => import('./components/JapaneseTutor'));
 
 const REMINDER_DEFINITIONS = [
   {
@@ -132,7 +133,7 @@ export default function App() {
   }, [records]);
 
   function applyNavigationState(navigationState) {
-    const nextView = ['home', 'category', 'settings', 'tutor'].includes(navigationState?.view)
+    const nextView = ['home', 'category', 'settings', 'tutor', 'japanese-tutor'].includes(navigationState?.view)
       ? navigationState.view
       : 'home';
     const nextLayer = navigationState?.layer || '';
@@ -400,6 +401,7 @@ export default function App() {
           onEdit={openEdit}
           onDelete={confirmDelete}
           onOpenTutor={() => navigateToView('tutor')}
+          onOpenJapaneseTutor={() => navigateToView('japanese-tutor')}
         />
       )}
 
@@ -450,12 +452,17 @@ export default function App() {
           <EnglishTutor key={auth.userId} userId={auth.userId} onBack={() => navigateBack({ view: 'home' })} />
         </Suspense>
       )}
+      {view === 'japanese-tutor' && (
+        <Suspense fallback={<main className="screen"><p className="empty-text">일본어 튜터 불러오는 중…</p></main>}>
+          <JapaneseTutor key={auth.userId} userId={auth.userId} onBack={() => navigateBack({ view: 'home' })} />
+        </Suspense>
+      )}
 
       {recordsLoading && <div className="sync-indicator">동기화 중</div>}
       {recordsError && <div className="sync-error" role="alert">{recordsError}<button type="button" onClick={reloadRecords}>다시 불러오기</button></div>}
       {!recordsError && settingsError && <div className="sync-error" role="alert">{settingsError}<button type="button" onClick={reloadSettings}>다시 불러오기</button></div>}
 
-      <nav className="bottom-nav" aria-label="하단 내비게이션">
+      {!['tutor', 'japanese-tutor'].includes(view) && <nav className="bottom-nav" aria-label="하단 내비게이션">
         <button type="button" className={view === 'home' ? 'is-active' : ''} onClick={() => navigateToView('home')}>
           <span className="bottom-nav-icon" aria-hidden="true">⌂</span>
           <span>홈</span>
@@ -478,7 +485,7 @@ export default function App() {
           <span className="bottom-nav-icon" aria-hidden="true">⚙</span>
           <span>설정</span>
         </button>
-      </nav>
+      </nav>}
 
       {showPicker && (
         <CategoryPicker

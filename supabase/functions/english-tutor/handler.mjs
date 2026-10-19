@@ -39,7 +39,10 @@ export async function readSmallJson(req) {
   return body;
 }
 
-export function createTutorHandler({ createClient, env, fetchImpl = fetch }) {
+export function createTutorHandler({ createClient, env, fetchImpl = fetch, curriculum = null }) {
+  // Curriculum is server configuration, never a browser-supplied language/table name.
+  const lesson = curriculum || { buildTutorMessages, cleanTutorFeedback, learningSummary, LEVELS, getTutorTopic, makeTopicOpening };
+  const prefix = curriculum ? 'japanese_tutor_' : 'tutor_';
   return async function handler(req) {
     if (req.method === 'OPTIONS') return new Response('ok', { headers: cors });
     if (req.method !== 'POST') return json({ code: 'METHOD_NOT_ALLOWED' }, 405);
@@ -48,7 +51,9 @@ export function createTutorHandler({ createClient, env, fetchImpl = fetch }) {
       if (!url || !key) throw new TutorError('SETUP_REQUIRED', 503);
       const token = req.headers.get('Authorization')?.match(/^Bearer (\S+)$/i)?.[1];
       if (!token) throw new TutorError('UNAUTHORIZED', 401);
-      const db = createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
+      const client = createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
+      const scoped = name => name.startsWith('tutor_') ? prefix + name.slice(6) : name;
+      const db = { auth: client.auth, from: name => client.from(scoped(name)), rpc: (name, args) => client.rpc(scoped(name), args) };
       const auth = await db.auth.getUser(token);
       if (auth.error || !auth.data?.user?.id) throw new TutorError('UNAUTHORIZED', 401);
       const userId = auth.data.user.id;
@@ -84,15 +89,15 @@ export function createTutorHandler({ createClient, env, fetchImpl = fetch }) {
         const turns = checked(await db.from('tutor_turns').select('*').eq('user_id', userId).eq('state', 'completed').order('created_at', { ascending: false }).order('id').limit(200));
         const { user_id, ...ownUsage } = usage.users[0];
         return json({ profile, sessions, usage: { day: usage.day, ...ownUsage },
-          learning: learningSummary(turns, profile.level), review: turns.filter(turn => turn.feedback?.errors?.length || turn.feedback?.natural || turn.feedback?.english_version).map(publicTurn) });
+          learning: lesson.learningSummary(turns, profile.level), review: turns.filter(turn => turn.feedback?.errors?.length || turn.feedback?.natural || turn.feedback?.english_version).map(publicTurn) });
       }
       if (body.action === 'start-topic') {
         requireId(body.sessionId);
-        const topic = getTutorTopic(body.topicId);
+        const topic = lesson.getTutorTopic(body.topicId);
         if (!topic) throw new TutorError('INVALID_INPUT');
         const profile = checked(await db.from('tutor_profiles').select('level').eq('user_id', userId).maybeSingle());
         const session = checked(await db.rpc('tutor_start_topic', { p_user_id: userId, p_session_id: body.sessionId,
-          p_topic_id: topic.id, p_title: topic.label, p_opening: makeTopicOpening(topic.id, profile?.level) }));
+          p_topic_id: topic.id, p_title: topic.label, p_opening: lesson.makeTopicOpening(topic.id, profile?.level) }));
         return json({ session });
       }
       if (body.action === 'create-session') {
@@ -112,7 +117,7 @@ export function createTutorHandler({ createClient, env, fetchImpl = fetch }) {
         return json({ session: { id: session.id, title: session.title, topic_id: session.topic_id || null, opening: session.opening || null }, turns: turns.map(publicTurn) });
       }
       if (body.action === 'preferences') {
-        if (!LEVELS.includes(body.level) || typeof body.improvements !== 'boolean') throw new TutorError('INVALID_INPUT');
+        if (!lesson.LEVELS.includes(body.level) || typeof body.improvements !== 'boolean') throw new TutorError('INVALID_INPUT');
         checked(await db.from('tutor_profiles').upsert({ user_id: userId, level: body.level, improvements: body.improvements }, { onConflict: 'user_id' }));
         return json({ ok: true });
       }
@@ -138,7 +143,7 @@ export function createTutorHandler({ createClient, env, fetchImpl = fetch }) {
       let tokenCount = null, usageSaved = false;
       try {
         const previous = checked(await db.from('tutor_turns').select('content,feedback').eq('user_id', userId).eq('session_id', session.id).eq('state', 'completed').order('created_at', { ascending: false }).order('id').limit(6));
-        const messages = buildTutorMessages({ profile: begin.turn, session, turns: previous.reverse(), content: input.content, inputMode: input.inputMode });
+        const messages = lesson.buildTutorMessages({ profile: begin.turn, session, turns: previous.reverse(), content: input.content, inputMode: input.inputMode });
         const completion = await requestHiveCompletion(provider, messages, fetchImpl);
         tokenCount = reportedTokenCount(completion.usage);
         if (tokenCount !== null) {
@@ -148,7 +153,7 @@ export function createTutorHandler({ createClient, env, fetchImpl = fetch }) {
         if (completion.choices?.[0]?.finish_reason !== 'stop') throw new TutorError('INVALID_MODEL_OUTPUT', 502);
         let feedback;
         try { feedback = JSON.parse(completion.choices[0].message.content); } catch { throw new TutorError('INVALID_MODEL_OUTPUT', 502); }
-        feedback = cleanTutorFeedback(feedback, { ...input, improvements: begin.turn.improvements, level: begin.turn.level,
+        feedback = lesson.cleanTutorFeedback(feedback, { ...input, improvements: begin.turn.improvements, level: begin.turn.level,
           referenceSentences: previous.map(turn => turn.feedback?.natural?.sentence || turn.feedback?.english_version || (turn.feedback?.errors?.length ? turn.feedback.corrected : '')) });
         const finished = checked(await db.rpc('tutor_finish_turn', { p_user_id: userId, p_request_id: body.requestId, p_feedback: feedback,
           p_tokens: tokenCount }));

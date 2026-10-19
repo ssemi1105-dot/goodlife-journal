@@ -5,6 +5,8 @@ import CompactToggle from './ui/CompactToggle';
 import TutorFeedback, { ERROR_LABELS } from './TutorFeedback';
 import TutorTopics from './TutorTopics';
 import TutorUsageSummary, { TutorUsageNote } from './TutorUsageSummary';
+import TutorHeader from './TutorHeader';
+import TutorComposer from './TutorComposer';
 import './EnglishTutor.css';
 
 const LEVELS = ['A2', 'B1', 'B1+'];
@@ -98,28 +100,23 @@ export default function EnglishTutor({ userId, onBack }) {
   const showTopics = choosingTopic || (!tutor.session && !tutor.turns.length);
   const locked = tutor.busy || !!tutor.pending || listening;
   return <main className={`screen tutor-screen ${keyboardOpen ? 'tutor-keyboard-open' : ''}`} style={{ '--tutor-height': `${viewportHeight}px` }}>
-    <header className="tutor-header">
-      <button type="button" className="tutor-icon" title="뒤로" aria-label="뒤로" onClick={onBack}>←</button>
-      <div><h1>영어 튜터</h1><span>Mina {tutor.data ? `· ${tutor.data.profile.level}` : ''}</span></div>
-      {tutor.data && <span className="tutor-usage" title="하루 횟수 제한 없음 · 토큰 사용량은 학습 설정에서 확인">오늘 {tutor.data.usage.today.requests.toLocaleString('ko-KR')}회</span>}
-    </header>
-    {tutor.data && <div className="tutor-tabs" role="tablist" aria-label="영어 학습">
-      {[['chat', '대화'], ['review', `복습${remaining.length ? ` ${remaining.length}` : ''}`], ['settings', '학습 설정']].map(([id, label]) => <button key={id} type="button" role="tab" id={`tutor-tab-${id}`} aria-controls={`tutor-panel-${id}`} aria-selected={tab === id} onClick={() => changeTab(id)}>{label}</button>)}
-    </div>}
+    <TutorHeader title="영어 튜터" subtitle={`Mina${tutor.data ? ` · ${tutor.data.profile.level}` : ''}`} onBack={onBack} ready={!!tutor.data} tab={tab}
+      tabs={[[ 'chat', '대화' ], ['review', `복습${remaining.length ? ` ${remaining.length}` : ''}`], ['settings', '학습 설정']]} onTabChange={changeTab} onOpenMenu={stopAudio}>
+      {close => <div className="tutor-session-bar">
+        <select aria-label="대화 선택" value={tutor.session?.id || ''} disabled={locked} onChange={async event => { stopAudio(); if (await tutor.selectSession(event.target.value)) { setTab('chat'); setChoosingTopic(false); setPracticeText(''); close(); } }}>
+          {!tutor.session && <option value="">새 대화</option>}
+          {tutor.data.sessions.map(session => <option key={session.id} value={session.id}>{session.title} · {new Date(session.created_at).toLocaleDateString('ko-KR')}</option>)}
+        </select>
+        <button type="button" className="tutor-icon" aria-label="새 주제 선택" title="새 주제 선택" disabled={locked} onClick={() => { stopAudio(); setTab('chat'); setChoosingTopic(true); close(); }}>＋</button>
+        <button type="button" className="tutor-icon" aria-label="대화 삭제" title="대화 삭제" disabled={!tutor.session || locked} onClick={async () => { if (window.confirm('이 대화와 교정·복습 기록을 삭제할까요? 사용량은 초기화되지 않습니다.')) { stopAudio(); await tutor.deleteSession(tutor.session.id); close(); } }}>×</button>
+      </div>}
+    </TutorHeader>
     {tutor.loading && <p className="tutor-state" role="status">학습 기록 불러오는 중…</p>}
     {(tutor.error || voiceError) && <div className="tutor-error" role="alert"><span>{tutor.error || voiceError}</span>
       {!tutor.pending && <button type="button" disabled={tutor.busy} onClick={() => { setVoiceError(''); tutor.reload(); }}>다시 확인</button>}
     </div>}
     {unavailable && <div className="tutor-state"><h2>아직 연결되지 않았어요</h2><p>서버 배포와 계정 사용 허가가 완료되면 시작할 수 있습니다.</p></div>}
-    {tutor.data && tab === 'chat' && <section className="tutor-chat" role="tabpanel" id="tutor-panel-chat" aria-labelledby="tutor-tab-chat">
-      <div className="tutor-session-bar">
-        <select aria-label="대화 선택" value={tutor.session?.id || ''} disabled={locked} onChange={async event => { stopAudio(); if (await tutor.selectSession(event.target.value)) { setChoosingTopic(false); setPracticeText(''); } }}>
-          {!tutor.session && <option value="">새 대화</option>}
-          {tutor.data.sessions.map(session => <option key={session.id} value={session.id}>{session.title} · {new Date(session.created_at).toLocaleDateString('ko-KR')}</option>)}
-        </select>
-        <button type="button" className="tutor-icon" aria-label="새 주제 선택" title="새 주제 선택" disabled={locked} onClick={() => { stopAudio(); setChoosingTopic(true); }}>＋</button>
-        <button type="button" className="tutor-icon" aria-label="대화 삭제" title="대화 삭제" disabled={!tutor.session || locked} onClick={() => { if (window.confirm('이 대화와 교정·복습 기록을 삭제할까요? 사용량은 초기화되지 않습니다.')) tutor.deleteSession(tutor.session.id); }}>×</button>
-      </div>
+    {tutor.data && tab === 'chat' && <section className="tutor-chat" role="tabpanel" aria-label="영어 대화">
       <div className="tutor-conversation" ref={scrollRef} aria-label="영어 대화 내역" aria-busy={tutor.busy}>
         {showTopics && <TutorTopics disabled={locked} onSelect={startConversation} onFree={() => startConversation(null)} onClose={tutor.session ? () => setChoosingTopic(false) : null} />}
         {!showTopics && tutor.session?.opening && <section className="tutor-opening" aria-label="튜터 시작 질문">
@@ -139,21 +136,15 @@ export default function EnglishTutor({ userId, onBack }) {
         </article>)}
         {tutor.busy && <p className="tutor-note" role="status">처리 중…</p>}
       </div>
-      <form className="tutor-composer" onSubmit={send} hidden={showTopics}>
+      <TutorComposer id="tutor-message" inputRef={inputRef} draft={draft} onDraftChange={setDraft} onSubmit={send} hidden={showTopics}
+        busy={tutor.busy} pending={!!tutor.pending} listening={listening} supported={!!Recognition} onVoice={startVoice} onStop={canSpeak ? stopAudio : null}
+        language={language} onLanguageChange={setLanguage} languages={[[ 'en-US', '영어' ], ['ko-KR', '한국어']]} languageLabel="음성 인식 언어" submitLabel="메시지 제출하기"
+        placeholder={tutor.session?.opening ? '질문에 답해 보세요' : '오늘 있었던 일을 이야기해 보세요'}>
         {practiceText && <div className="tutor-practice-target"><div><span>따라 말하기</span><button type="button" className="tutor-icon" aria-label="따라 말하기 닫기" title="닫기" disabled={listening} onClick={() => setPracticeText('')}>×</button></div><p lang="en">{practiceText}</p></div>}
         {!!tutor.pending && <div className="tutor-pending"><span>이전 요청 확인이 필요합니다.</span><button type="button" disabled={tutor.busy} onClick={async () => { const content = tutor.pending.content; if (await tutor.resolvePending()) clearSubmittedDraft(content); }}>저장 상태 확인</button></div>}
-        <label className="tutor-input-label" htmlFor="tutor-message">메시지 <span>{draft.text.length}/1,000</span></label>
-        <div className="tutor-input-row"><textarea id="tutor-message" ref={inputRef} value={draft.text} maxLength={1000} rows={2} disabled={tutor.busy || listening || !!tutor.pending} placeholder={tutor.session?.opening ? '질문에 답해 보세요' : '오늘 있었던 일을 이야기해 보세요'} onChange={event => setDraft(current => ({ ...current, text: event.target.value }))} />
-          <button type="submit" className="tutor-send" aria-label="메시지 전송" title="메시지 전송" disabled={!draft.text.trim() || tutor.busy || listening || !!tutor.pending || (draft.mode === 'voice' && !draft.confirmed)}>↑</button>
-        </div>
-        <div className="tutor-compose-tools">
-          {Recognition && <><button type="button" className="tutor-voice-button" disabled={tutor.busy || !!tutor.pending} aria-pressed={listening} onClick={startVoice}>{listening ? '인식 종료' : '음성 입력'}</button><select aria-label="음성 인식 언어" value={language} disabled={listening} onChange={event => setLanguage(event.target.value)}><option value="en-US">영어</option><option value="ko-KR">한국어</option></select></>}
-          {canSpeak && <button type="button" className="tutor-icon tutor-stop-audio" title="음성 재생 정지" aria-label="음성 재생 정지" onClick={stopAudio}>■</button>}
-        </div>
-        {draft.mode === 'voice' && <label className="tutor-voice-confirm"><input type="checkbox" checked={draft.confirmed} onChange={event => setDraft(current => ({ ...current, confirmed: event.target.checked }))} />인식된 문장을 확인했습니다</label>}
-      </form>
+      </TutorComposer>
     </section>}
-    {tutor.data && tab === 'review' && <section className="tutor-scroll-panel" role="tabpanel" id="tutor-panel-review" aria-labelledby="tutor-tab-review">
+    {tutor.data && tab === 'review' && <section className="tutor-scroll-panel" role="tabpanel" aria-label="영어 복습">
       <div className="tutor-review-heading"><h2>다시 볼 표현</h2><span>{remaining.length}건 남음</span></div>
       {reviewItems.map(turn => <article className={`tutor-review-item ${turn.reviewed_at ? 'is-reviewed' : ''}`} key={turn.id}><time>{timestamp(turn.created_at)}</time>
         <TutorFeedback feedback={turn.feedback} onSpeak={canSpeak ? speak : null} onPractice={practice} disabled={locked} showReply={false} />
@@ -162,7 +153,7 @@ export default function EnglishTutor({ userId, onBack }) {
       {!reviewItems.length && <p className="tutor-state">아직 복습할 표현이 없습니다.</p>}
       <small className="tutor-note">최근 학습 200회를 기준으로 표시합니다.</small>
     </section>}
-    {tutor.data && tab === 'settings' && <section className="tutor-scroll-panel" role="tabpanel" id="tutor-panel-settings" aria-labelledby="tutor-tab-settings">
+    {tutor.data && tab === 'settings' && <section className="tutor-scroll-panel" role="tabpanel" aria-label="영어 학습 설정">
       <section className="tutor-setting-section"><h2>학습 수준</h2><div className="tutor-levels">{LEVELS.map(level => <button type="button" key={level} aria-pressed={tutor.data.profile.level === level} disabled={tutor.busy || !!tutor.pending} onClick={() => tutor.savePreferences(level, tutor.data.profile.improvements)}>{level}</button>)}</div>
         {tutor.data.learning.recommendation && <div className="tutor-recommendation"><span>{tutor.data.learning.recommendation} 단계도 연습해 볼까요?</span><button type="button" disabled={tutor.busy} onClick={() => tutor.savePreferences(tutor.data.learning.recommendation, tutor.data.profile.improvements)}>변경</button></div>}
         <p className="tutor-note">공인 시험 점수가 아닌 학습 난이도입니다. 수준은 자동으로 바뀌지 않습니다.</p>

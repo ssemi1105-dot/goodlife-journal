@@ -5676,7 +5676,7 @@ select:focus {
 .tcx-import-status { color: var(--text-muted); }
 .tcx-import-error { color: var(--expense); }
 
-.tutor-entry-bar { display: flex; justify-content: flex-end; margin-top: 8px; }
+.tutor-entry-bar { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
 .tutor-category-tile .category-tile-copy strong { white-space: normal; overflow-wrap: anywhere; }
 .admin-tutor-access { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; padding-top: 8px; }
 .admin-tutor-access small { color: var(--text-muted); font-size: 11px; }
