@@ -108,6 +108,13 @@ export function feedbackFor(content = 'I ate apple.') {
     natural: { sentence: "Can you recommend something for dinner? I'm having dinner with my wife.", explanation_ko: '먹을 음식은 something for dinner가 자연스럽고, 누구와 식사하는지 별도 문장으로 밝히면 명확합니다.' },
     tutor_reply: 'What kind of food do you and your wife enjoy?',
   };
+  if (content === 'I always using the air conditioner.') return {
+    ...feedbackFor('Hello!'), corrected: 'I always use the air conditioner.',
+    errors: [{ type: 'verb_form', original: 'using', corrected: 'use', explanation_ko: '평소 습관을 말할 때 현재형 use를 써요.' }],
+    natural: { sentence: 'I always use the air conditioner.', explanation_ko: '늘 사용하는 습관을 현재형으로 표현해요.' },
+    tutor_reply: 'What temperature do you usually set it to?',
+    level_signal: null, improvements: null, memory: null,
+  };
   const error = content.includes('ate apple') ? [{ type: 'article', original: 'apple', corrected: 'an apple', explanation_ko: '셀 수 있는 단수 명사 앞에 관사가 필요해요.' }] : [];
   return { spec_version: '1.0', corrected: error.length ? content.replace('apple', 'an apple') : content,
     english_version: /[가-힣]/.test(content) ? 'I had a nice day today.' : null, errors: error, improvements: [],

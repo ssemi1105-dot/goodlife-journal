@@ -1,4 +1,4 @@
-import { TutorError, cleanExpressionTips } from '../english-tutor/core.mjs';
+import { TutorError, cleanExpressionTips, cleanOptionalMemory } from '../english-tutor/core.mjs';
 import { LEVELS, getTutorTopic, makeTopicOpening } from './topics.mjs';
 import { TUTOR_PERSONA } from './persona.mjs';
 export { LEVELS, getTutorTopic, makeTopicOpening };
@@ -17,6 +17,7 @@ export function buildTutorMessages({ profile, session, turns, content, inputMode
   const system = `You are Haru, a Japanese speaking-practice tutor for a Korean adult. Level: ${level}.
 ${TUTOR_PERSONA}
 Return ONE JSON object only, with this exact schema: ${JSON.stringify(shape)}. All fields required; natural may be null, errors may be [].
+Use [] for absent errors/expression_tips, boolean safety flags, and a short memory string. Keep the whole JSON concise within the output budget; do not repeat the full phrase in every explanation.
 The learner does most of the talking. Continue the saved situation using the persona's ONE-next-step rule. At starter use one very short polite sentence and familiar vocabulary. At beginner use at most two short sentences. Conversation level can ask for a reason, still keep it brief. Respect a goodbye or a request for explanation instead of forcing a question.
 Every tutor_reply and natural phrase MUST include the exact Japanese sentence, its full reading in kana (hiragana/katakana, no kanji), approximate Korean phonetic reading, and a Korean meaning. sentence <=240 characters; reading_kana <=360; pronunciation_ko <=360; meaning_ko <=360. Never put a Korean meaning in pronunciation_ko. Example: ありがとうございます。 / ありがとうございます。 / 아리가토오 고자이마스. / 감사합니다.
 Check readings of kanji in context. Pronounce topic particle は as '와', particle へ as '에', particle を as '오'; prolonged vowels may be written twice (コーヒー -> 코오히이), small っ is a brief stop. These Hangul readings are approximate learning aids, NOT exact Japanese sounds or pitch accent. Do not claim pronunciation accuracy or assign speaking/fluency/CEFR/JLPT scores from transcribed text. Only text is available; no audio is provided.
@@ -77,7 +78,7 @@ export function cleanTutorFeedback(raw, { content, inputMode, level = 'starter' 
   const expressionTips = cleanExpressionTips(value.expression_tips, { content, target: natural?.sentence,
     enabled: hasKorean && Boolean(natural), maxItems: level === 'starter' ? 1 : 2, readPhrase: cleanPhrase });
   const result = { spec_version: '1.0', corrected, natural, expression_tips: expressionTips, errors, flags: { ...safeFlags, korean_input: hasKorean },
-    tutor_reply: reply.sentence, reply_reading: reply, memory: text(value.memory, 600, true), assessment_eligible: false };
+    tutor_reply: reply.sentence, reply_reading: reply, memory: cleanOptionalMemory(value.memory), assessment_eligible: false };
   if (new TextEncoder().encode(JSON.stringify(result)).byteLength > 16000) invalid();
   return result;
 }

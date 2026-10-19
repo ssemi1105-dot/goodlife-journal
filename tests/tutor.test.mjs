@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { buildTutorMessages, cleanTutorFeedback, learningSummary, validateSend } from '../supabase/functions/english-tutor/core.mjs';
+import { buildTutorMessages, cleanTutorFeedback, parseTutorFeedback, learningSummary, validateSend } from '../supabase/functions/english-tutor/core.mjs';
 import { createTutorHandler, readSmallJson } from '../supabase/functions/english-tutor/handler.mjs';
 import { feedbackFor } from './helpers/tutorDatabase.mjs';
 import { HIVE_MODEL, hiveConfiguration, readHiveCompletion, requestHiveCompletion } from '../supabase/functions/english-tutor/hiveProvider.mjs';
@@ -234,5 +234,54 @@ test('Mina receives the actual retry context and learner choice, not fabricated 
     assert.match(messages[0].content, /Accept a correct equivalent/);
     assert.match(messages[0].content, /Never claim to hear pronunciation, remember another session/);
     assert.ok(!JSON.stringify(messages).includes('PRIVATE_JOURNAL'));
+  }
+});
+
+test('complete standalone JSON fences are accepted without repairing truncated or ambiguous output', () => {
+  const raw = feedbackFor('I always using the air conditioner.'), json = JSON.stringify(raw);
+  for (const source of [json, '\ufeff  ' + json, '```json\n' + json + '\n```', '```JSON\r\n' + json + '\r\n```', '```\n' + json + '\n```']) {
+    assert.deepEqual(parseTutorFeedback(source), raw);
+  }
+  for (const source of ['Here is your answer:\n' + json, '```json\n' + json, '```json\n' + json.slice(0, -1) + '\n```', json + '\n' + json, '[]', 'null', '"text"', 'x'.repeat(32001), '']) {
+    assert.throws(() => parseTutorFeedback(source), /INVALID_MODEL_OUTPUT/);
+  }
+});
+
+test('short air-conditioner answer keeps correction and reply even with absent optional assessment and style data', () => {
+  const content = 'I always using the air conditioner.', raw = feedbackFor(content);
+  for (const level_signal of [null, undefined, {}, { observed_level: 'A1', confidence: 'high', evidence_ko: '지원하지 않는 수준' }, 'not-an-assessment']) {
+    for (const improvements of [null, undefined, [], {}, [{ original: 'using', suggestion: null }]]) {
+      const result = cleanTutorFeedback({ ...raw, level_signal, improvements }, { ...options, content, improvements: true });
+      assert.equal(result.corrected, 'I always use the air conditioner.');
+      assert.equal(result.errors.length, 1);
+      assert.equal(result.tutor_reply, raw.tutor_reply);
+      assert.equal(result.natural.sentence, result.corrected);
+      assert.equal(result.assessment_eligible, false);
+      assert.equal(result.level_signal.observed_level, null);
+      assert.deepEqual(result.improvements, []);
+      assert.equal(result.memory, null);
+    }
+  }
+  const longer = 'I usually use the air conditioner at home during summer.';
+  assert.equal(cleanTutorFeedback({ ...feedbackFor(longer), level_signal: null }, { ...options, content: longer }).assessment_eligible, false);
+  for (const key of ['stt_suspected', 'sensitive', 'off_topic']) {
+    assert.throws(() => cleanTutorFeedback({ ...raw, flags: { ...raw.flags, [key]: null } }, { ...options, content }), /INVALID_MODEL_OUTPUT/);
+  }
+  assert.throws(() => cleanTutorFeedback({ ...raw, errors: null }, { ...options, content }), /INVALID_MODEL_OUTPUT/);
+  assert.throws(() => cleanTutorFeedback({ ...raw, tutor_reply: '' }, { ...options, content }), /INVALID_MODEL_OUTPUT/);
+});
+
+test('provider rejection distinguishes output limit, broken stream and bad JSON while preserving known token usage', async () => {
+  for (const [reason, response] of [
+    ['OUTPUT_LIMIT', Response.json({ choices: [{ finish_reason: 'length', message: { content: '{}' } }], usage: { total_tokens: 1400 } })],
+    ['INCOMPLETE_STREAM', new Response('data: {"choices":[{"index":0,"delta":{"content":"{}"},"finish_reason":"stop"}]}\n\n', { headers: { 'Content-Type': 'text/event-stream' } })],
+    ['INVALID_JSON', new Response('broken-json')],
+    ['EMPTY_REPLY', Response.json({ choices: [{ finish_reason: 'stop', message: { content: '' } }] })],
+  ]) {
+    await assert.rejects(readHiveCompletion(response), error => {
+      assert.equal(error.code, 'INVALID_MODEL_OUTPUT'); assert.equal(error.reason, reason);
+      assert.equal(error.reportedTokens, reason === 'OUTPUT_LIMIT' ? 1400 : null);
+      return true;
+    });
   }
 });

@@ -1,10 +1,11 @@
-import { buildTutorMessages, cleanTutorFeedback, learningSummary, LEVELS, requireId, TutorError, validateSend } from './core.mjs';
+import { buildTutorMessages, cleanTutorFeedback, parseTutorFeedback, learningSummary, LEVELS, requireId, TutorError, validateSend } from './core.mjs';
 import { hiveConfiguration, requestHiveCompletion, reportedTokenCount } from './hiveProvider.mjs';
 import { getTutorTopic, makeTopicOpening } from './topics.mjs';
 
 const cors = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type', 'Access-Control-Allow-Methods': 'POST, OPTIONS' };
 const json = (body, status = 200) => new Response(JSON.stringify(body), { status, headers: { ...cors, 'Content-Type': 'application/json', 'Cache-Control': 'no-store' } });
 const statuses = { INVALID_INPUT: 400, ADMIN_REQUIRED: 403, TARGET_USER_NOT_FOUND: 404, TUTOR_FORBIDDEN: 403, SESSION_NOT_FOUND: 404, REQUEST_NOT_FOUND: 404, REQUEST_CONFLICT: 409, REQUEST_BUSY: 409, REQUEST_EXPIRED: 409, SESSION_FULL: 409, TOO_MANY_SESSIONS: 409, DAILY_LIMIT: 429, GLOBAL_LIMIT: 429, RATE_LIMIT: 429 };
+const outputReasons = new Set(['EMPTY_REPLY', 'RESPONSE_TOO_LARGE', 'INVALID_JSON', 'SCHEMA_MISMATCH', 'INVALID_STREAM', 'OUTPUT_LIMIT', 'INCOMPLETE_STREAM']);
 function checked(result) {
   if (!result.error) return result.data;
   if (['42P01', '42703', 'PGRST202', 'PGRST205'].includes(result.error.code)) throw new TutorError('SETUP_REQUIRED', 503);
@@ -39,7 +40,7 @@ export async function readSmallJson(req) {
   return body;
 }
 
-export function createTutorHandler({ createClient, env, fetchImpl = fetch, curriculum = null }) {
+export function createTutorHandler({ createClient, env, fetchImpl = fetch, curriculum = null, logDiagnostic = entry => console.warn(JSON.stringify(entry)) }) {
   // Curriculum is server configuration, never a browser-supplied language/table name.
   const lesson = curriculum || { buildTutorMessages, cleanTutorFeedback, learningSummary, LEVELS, getTutorTopic, makeTopicOpening };
   const prefix = curriculum ? 'japanese_tutor_' : 'tutor_';
@@ -140,26 +141,38 @@ export function createTutorHandler({ createClient, env, fetchImpl = fetch, curri
       const begin = checked(await db.rpc('tutor_begin_turn', { p_user_id: userId, p_session_id: body.sessionId, p_request_id: body.requestId,
         p_content: input.content, p_input_mode: input.inputMode, p_voice_confirmed: input.voiceConfirmed }));
       if (!begin.fresh) return json({ turn: publicTurn(begin.turn) });
-      let tokenCount = null, usageSaved = false;
+      let tokenCount = null, usageSaved = false, stage = 'context';
       try {
         const previous = checked(await db.from('tutor_turns').select('content,feedback').eq('user_id', userId).eq('session_id', session.id).eq('state', 'completed').order('created_at', { ascending: false }).order('id').limit(6));
         const messages = lesson.buildTutorMessages({ profile: begin.turn, session, turns: previous.reverse(), content: input.content, inputMode: input.inputMode });
+        stage = 'provider';
         const completion = await requestHiveCompletion(provider, messages, fetchImpl);
         tokenCount = reportedTokenCount(completion.usage);
+        stage = 'usage';
         if (tokenCount !== null) {
           checked(await db.rpc('tutor_report_usage', { p_user_id: userId, p_request_id: body.requestId, p_tokens: tokenCount }));
           usageSaved = true;
         }
-        if (completion.choices?.[0]?.finish_reason !== 'stop') throw new TutorError('INVALID_MODEL_OUTPUT', 502);
-        let feedback;
-        try { feedback = JSON.parse(completion.choices[0].message.content); } catch { throw new TutorError('INVALID_MODEL_OUTPUT', 502); }
+        stage = 'json';
+        if (completion.choices?.[0]?.finish_reason !== 'stop') throw new TutorError('INVALID_MODEL_OUTPUT', 502, 'INCOMPLETE_STREAM');
+        let feedback = parseTutorFeedback(completion.choices[0].message.content);
+        stage = 'schema';
         feedback = lesson.cleanTutorFeedback(feedback, { ...input, improvements: begin.turn.improvements, level: begin.turn.level,
           referenceSentences: previous.map(turn => turn.feedback?.natural?.sentence || turn.feedback?.english_version || (turn.feedback?.errors?.length ? turn.feedback.corrected : '')) });
+        // Missing optional memory must not erase the owner's existing conversation summary.
+        feedback.memory ??= session.summary || '';
+        stage = 'save';
         const finished = checked(await db.rpc('tutor_finish_turn', { p_user_id: userId, p_request_id: body.requestId, p_feedback: feedback,
           p_tokens: tokenCount }));
         return json({ turn: publicTurn(finished) });
       } catch (error) {
         tokenCount ??= reportedTokenCount({ total_tokens: error.reportedTokens });
+        const reason = error.code === 'INVALID_MODEL_OUTPUT'
+          ? (outputReasons.has(error.reason) ? error.reason : 'SCHEMA_MISMATCH') : null;
+        if (reason) {
+          // Diagnostics contain no prompts, learner text, model output, account IDs or secrets.
+          try { logDiagnostic({ event: 'tutor_response_rejected', tutor: curriculum ? 'japanese' : 'english', stage, reason, reported_tokens: tokenCount }); } catch { /* Logging never changes persistence or billing. */ }
+        }
         if (tokenCount !== null && !usageSaved) {
           const settled = await db.rpc('tutor_report_usage', { p_user_id: userId, p_request_id: body.requestId, p_tokens: tokenCount });
           if (settled.error) return json({ code: 'STATUS_UNKNOWN' }, 503);
@@ -168,10 +181,11 @@ export function createTutorHandler({ createClient, env, fetchImpl = fetch, curri
         // A lost commit response may already be completed; fail RPC never changes a completed turn.
         const failed = await db.rpc('tutor_fail_turn', { p_user_id: userId, p_request_id: body.requestId, p_code: code });
         if (failed.error) return json({ code: 'STATUS_UNKNOWN' }, 503);
-        throw new TutorError(code, 502);
+        throw new TutorError(code, 502, reason);
       }
     } catch (error) {
-      return json({ code: error instanceof TutorError ? error.code : 'SERVER_ERROR' }, error instanceof TutorError ? error.status : 503);
+      return json({ code: error instanceof TutorError ? error.code : 'SERVER_ERROR',
+        ...(error instanceof TutorError && outputReasons.has(error.reason) ? { reason: error.reason } : {}) }, error instanceof TutorError ? error.status : 503);
     }
   };
 }

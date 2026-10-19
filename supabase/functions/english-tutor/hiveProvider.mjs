@@ -25,18 +25,18 @@ export function hiveConfiguration(env) {
 // No automatic second call, including when a stream is incomplete or malformed.
 export async function readHiveCompletion(response) {
   const reader = response.body?.getReader();
-  if (!reader) throw new TutorError('INVALID_MODEL_OUTPUT', 502);
+  if (!reader) throw new TutorError('INVALID_MODEL_OUTPUT', 502, 'EMPTY_REPLY');
   const streaming = response.headers.get('content-type')?.includes('text/event-stream');
   let bytes = 0, buffer = '', content = '', reason = null, usage = null, doneMarker = false;
   let eventLines = [];
   const decoder = new TextDecoder();
-  const invalid = () => { throw new TutorError('INVALID_MODEL_OUTPUT', 502); };
+  const invalid = (reason = 'INVALID_STREAM') => { throw new TutorError('INVALID_MODEL_OUTPUT', 502, reason); };
   function event() {
     if (!eventLines.length) return;
     const data = eventLines.join('\n'); eventLines = [];
     if (data.trim() === '[DONE]') { doneMarker = true; return; }
     let chunk; try { chunk = JSON.parse(data); } catch { invalid(); }
-    if (!chunk || chunk.error) invalid();
+    if (!chunk || typeof chunk !== 'object' || chunk.error || (chunk.choices != null && !Array.isArray(chunk.choices))) invalid();
     if (chunk.usage) usage = chunk.usage;
     for (const choice of chunk.choices || []) {
       if (choice.index !== 0) invalid();
@@ -61,19 +61,23 @@ export async function readHiveCompletion(response) {
       const { value, done } = await reader.read();
       if (done) break;
       bytes += value.byteLength;
-      if (bytes > MAX_RESPONSE_BYTES) invalid();
+      if (bytes > MAX_RESPONSE_BYTES) invalid('RESPONSE_TOO_LARGE');
       buffer += decoder.decode(value, { stream: true });
       if (streaming) consumeLines();
     }
     buffer += decoder.decode();
     if (!streaming) {
-      let completion; try { completion = JSON.parse(buffer); } catch { invalid(); }
+      let completion; try { completion = JSON.parse(buffer); } catch { invalid('INVALID_JSON'); }
       usage = completion?.usage;
-      if (completion?.choices?.[0]?.finish_reason !== 'stop' || typeof completion.choices[0].message?.content !== 'string') invalid();
+      if (completion?.choices?.[0]?.finish_reason === 'length') invalid('OUTPUT_LIMIT');
+      if (completion?.choices?.[0]?.finish_reason !== 'stop') invalid('INCOMPLETE_STREAM');
+      if (typeof completion.choices[0].message?.content !== 'string' || !completion.choices[0].message.content.trim()) invalid('EMPTY_REPLY');
       return completion;
     }
     if (!doneMarker) { buffer += '\n\n'; consumeLines(); }
-    if (!doneMarker || reason !== 'stop' || !content.trim()) invalid();
+    if (reason === 'length') invalid('OUTPUT_LIMIT');
+    if (!doneMarker || reason !== 'stop') invalid('INCOMPLETE_STREAM');
+    if (!content.trim()) invalid('EMPTY_REPLY');
     return { choices: [{ finish_reason: reason, message: { content } }], usage };
   } catch (error) {
     // A paid but invalid/truncated reply may still include reliable usage metadata.

@@ -9,7 +9,22 @@ export const MAX_OUTPUT_TOKENS = 1400;
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const korean = /[\u1100-\u11ff\u3130-\u318f\uac00-\ud7a3]/;
 export class TutorError extends Error {
-  constructor(code, status = 400) { super(code); this.code = code; this.status = status; }
+  constructor(code, status = 400, reason = null) { super(code); this.code = code; this.status = status; this.reason = reason; }
+}
+export function parseTutorFeedback(content) {
+  if (typeof content !== 'string' || !content.trim()) throw new TutorError('INVALID_MODEL_OUTPUT', 502, 'EMPTY_REPLY');
+  if (new TextEncoder().encode(content).byteLength > 32000) throw new TutorError('INVALID_MODEL_OUTPUT', 502, 'RESPONSE_TOO_LARGE');
+  let source = content.trim();
+  // Accept only a complete standalone JSON fence, never extract or repair partial JSON.
+  const fenced = /^```(?:json)?\s*\r?\n([\s\S]*?)\r?\n```$/i.exec(source);
+  if (fenced) source = fenced[1].trim();
+  let parsed;
+  try { parsed = JSON.parse(source); } catch { throw new TutorError('INVALID_MODEL_OUTPUT', 502, 'INVALID_JSON'); }
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new TutorError('INVALID_MODEL_OUTPUT', 502, 'SCHEMA_MISMATCH');
+  return parsed;
+}
+export function cleanOptionalMemory(value) {
+  return typeof value === 'string' && value.length <= 600 ? value : null;
 }
 export function requireId(value) {
   if (typeof value !== 'string' || !uuid.test(value)) throw new TutorError('INVALID_INPUT');
@@ -42,6 +57,7 @@ export function buildTutorMessages({ profile, session, turns, content, inputMode
 ${TUTOR_PERSONA}
 Return exactly one JSON object, no markdown fences, using this shape: ${JSON.stringify(shape)}
 All listed keys are required. Errors use only: ${ERROR_TYPES.join(', ')}. Maximum 5 errors, 2 improvements (1 at A2).
+Use [] for absent errors/improvements/expression_tips. Keep all safety flags boolean. Without assessment evidence use level_signal={observed_level:null,confidence:"low",evidence_ko:"근거 부족"}; still provide correction and tutor_reply for short answers. Keep the whole JSON concise within the output budget.
 Correct ONLY genuine errors in the user's English. Each error.original must be a literal substring of the current user text; original and corrected must differ. Never label correct phrases as errors. Do not penalize casual spoken fragments or punctuation alone. Explain in Korean in <=120 characters each. Do not overcorrect acceptable variants.
 Check the WHOLE utterance for verb forms, missing articles, unclear references, and sentence connections. A2 means simple explanations, NOT overlooking real errors. Prioritize up to 3 useful corrections; include up to 5 only when necessary. A short answer to your question can be perfectly natural: do not demand full sentences.
 The corrected field must be constructed ONLY by replacing listed error substrings in the original. Do not reorder/rewrite correct parts. Preserve Korean parts verbatim there. If no errors, corrected must equal original exactly.
@@ -101,9 +117,9 @@ export function cleanExpressionTips(raw, { content, target, enabled, maxItems = 
 }
 export function cleanTutorFeedback(raw, { content, inputMode, improvements, level, referenceSentences = [] }) {
   const value = object(raw);
-  if (value.spec_version !== SPEC_VERSION || !Array.isArray(value.errors) || !Array.isArray(value.improvements) || value.errors.length > 5 || value.improvements.length > 2) throw new TutorError('INVALID_MODEL_OUTPUT', 502);
+  if (value.spec_version !== SPEC_VERSION || !Array.isArray(value.errors) || value.errors.length > 5) throw new TutorError('INVALID_MODEL_OUTPUT', 502);
   const flags = object(value.flags);
-  for (const key of ['korean_input', 'stt_suspected', 'off_topic', 'sensitive']) if (typeof flags[key] !== 'boolean') throw new TutorError('INVALID_MODEL_OUTPUT', 502);
+  for (const key of ['stt_suspected', 'off_topic', 'sensitive']) if (typeof flags[key] !== 'boolean') throw new TutorError('INVALID_MODEL_OUTPUT', 502);
   if (flags.meaning_unclear != null && typeof flags.meaning_unclear !== 'boolean') throw new TutorError('INVALID_MODEL_OUTPUT', 502);
   const hasKorean = korean.test(content);
   const safeFlags = { korean_input: hasKorean, stt_suspected: inputMode === 'voice' && flags.stt_suspected, off_topic: flags.off_topic, sensitive: flags.sensitive, meaning_unclear: flags.meaning_unclear === true };
@@ -122,24 +138,29 @@ export function cleanTutorFeedback(raw, { content, inputMode, improvements, leve
   });
   let corrected = content;
   for (const span of used.sort((a, b) => b.start - a.start)) corrected = corrected.slice(0, span.start) + span.replacement + corrected.slice(span.end);
-  const suggestions = !improvements || uncertain ? [] : value.improvements.slice(0, level === 'A2' ? 1 : 2).flatMap(item => {
-    object(item);
-    const original = text(item.original, 300), suggestion = text(item.suggestion, 300), reason = text(item.reason_ko, 120);
-    return content.includes(original) && original !== suggestion ? [{ original, suggestion, reason_ko: reason }] : [];
+  const suggestions = !improvements || uncertain || !Array.isArray(value.improvements) ? [] : value.improvements.slice(0, level === 'A2' ? 1 : 2).flatMap(item => {
+    try {
+      object(item);
+      const original = text(item.original, 300), suggestion = text(item.suggestion, 300), reason = text(item.reason_ko, 120);
+      return content.includes(original) && original !== suggestion ? [{ original, suggestion, reason_ko: reason }] : [];
+    } catch (error) { if (error instanceof TutorError) return []; throw error; }
   });
-  const signal = object(value.level_signal);
+  const candidate = value.level_signal;
+  const validSignal = candidate && typeof candidate === 'object' && !Array.isArray(candidate)
+    && (candidate.observed_level === null || LEVELS.includes(candidate.observed_level))
+    && ['low', 'medium', 'high'].includes(candidate.confidence)
+    && typeof candidate.evidence_ko === 'string' && candidate.evidence_ko.trim().length > 0 && candidate.evidence_ko.length <= 160;
+  const signal = validSignal ? candidate : { observed_level: null, confidence: 'low', evidence_ko: '평가 정보가 없어 수준 평가에서 제외했어요.' };
   let natural = null;
   if (value.natural != null && !hasKorean && !uncertain) {
     const item = object(value.natural);
     const sentence = text(item.sentence, 1000), explanation = text(item.explanation_ko, 180);
     if (sentence.trim() !== content.trim()) natural = { sentence, explanation_ko: explanation };
   }
-  if (signal.observed_level !== null && !LEVELS.includes(signal.observed_level)) throw new TutorError('INVALID_MODEL_OUTPUT', 502);
-  if (!['low', 'medium', 'high'].includes(signal.confidence)) throw new TutorError('INVALID_MODEL_OUTPUT', 502);
   const wordCount = (content.match(/[a-z]+(?:'[a-z]+)?/gi) || []).length;
   const normalizePractice = sentence => String(sentence || '').toLowerCase().replace(/[^a-z0-9']/g, '');
   const practiceRepeat = referenceSentences.some(sentence => sentence && normalizePractice(sentence) === normalizePractice(content));
-  const eligible = !practiceRepeat && !hasKorean && wordCount >= 8 && !uncertain;
+  const eligible = Boolean(validSignal) && !practiceRepeat && !hasKorean && wordCount >= 8 && !uncertain;
   const englishVersion = hasKorean && !uncertain && value.english_version != null ? text(value.english_version, 1800) : null;
   const expressionTips = cleanExpressionTips(value.expression_tips, { content, target: englishVersion,
     enabled: Boolean(englishVersion), maxItems: level === 'A2' ? 1 : 2 });
@@ -149,7 +170,7 @@ export function cleanTutorFeedback(raw, { content, inputMode, improvements, leve
     errors, improvements: suggestions, tutor_reply: text(value.tutor_reply, 600),
     level_signal: { observed_level: eligible ? signal.observed_level : null, confidence: eligible ? signal.confidence : 'low', evidence_ko: text(signal.evidence_ko, 160) },
     flags: safeFlags, assessment_eligible: eligible, word_count: wordCount,
-    memory: text(value.memory, 600, true),
+    memory: cleanOptionalMemory(value.memory),
   };
   if (new TextEncoder().encode(JSON.stringify(result)).byteLength > 16000) throw new TutorError('INVALID_MODEL_OUTPUT', 502);
   return result;

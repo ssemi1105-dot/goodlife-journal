@@ -135,3 +135,16 @@ test('Haru receives the actual practice phrase and unchanged inputs for retry, s
     assert.ok(!JSON.stringify(messages).includes('PRIVATE_JOURNAL'));
   }
 });
+
+test('Japanese reply survives absent optional memory but not missing required readings or safety flags', () => {
+  const content = '커피 주세요', raw = japaneseFeedback(content);
+  for (const memory of [null, undefined, {}, 'x'.repeat(601)]) {
+    const result = cleanTutorFeedback({ ...raw, memory }, { content, inputMode: 'text' });
+    assert.equal(result.memory, null);
+    assert.equal(result.tutor_reply, raw.tutor_reply.sentence);
+    assert.equal(result.natural.pronunciation_ko, raw.natural.pronunciation_ko);
+  }
+  const incomplete = structuredClone(raw); delete incomplete.tutor_reply.pronunciation_ko;
+  assert.throws(() => cleanTutorFeedback(incomplete, { content, inputMode: 'text' }), /INVALID_MODEL_OUTPUT/);
+  assert.throws(() => cleanTutorFeedback({ ...raw, flags: null }, { content, inputMode: 'text' }), /INVALID_MODEL_OUTPUT/);
+});

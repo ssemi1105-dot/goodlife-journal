@@ -29,14 +29,25 @@ const messages = {
   PROVIDER_BUSY: 'Hive 요청이 많습니다. 잠시 후 다시 시도해 주세요.',
   PROVIDER_ERROR: 'Hive에 연결하지 못했습니다. 키·모델 설정 또는 서비스 상태를 확인해 주세요.',
   PROVIDER_TIMEOUT: '답변 대기 시간이 초과되었습니다. 입력 내용은 유지됩니다.',
-  INVALID_MODEL_OUTPUT: '답변 형식을 확인하지 못해 학습 평가에 반영하지 않았습니다.',
+  INVALID_MODEL_OUTPUT: 'AI 답변을 처리하지 못해 교정과 응답을 저장하지 못했습니다. 보낸 문장은 남아 있습니다. 반복 제출 시 추가 비용이 발생할 수 있습니다.',
   CONTEXT_TOO_LARGE: '대화 내용이 너무 깁니다. 새 대화를 시작해 주세요.',
   STATUS_UNKNOWN: '저장 결과를 확인하지 못했습니다. 새로 보내기 전에 저장 상태를 확인해 주세요.',
   NETWORK_ERROR: '서버에 연결하지 못했습니다. 인터넷과 함수 배포 상태를 확인해 주세요.',
   SERVER_ERROR: '영어 튜터 서버가 응답하지 않습니다. 잠시 후 다시 확인해 주세요.',
   FUNCTION_MISSING: 'english-tutor Edge Function이 아직 배포되지 않았습니다.',
 };
-export const tutorErrorMessage = code => messages[code] || messages.SERVER_ERROR;
+const outputMessages = {
+  OUTPUT_LIMIT: 'AI 답변이 길이 제한으로 중간에 끊겼습니다.',
+  INCOMPLETE_STREAM: 'AI 답변 수신이 끝까지 완료되지 않았습니다.',
+  INVALID_STREAM: 'AI 답변을 받는 과정에서 형식 오류가 발생했습니다.',
+  INVALID_JSON: 'AI 답변의 데이터 형식을 읽지 못했습니다.',
+  SCHEMA_MISMATCH: 'AI 답변에 필요한 교정 정보나 읽기 정보가 올바르지 않습니다.',
+  EMPTY_REPLY: 'AI가 빈 답변을 반환했습니다.',
+  RESPONSE_TOO_LARGE: 'AI 답변이 허용 크기를 초과했습니다.',
+};
+export const tutorErrorMessage = (code, reason) => code === 'INVALID_MODEL_OUTPUT' && Object.hasOwn(outputMessages, reason)
+  ? `${outputMessages[reason]} 교정과 응답은 저장되지 않았으며 보낸 문장은 남아 있습니다. 반복 제출 시 추가 비용이 발생할 수 있습니다.`
+  : messages[code] || messages.SERVER_ERROR;
 export const callTutor = (action, body) => callTutorEndpoint('english-tutor', action, body);
 export async function callJapaneseTutor(action, body) {
   try { return await callTutorEndpoint('japanese-tutor', action, body); }
@@ -56,7 +67,7 @@ async function callTutorEndpoint(endpoint, action, body = {}) {
     const result = await response.json().catch(() => null);
     if (!response.ok) {
       const code = result?.code && messages[result.code] ? result.code : response.status === 401 ? 'UNAUTHORIZED' : response.status === 404 ? 'FUNCTION_MISSING' : response.status === 403 ? 'TUTOR_FORBIDDEN' : 'SERVER_ERROR';
-      throw Object.assign(new Error(tutorErrorMessage(code)), { code, status: response.status });
+      throw Object.assign(new Error(tutorErrorMessage(code, result?.reason)), { code, status: response.status });
     }
     if (!result || typeof result !== 'object') throw Object.assign(new Error(messages.SERVER_ERROR), { code: 'SERVER_ERROR' });
     if ((action === 'bootstrap' && (!result.usage?.today || !result.usage?.total)) ||
