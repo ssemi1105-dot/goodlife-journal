@@ -69,3 +69,34 @@ test('Japanese corrections are literal, unique and non-overlapping, never halluc
   assert.equal(safe.errors.length, 1); assert.equal(safe.corrected, 'パンを食べます。');
   assert.equal(cleanTutorFeedback(raw, { content: 'がが', inputMode: 'text' }).errors.length, 0);
 });
+
+test('Korean and mixed Japanese coaching keeps original Japanese, complete readings, and ungraded Korean gaps', () => {
+  for (const content of ['커피 주세요', 'コーヒーを 두 잔 주세요']) {
+    const result = cleanTutorFeedback(japaneseFeedback(content), { content, inputMode: 'text', level: 'starter' });
+    assert.equal(result.corrected, content);
+    assert.equal(result.flags.korean_input, true);
+    assert.deepEqual(result.errors, []);
+    assert.equal(result.expression_tips.length, 1);
+    cleanPhrase(result.expression_tips[0]);
+    assert.ok(result.natural.sentence.includes(result.expression_tips[0].sentence));
+    assert.equal(result.assessment_eligible, false);
+  }
+  const mixed = cleanTutorFeedback(japaneseFeedback('コーヒーを 두 잔 주세요'), { content: 'コーヒーを 두 잔 주세요', inputMode: 'text' });
+  assert.equal(mixed.natural.sentence, 'コーヒーを二杯ください。');
+  assert.equal(mixed.expression_tips[0].pronunciation_ko, '니하이');
+});
+
+test('Japanese tips remain compatible, bounded and absent for Japanese-only or unclear pronunciation input', () => {
+  const content = '커피 주세요', raw = japaneseFeedback(content);
+  const legacy = { ...raw }; delete legacy.expression_tips;
+  assert.deepEqual(cleanTutorFeedback(legacy, { content, inputMode: 'text' }).expression_tips, []);
+  for (const flag of ['stt_suspected', 'meaning_unclear', 'sensitive']) {
+    const result = cleanTutorFeedback({ ...raw, flags: { ...raw.flags, [flag]: true } }, { content, inputMode: 'voice' });
+    assert.equal(result.natural, null); assert.deepEqual(result.expression_tips, []);
+  }
+  const missingReading = structuredClone(raw); delete missingReading.expression_tips[0].pronunciation_ko;
+  assert.throws(() => cleanTutorFeedback(missingReading, { content, inputMode: 'text' }), /INVALID_MODEL_OUTPUT/);
+  assert.throws(() => cleanTutorFeedback({ ...raw, expression_tips: Array(3).fill(raw.expression_tips[0]) }, { content, inputMode: 'text' }), /INVALID_MODEL_OUTPUT/);
+  assert.deepEqual(cleanTutorFeedback({ ...raw, expression_tips: [{ ...raw.expression_tips[0], source: '없는 원문' }] }, { content, inputMode: 'text' }).expression_tips, []);
+  assert.deepEqual(cleanTutorFeedback(raw, { content: 'コーヒーをください。', inputMode: 'text' }).expression_tips, []);
+});

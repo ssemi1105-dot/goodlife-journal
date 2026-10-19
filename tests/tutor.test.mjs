@@ -158,3 +158,47 @@ test('repeating a reference sentence is practice, not evidence for a level upgra
   assert.equal(result.level_signal.observed_level, null);
   assert.equal(result.level_signal.confidence, 'low');
 });
+
+test('Korean and mixed English inputs receive reusable expression coaching independently of optional alternatives', () => {
+  for (const content of ['오늘 회사에서 너무 바빴어.', 'I want to 아내랑 저녁 먹다.']) {
+    const raw = feedbackFor(content);
+    raw.level_signal = { observed_level: 'B1+', confidence: 'high', evidence_ko: '평가 대상 아님' };
+    const result = cleanTutorFeedback(raw, { ...options, content });
+    assert.equal(result.corrected, content);
+    assert.deepEqual(result.errors, []);
+    assert.deepEqual(result.improvements, []);
+    assert.equal(result.expression_tips.length, 1);
+    assert.ok(content.includes(result.expression_tips[0].source));
+    assert.ok(result.english_version.includes(result.expression_tips[0].sentence));
+    assert.equal(result.assessment_eligible, false);
+    assert.equal(result.level_signal.observed_level, null);
+    const legacy = { ...raw }; delete legacy.expression_tips;
+    assert.deepEqual(cleanTutorFeedback(legacy, { ...options, content }).expression_tips, []);
+  }
+  const messages = buildTutorMessages({ profile: { level: 'A2', improvements: false }, session: { title: '일상' }, turns: [], content: 'I want to 아내랑 저녁 먹다.', inputMode: 'text' });
+  assert.match(messages[0].content, /Korean expression coaching is ALWAYS enabled/);
+  assert.match(messages[0].content, /Preserve the learner's correct English/);
+});
+
+test('expression coaching rejects invented mappings, bounds payloads, and suppresses uncertain or English-only help', () => {
+  const content = 'I want to 아내랑 저녁 먹다.';
+  const raw = feedbackFor(content);
+  for (const replacement of [{ source: '없는 원문' }, { source: 'I want' }, { sentence: 'go swimming' }]) {
+    assert.deepEqual(cleanTutorFeedback({ ...raw, expression_tips: [{ ...raw.expression_tips[0], ...replacement }] }, { ...options, content }).expression_tips, []);
+  }
+  assert.equal(cleanTutorFeedback({ ...raw, expression_tips: [raw.expression_tips[0], raw.expression_tips[0]] }, { ...options, content, level: 'B1' }).expression_tips.length, 1);
+  assert.throws(() => cleanTutorFeedback({ ...raw, expression_tips: Array(3).fill(raw.expression_tips[0]) }, { ...options, content }), /INVALID_MODEL_OUTPUT/);
+  assert.throws(() => cleanTutorFeedback({ ...raw, expression_tips: [{ ...raw.expression_tips[0], explanation_ko: 'x'.repeat(161) }] }, { ...options, content }), /INVALID_MODEL_OUTPUT/);
+  for (const flag of ['sensitive', 'stt_suspected', 'off_topic', 'meaning_unclear']) {
+    const result = cleanTutorFeedback({ ...raw, flags: { ...raw.flags, [flag]: true } }, { ...options, content, inputMode: 'voice' });
+    assert.deepEqual(result.expression_tips, []);
+    assert.equal(result.english_version, null);
+    assert.deepEqual(result.errors, []);
+    assert.equal(result.assessment_eligible, false);
+  }
+  assert.deepEqual(cleanTutorFeedback(raw, options).expression_tips, []);
+  const second = { source: '아내랑', sentence: 'with my wife', explanation_ko: '함께하는 사람 앞에 with를 써요.' };
+  const two = { ...raw, expression_tips: [raw.expression_tips[0], second] };
+  assert.equal(cleanTutorFeedback(two, { ...options, content }).expression_tips.length, 1);
+  assert.equal(cleanTutorFeedback(two, { ...options, content, level: 'B1' }).expression_tips.length, 2);
+});

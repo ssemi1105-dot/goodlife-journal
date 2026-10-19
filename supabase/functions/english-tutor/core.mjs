@@ -24,12 +24,13 @@ export function validateSend(body) {
 const shape = {
   spec_version: '1.0', corrected: 'Original English with only real errors corrected; preserve Korean portions.',
   english_version: 'English rendering of Korean/mixed input, or null for English-only input.',
+  expression_tips: [{ source: 'exact Korean/mixed portion from the learner', sentence: 'exact phrase from english_version', explanation_ko: '이 상황에서 이 표현을 쓰는 이유와 재사용 방법' }],
   natural: { sentence: 'A complete natural version; use natural:null if already natural or meaning uncertain.', explanation_ko: '문법 오류와 구분되는 간결한 표현 설명' },
   errors: [{ type: 'article', original: 'exact substring', corrected: 'replacement', explanation_ko: '짧은 한국어 설명' }],
   improvements: [{ original: 'exact substring', suggestion: 'optional alternative', reason_ko: '짧은 한국어 설명' }],
   tutor_reply: 'A short conversational English reply.',
   level_signal: { observed_level: null, confidence: 'low', evidence_ko: '근거 부족' },
-  flags: { korean_input: false, stt_suspected: false, off_topic: false, sensitive: false },
+  flags: { korean_input: false, stt_suspected: false, off_topic: false, sensitive: false, meaning_unclear: false },
   memory: 'Brief updated conversation summary, at most 600 characters, or empty string.',
 };
 export function buildTutorMessages({ profile, session, turns, content, inputMode }) {
@@ -43,7 +44,9 @@ Correct ONLY genuine errors in the user's English. Each error.original must be a
 Check the WHOLE utterance for verb forms, missing articles, unclear references, and sentence connections. A2 means simple explanations, NOT overlooking real errors. Prioritize up to 3 useful corrections; include up to 5 only when necessary. A short answer to your question can be perfectly natural: do not demand full sentences.
 The corrected field must be constructed ONLY by replacing listed error substrings in the original. Do not reorder/rewrite correct parts. Preserve Korean parts verbatim there. If no errors, corrected must equal original exactly.
 Natural coaching is ALWAYS enabled, independent of the optional improvements setting. For English-only input that is incorrect or awkward and whose intent is clear, provide natural={sentence,explanation_ko}: a complete natural version in simple familiar English, <=1000 characters, preserving meaning, tense, people and degree of certainty. Explain the main phrasing change in Korean (<=180 characters), distinguishing suggestions from mistakes. Never invent missing facts or change a question into an answer. If already natural, a valid conversational fragment, meaning uncertain, sensitive, off-topic, or transcription uncertain, natural=null. For Korean/mixed input use english_version instead, natural=null. Never count a natural rewrite as an error or as the learner's own ability.
-For Korean/mixed input, put the separate natural English rendering in english_version. Korean is not an English error; never count your translation or suggested rewrite as the learner's ability. When unsure about meaning, ask a clarification rather than invent intent.
+For Korean/mixed input, put the separate natural English rendering in english_version. Preserve the learner's correct English as much as possible, filling Korean gaps and making only necessary grammar/connection changes. Korean is not an English error; never count your translation or suggested rewrite as the learner's ability. If the meaning is uncertain, flags.meaning_unclear=true, english_version=null, expression_tips=[], errors=[]; ask a clarification rather than invent intent.
+Korean expression coaching is ALWAYS enabled, even when improvements=false. For clear Korean/mixed input, include 1 useful expression_tip at A2 and up to 2 at higher levels. Each source must be an exact substring of the current input containing Korean (<=200 characters); sentence must be an exact contiguous phrase from english_version (<=240 characters). explanation_ko (<=160 characters) explains when/why to use that phrase and a reusable pattern, not just a translation or generic praise. Focus on what the learner wrote in Korean; do not imply their already-correct English was wrong. No tips for English-only input or unclear meaning, suspected transcription, sensitive or off-topic input. Do not duplicate the complete translation when a short phrase is enough. Keep the reply conversational after the coaching; do not repeat the explanation in tutor_reply.
+Example: '오늘 회사에서 너무 바빴어.' -> english_version='I was really busy at work today.'; tip source='회사에서 너무 바빴어', sentence='really busy at work', explanation_ko='회사 일이 바쁘다고 할 때 busy at work를 써요. really를 붙이면 매우 바빴다는 뜻이에요.'. Mixed example: 'I want to 아내랑 저녁 먹다.' -> 'I want to have dinner with my wife.'; source='아내랑 저녁 먹다', sentence='have dinner with my wife', explanation_ko='have dinner with ~는 ~와 저녁을 먹다는 표현이에요. I want to는 그대로 잘 사용했어요.'. These are illustrations, never answers to unrelated input.
 Additional alternative expressions enabled: ${profile.improvements === true}. If false, improvements MUST be []; still provide natural coaching when useful. Optional style changes never belong to errors or corrected. Do not duplicate natural or listed errors in improvements.
 Tutor reply: briefly acknowledge the meaning, then usually ask ONE concrete follow-up question. Help the learner do most of the talking. Use their last answer to continue, not generic praise or repeated questions. At A2, use 1-2 short sentences with familiar words. At B1/B1+, invite a reason or example without stacking questions. Respect requests to stop, say goodbye or explain without a question. If the learner repeats a suggested expression, acknowledge practice and move to a new question; do not assess copied examples as independent ability. No fixed learner weakness assumptions. For insufficient evidence (short replies, Korean, copied examples, uncertain speech recognition), observed_level=null and confidence=low. Ratings are observations, never a certificate or automatic level change.
 Lesson: ${topic ? `${topic.label}; situation: ${topic.situation}; roles: ${topic.role}. Continue these roles after the saved opening question; the learner is answering you. Fictional practice, not a real booking, purchase, job offer or current recommendation.` : 'Open conversation. Invite a concrete topic when needed.'}
@@ -80,13 +83,29 @@ function object(value) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new TutorError('INVALID_MODEL_OUTPUT', 502);
   return value;
 }
+export function cleanExpressionTips(raw, { content, target, enabled, maxItems = 2, readPhrase }) {
+  // Older saved/provider responses may omit coaching. Never manufacture explanations.
+  if (!enabled || raw == null) return [];
+  if (!Array.isArray(raw) || raw.length > 2) throw new TutorError('INVALID_MODEL_OUTPUT', 502);
+  const seen = new Set();
+  return raw.flatMap(item => {
+    object(item);
+    const source = text(item.source, 200), explanation_ko = text(item.explanation_ko, 160);
+    const phrase = readPhrase ? readPhrase(item) : { sentence: text(item.sentence, 240) };
+    if (!korean.test(source) || !content.includes(source) || !target.includes(phrase.sentence) || seen.has(phrase.sentence)) return [];
+    seen.add(phrase.sentence);
+    return [{ source, ...phrase, explanation_ko }];
+  }).slice(0, maxItems);
+}
 export function cleanTutorFeedback(raw, { content, inputMode, improvements, level, referenceSentences = [] }) {
   const value = object(raw);
   if (value.spec_version !== SPEC_VERSION || !Array.isArray(value.errors) || !Array.isArray(value.improvements) || value.errors.length > 5 || value.improvements.length > 2) throw new TutorError('INVALID_MODEL_OUTPUT', 502);
   const flags = object(value.flags);
   for (const key of ['korean_input', 'stt_suspected', 'off_topic', 'sensitive']) if (typeof flags[key] !== 'boolean') throw new TutorError('INVALID_MODEL_OUTPUT', 502);
+  if (flags.meaning_unclear != null && typeof flags.meaning_unclear !== 'boolean') throw new TutorError('INVALID_MODEL_OUTPUT', 502);
   const hasKorean = korean.test(content);
-  const safeFlags = { korean_input: hasKorean, stt_suspected: inputMode === 'voice' && flags.stt_suspected, off_topic: flags.off_topic, sensitive: flags.sensitive };
+  const safeFlags = { korean_input: hasKorean, stt_suspected: inputMode === 'voice' && flags.stt_suspected, off_topic: flags.off_topic, sensitive: flags.sensitive, meaning_unclear: flags.meaning_unclear === true };
+  const uncertain = safeFlags.stt_suspected || safeFlags.sensitive || safeFlags.off_topic || safeFlags.meaning_unclear;
   const used = [];
   const errors = value.errors.flatMap(item => {
     object(item);
@@ -94,21 +113,21 @@ export function cleanTutorFeedback(raw, { content, inputMode, improvements, leve
     const original = text(item.original, 300), corrected = text(item.corrected, 300, true), explanation = text(item.explanation_ko, 120);
     const start = content.indexOf(original);
     // Reject hallucinated spans, no-op "errors", overlapping replacements, and Korean translation as error.
-    if (start < 0 || original === corrected || korean.test(original) || safeFlags.stt_suspected || safeFlags.sensitive || safeFlags.off_topic) return [];
+    if (start < 0 || original === corrected || korean.test(original) || uncertain) return [];
     if (content.indexOf(original, start + 1) !== -1 || used.some(span => start < span.end && start + original.length > span.start)) return [];
     used.push({ start, end: start + original.length, replacement: corrected });
     return [{ type: item.type, original, corrected, explanation_ko: explanation }];
   });
   let corrected = content;
   for (const span of used.sort((a, b) => b.start - a.start)) corrected = corrected.slice(0, span.start) + span.replacement + corrected.slice(span.end);
-  const suggestions = !improvements || safeFlags.sensitive || safeFlags.stt_suspected || safeFlags.off_topic ? [] : value.improvements.slice(0, level === 'A2' ? 1 : 2).flatMap(item => {
+  const suggestions = !improvements || uncertain ? [] : value.improvements.slice(0, level === 'A2' ? 1 : 2).flatMap(item => {
     object(item);
     const original = text(item.original, 300), suggestion = text(item.suggestion, 300), reason = text(item.reason_ko, 120);
     return content.includes(original) && original !== suggestion ? [{ original, suggestion, reason_ko: reason }] : [];
   });
   const signal = object(value.level_signal);
   let natural = null;
-  if (value.natural != null && !hasKorean && !safeFlags.stt_suspected && !safeFlags.sensitive && !safeFlags.off_topic) {
+  if (value.natural != null && !hasKorean && !uncertain) {
     const item = object(value.natural);
     const sentence = text(item.sentence, 1000), explanation = text(item.explanation_ko, 180);
     if (sentence.trim() !== content.trim()) natural = { sentence, explanation_ko: explanation };
@@ -118,10 +137,13 @@ export function cleanTutorFeedback(raw, { content, inputMode, improvements, leve
   const wordCount = (content.match(/[a-z]+(?:'[a-z]+)?/gi) || []).length;
   const normalizePractice = sentence => String(sentence || '').toLowerCase().replace(/[^a-z0-9']/g, '');
   const practiceRepeat = referenceSentences.some(sentence => sentence && normalizePractice(sentence) === normalizePractice(content));
-  const eligible = !practiceRepeat && !hasKorean && wordCount >= 8 && !safeFlags.stt_suspected && !safeFlags.off_topic && !safeFlags.sensitive;
+  const eligible = !practiceRepeat && !hasKorean && wordCount >= 8 && !uncertain;
+  const englishVersion = hasKorean && !uncertain && value.english_version != null ? text(value.english_version, 1800) : null;
+  const expressionTips = cleanExpressionTips(value.expression_tips, { content, target: englishVersion,
+    enabled: Boolean(englishVersion), maxItems: level === 'A2' ? 1 : 2 });
   const result = {
     spec_version: SPEC_VERSION, corrected, natural,
-    english_version: hasKorean && !safeFlags.stt_suspected && !safeFlags.sensitive && !safeFlags.off_topic && value.english_version !== null ? text(value.english_version, 1800) : null,
+    english_version: englishVersion, expression_tips: expressionTips,
     errors, improvements: suggestions, tutor_reply: text(value.tutor_reply, 600),
     level_signal: { observed_level: eligible ? signal.observed_level : null, confidence: eligible ? signal.confidence : 'low', evidence_ko: text(signal.evidence_ko, 160) },
     flags: safeFlags, assessment_eligible: eligible, word_count: wordCount,

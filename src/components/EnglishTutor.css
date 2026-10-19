@@ -45,6 +45,16 @@
 .tutor-expression > p { font-size: 16px; font-weight: 600; color: var(--text); }
 .tutor-expression-note { margin-top: 8px; font-size: 12px; line-height: 1.6; color: var(--text-muted); overflow-wrap: anywhere; }
 .tutor-expression-note > span { font-weight: 700; color: var(--accent); }
+.tutor-expression-tips { list-style: none; padding: 0; margin: 10px 0 0; }
+.tutor-expression-tips > li { min-width: 0; padding: 10px 0; border-top: 1px solid var(--border); }
+.tutor-expression-mapping { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; font-size: 13px; line-height: 1.6; }
+.tutor-expression-mapping > span, .tutor-expression-mapping > strong { min-width: 0; overflow-wrap: anywhere; }
+.tutor-expression-mapping > span { color: var(--text-muted); }
+.tutor-expression-mapping > strong { color: var(--accent-dark, var(--accent)); }
+.tutor-expression-mapping > svg { flex: 0 0 14px; color: var(--text-muted); }
+.tutor-expression-tips li > p { font-size: 12px; line-height: 1.65; margin: 4px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.tutor-expression-tips .tutor-tip-reading { color: var(--accent-dark, var(--accent)); }
+.tutor-tip-reading > span { color: var(--text-muted); font-size: 11px; }
 .tutor-expression-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 10px; }
 .tutor-expression-actions > button:not(.tutor-icon) { min-height: 36px; border: 1px solid var(--border); border-radius: 8px; background: transparent; color: var(--accent); padding: 6px 10px; font-size: 12px; box-shadow: none; }
 .tutor-feedback > .tutor-answer { margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--border); }

@@ -4,8 +4,11 @@ import { createServer } from 'vite';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { feedbackFor } from './helpers/tutorDatabase.mjs';
+import { japaneseFeedback } from './helpers/japaneseFeedback.mjs';
+import { cleanTutorFeedback as cleanEnglish } from '../supabase/functions/english-tutor/core.mjs';
+import { cleanTutorFeedback as cleanJapanese } from '../supabase/functions/japanese-tutor/core.mjs';
 
-let server, Feedback, Topics, Usage, totalUsage, JapanesePhrase, Composer;
+let server, Feedback, Topics, Usage, totalUsage, JapanesePhrase, Composer, JapaneseFeedback;
 before(async () => {
   server = await createServer({ server: { middlewareMode: true, hmr: false }, appType: 'custom', logLevel: 'silent' });
   Feedback = (await server.ssrLoadModule('/src/components/TutorFeedback.jsx')).default;
@@ -14,6 +17,7 @@ before(async () => {
   Usage = usage.default; totalUsage = usage.totalTutorUsage;
   JapanesePhrase = (await server.ssrLoadModule('/src/components/JapanesePhrase.jsx')).default;
   Composer = (await server.ssrLoadModule('/src/components/TutorComposer.jsx')).default;
+  JapaneseFeedback = (await server.ssrLoadModule('/src/components/JapaneseFeedback.jsx')).default;
 });
 after(async () => { await server?.close(); });
 
@@ -101,4 +105,28 @@ test('shared tutor composer labels both actions and requires voice confirmation 
   assert.match(starting, /type="submit"[^>]*disabled/);
   const stopping = renderToStaticMarkup(createElement(Composer, { ...props, voiceStopping: true }));
   assert.match(stopping, /인식 마무리/); assert.match(stopping, /class="tutor-voice-button" disabled=""/);
+});
+
+test('both tutors display Korean-gap coaching before replies, keep practice and listening, and escape all tips', () => {
+  const english = cleanEnglish(feedbackFor('I want to 아내랑 저녁 먹다.'), { content: 'I want to 아내랑 저녁 먹다.', inputMode: 'text', level: 'A2', improvements: false });
+  const japanese = cleanJapanese(japaneseFeedback('コーヒーを 두 잔 주세요'), { content: 'コーヒーを 두 잔 주세요', inputMode: 'text' });
+  const en = renderToStaticMarkup(createElement(Feedback, { feedback: english, onSpeak() {}, onPractice() {}, disabled: true }));
+  const ja = renderToStaticMarkup(createElement(JapaneseFeedback, { feedback: japanese, speak() {}, practice() {}, disabled: true }));
+  for (const html of [en, ja]) {
+    assert.match(html, /이럴 땐 이렇게 말해요/);
+    assert.match(html, /상황별 표현 설명/);
+    assert.match(html, /이 표현으로 연습하기/);
+    assert.match(html, /disabled=""/);
+    assert.ok(html.indexOf('tutor-expression-tips') < html.indexOf(html === en ? 'MINA' : 'HARU'));
+  }
+  assert.match(en, /아내랑 저녁 먹다/); assert.match(en, /have dinner with my wife/);
+  assert.doesNotMatch(en, /핵심 교정/);
+  assert.match(ja, /二杯/); assert.match(ja, /니하이/); assert.match(ja, /にはい/);
+  const review = renderToStaticMarkup(createElement(JapaneseFeedback, { feedback: japanese, reply: false }));
+  assert.match(review, /상황별 표현 설명/); assert.doesNotMatch(review, /HARU/);
+  english.expression_tips[0].explanation_ko = '<script>alert(1)</script>';
+  const escaped = renderToStaticMarkup(createElement(Feedback, { feedback: english }));
+  assert.doesNotMatch(escaped, /<script>/); assert.match(escaped, /&lt;script&gt;/);
+  const legacy = { ...japanese }; delete legacy.expression_tips;
+  assert.match(renderToStaticMarkup(createElement(JapaneseFeedback, { feedback: legacy })), /이렇게 말해보세요/);
 });

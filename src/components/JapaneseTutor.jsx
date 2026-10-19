@@ -4,26 +4,15 @@ import { useJapaneseSpeech } from '../hooks/useJapaneseSpeech';
 import { callJapaneseTutor, tutorErrorMessage } from '../services/tutorClient';
 import { JAPANESE_TOPICS, LEVELS, LEVEL_LABELS } from '../../supabase/functions/japanese-tutor/topics.mjs';
 import JapanesePhrase from './JapanesePhrase';
+import JapaneseFeedback from './JapaneseFeedback';
 import TutorUsageSummary, { TutorUsageNote } from './TutorUsageSummary';
 import TutorHeader from './TutorHeader';
 import TutorComposer from './TutorComposer';
 import './EnglishTutor.css';
 import './JapaneseTutor.css';
 
-const errorLabels = { particle: '조사', verb_form: '동사 표현', word_choice: '단어', word_order: '어순', politeness: '말투', other: '표현' };
 const emptyDraft = () => ({ text: '', mode: 'text', confirmed: false });
 function readDraft(key) { try { const value = JSON.parse(sessionStorage.getItem(key)); return value && typeof value.text === 'string' ? value : emptyDraft(); } catch { return emptyDraft(); } }
-
-function JapaneseFeedback({ feedback, speak, practice, disabled, reply = true }) {
-  return <div className="japanese-feedback">
-    {feedback.natural && <section className="japanese-coaching">
-      <JapanesePhrase phrase={feedback.natural} label="이렇게 말해보세요" onSpeak={speak} onPractice={practice} disabled={disabled} />
-      <p className="tutor-note">{feedback.natural.explanation_ko}</p>
-    </section>}
-    {!!feedback.errors?.length && <ul className="japanese-corrections">{feedback.errors.map((error, index) => <li key={index}><span>{errorLabels[error.type] || '표현'}</span>{error.explanation_ko}</li>)}</ul>}
-    {reply && <JapanesePhrase phrase={feedback.reply_reading} label="HARU" onSpeak={speak} disabled={disabled} />}
-  </div>;
-}
 
 export default function JapaneseTutor({ userId, onBack }) {
   const tutor = useTutor(userId, { call: callJapaneseTutor, storagePrefix: 'goodlife-japanese-tutor' });

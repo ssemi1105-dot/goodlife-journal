@@ -90,6 +90,15 @@ export async function createTutorDatabase({ usageMigration = true, japanese = fa
 }
 
 export function feedbackFor(content = 'I ate apple.') {
+  if (['오늘 회사에서 너무 바빴어.', 'I want to 아내랑 저녁 먹다.'].includes(content)) {
+    const mixed = content.startsWith('I want');
+    return { ...feedbackFor('Hello!'), corrected: content,
+      english_version: mixed ? 'I want to have dinner with my wife.' : 'I was really busy at work today.',
+      expression_tips: [{ source: mixed ? '아내랑 저녁 먹다' : '회사에서 너무 바빴어',
+        sentence: mixed ? 'have dinner with my wife' : 'really busy at work',
+        explanation_ko: mixed ? 'have dinner with ~는 ~와 저녁을 먹다는 표현이에요. I want to는 그대로 잘 사용했어요.' : '회사 일이 바쁘다고 할 때 busy at work를 써요. really는 매우 바빴다는 뜻이에요.' }],
+      tutor_reply: mixed ? 'What would you like to eat together?' : 'What kept you so busy today?' };
+  }
   if (content === "can you recommended dinner menu it's with my wife") return {
     ...feedbackFor('Hello!'), corrected: "can you recommend a dinner menu it's with my wife",
     errors: [

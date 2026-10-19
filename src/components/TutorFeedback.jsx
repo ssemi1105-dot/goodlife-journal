@@ -1,3 +1,5 @@
+import TutorExpressionTips from './TutorExpressionTips';
+
 export const ERROR_LABELS = { tense: '시제', verb_form: '동사 형태', article: '관사', plural: '복수형', preposition: '전치사', word_order: '어순', word_choice: '단어 선택', spelling: '철자', agreement: '수 일치', other: '기타' };
 
 function CorrectionList({ errors }) {
@@ -11,14 +13,16 @@ function CorrectionList({ errors }) {
 export default function TutorFeedback({ feedback, onSpeak, onPractice, disabled = false, showReply = true }) {
   const errors = feedback.errors || [];
   const expression = feedback.natural?.sentence || feedback.english_version || (errors.length ? feedback.corrected : '');
-  const label = feedback.natural ? '이렇게 말해보세요' : feedback.english_version ? '영어로 표현하면' : '문법 교정';
+  const hasTips = Boolean(feedback.english_version && feedback.expression_tips?.length);
+  const label = hasTips ? '이럴 땐 이렇게 말해요' : feedback.natural ? '이렇게 말해보세요' : feedback.english_version ? '영어로 표현하면' : '문법 교정';
   return <div className="tutor-feedback">
     {expression && <section className="tutor-expression">
       <h3>{label}</h3><p lang="en">{expression}</p>
       {feedback.natural?.explanation_ko && <div className="tutor-expression-note"><span>표현 제안</span> {feedback.natural.explanation_ko}</div>}
+      {hasTips && <TutorExpressionTips tips={feedback.expression_tips} />}
       <div className="tutor-expression-actions">
         {onSpeak && <button type="button" className="tutor-icon" title="추천 문장 듣기" aria-label="추천 문장 듣기" onClick={() => onSpeak(expression)}>▷</button>}
-        {onPractice && <button type="button" disabled={disabled} onClick={() => onPractice(expression)}>다시 말해보기</button>}
+        {onPractice && <button type="button" disabled={disabled} onClick={() => onPractice(expression)}>{hasTips ? '이 표현으로 연습하기' : '다시 말해보기'}</button>}
       </div>
     </section>}
     {!!errors.length && <section className="tutor-correction">
