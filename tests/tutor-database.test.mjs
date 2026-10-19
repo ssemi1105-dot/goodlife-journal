@@ -1,11 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
-import { createTutorDatabase, USER_A, USER_B, SESSION_A, SESSION_B, feedbackFor } from './helpers/tutorDatabase.mjs';
+import { createTutorDatabase, applyTutorUsageMigration, USER_A, USER_B, SESSION_A, SESSION_B, feedbackFor } from './helpers/tutorDatabase.mjs';
 import { createTutorHandler } from '../supabase/functions/english-tutor/handler.mjs';
 import { makeTopicOpening } from '../supabase/functions/english-tutor/topics.mjs';
 
-test('real PostgreSQL: RLS, composite ownership, service-only RPC, atomic quotas, idempotency and delete retention', async () => {
+test('real PostgreSQL: RLS, service-only RPC, no daily quotas, idempotency and delete retention', async () => {
   const { pg, client, close } = await createTutorDatabase();
   try {
     await pg.exec(`set role authenticated; set request.jwt.claim.sub='${USER_A}';`);
@@ -20,6 +20,8 @@ test('real PostgreSQL: RLS, composite ownership, service-only RPC, atomic quotas
       `select tutor_delete_session('${USER_A}','${SESSION_A}')`,
       `select tutor_create_session('${USER_A}','No permission')`,
       `select tutor_set_access('${USER_A}','${USER_B}',true)`,
+      `select tutor_report_usage('${USER_A}','${randomUUID()}',1)`,
+      `select tutor_usage_summary('${USER_A}',true)`,
       `update profiles set role='owner' where id='${USER_A}'`,
     ]) await assert.rejects(pg.exec(sql), /permission denied/);
     await pg.exec('reset role');
@@ -41,12 +43,15 @@ test('real PostgreSQL: RLS, composite ownership, service-only RPC, atomic quotas
     assert.equal((await pg.query('select state from tutor_turns where id=$1', [id])).rows[0].state, 'completed');
     assert.equal((await pg.query('select tokens from tutor_usage where user_id=$1', [USER_A])).rows[0].tokens, 1200);
     assert.match((await client.rpc('tutor_begin_turn', { ...args, p_request_id: randomUUID() })).error.message, /RATE_LIMIT/);
-    assert.match((await client.rpc('tutor_begin_turn', { ...args, p_user_id: USER_B, p_session_id: SESSION_B, p_request_id: randomUUID(), p_global_limit: 1 })).error.message, /GLOBAL_LIMIT/);
-    await pg.exec(`update tutor_access set daily_limit=1 where user_id='${USER_A}'; update tutor_usage set last_request_at=now()-interval '10 seconds';`);
-    assert.match((await client.rpc('tutor_begin_turn', { ...args, p_request_id: randomUUID() })).error.message, /DAILY_LIMIT/);
+    assert.equal((await client.rpc('tutor_begin_turn', { ...args, p_user_id: USER_B, p_session_id: SESSION_B, p_request_id: randomUUID(), p_global_limit: 1 })).data.fresh, true);
+    await pg.exec(`update tutor_access set daily_limit=1,daily_token_limit=20000 where user_id='${USER_A}'; update tutor_usage set last_request_at=now()-interval '10 seconds'; update tutor_usage set requests=10000,tokens=999999999 where user_id='${USER_A}';`);
+    const nextId = randomUUID();
+    assert.equal((await client.rpc('tutor_begin_turn', { ...args, p_request_id: nextId, p_global_limit: 1 })).data.fresh, true);
+    await client.rpc('tutor_fail_turn', { p_user_id: USER_A, p_request_id: nextId, p_code: 'TEST' });
     await client.rpc('tutor_delete_session', { p_user_id: USER_A, p_session_id: SESSION_A });
     assert.equal((await pg.query('select count(*)::int n from tutor_turns where user_id=$1', [USER_A])).rows[0].n, 0);
-    assert.equal((await pg.query('select requests from tutor_usage where user_id=$1', [USER_A])).rows[0].requests, 1);
+    assert.equal((await pg.query('select requests from tutor_usage where user_id=$1', [USER_A])).rows[0].requests, 10001);
+    assert.equal((await pg.query('select reported_tokens from tutor_usage where user_id=$1', [USER_A])).rows[0].reported_tokens, 1200);
     await pg.exec(`update tutor_access set enabled=false where user_id='${USER_B}';`);
     assert.match((await client.rpc('tutor_begin_turn', { ...args, p_user_id: USER_B, p_session_id: SESSION_B, p_request_id: randomUUID() })).error.message, /TUTOR_FORBIDDEN/);
   } finally { await close(); }
@@ -75,7 +80,8 @@ test('admin grants only API access; learner ownership, levels and history remain
     await pg.query('update tutor_access set enabled=false where user_id=$1', [USER_A]);
     const list = await request(USER_A, { action: 'admin-access-list' });
     assert.equal(list.status, 200); assert.equal(list.body.access.length, 2);
-    assert.deepEqual(Object.keys(list.body.access[0]).sort(), ['daily_limit', 'enabled', 'user_id']);
+    assert.deepEqual(Object.keys(list.body.access[0]).sort(), ['enabled', 'user_id']);
+    assert.equal(list.body.usage.users.length, 2);
     assert.equal((await request(USER_B, { action: 'admin-access-list' })).status, 403);
     assert.equal((await request(USER_B, { action: 'admin-set-access', targetUserId: USER_B, enabled: true, role: 'owner' })).status, 403);
     assert.match((await client.rpc('tutor_set_access', { p_actor_id: USER_B, p_target_id: USER_B, p_enabled: true })).error.message, /ADMIN_REQUIRED/);
@@ -139,9 +145,10 @@ test('Edge handler + PostgreSQL: owner checks, bounded provider body, failed cal
     assert.ok(!JSON.stringify(fail).includes('provider-private-debug'));
     assert.equal((await request(failedPayload)).body.turn.state, 'failed'); assert.equal(calls, 2);
     const usage = (await request({ action: 'bootstrap' })).body.usage;
-    assert.equal(usage.used, 2); assert.equal(usage.tokens, 21200);
+    assert.deepEqual(usage.today, { requests: 2, tokens: 1200, unreported: 1 });
+    assert.deepEqual(usage.total, usage.today);
     assert.equal((await request({ action: 'delete-session', sessionId: SESSION_A })).status, 200);
-    assert.equal((await request({ action: 'bootstrap' })).body.usage.used, 2);
+    assert.deepEqual((await request({ action: 'bootstrap' })).body.usage, usage);
   } finally { await close(); }
 });
 
@@ -199,5 +206,105 @@ test('guided topic creation is private, idempotent, bounded and free; opening re
     await pg.query('update tutor_access set enabled=false where user_id=$1', [USER_B]);
     assert.equal((await request({ ...payload, sessionId: randomUUID() }, USER_B)).status, 403);
     assert.equal(calls, 1);
+  } finally { await close(); }
+});
+
+test('usage migration preserves history, excludes ambiguous reservations and is safe to rerun', async () => {
+  const { pg, client, close } = await createTutorDatabase({ usageMigration: false });
+  try {
+    const args = { p_user_id: USER_A, p_session_id: SESSION_A, p_content: 'I ate apple.', p_input_mode: 'text', p_voice_confirmed: false };
+    for (const tokens of [1200, null]) {
+      const id = randomUUID();
+      assert.equal((await client.rpc('tutor_begin_turn', { ...args, p_request_id: id })).data.fresh, true);
+      await client.rpc('tutor_finish_turn', { p_user_id: USER_A, p_request_id: id, p_feedback: feedbackFor(), p_tokens: tokens });
+      await pg.exec("update tutor_usage set last_request_at=now()-interval '10 seconds'");
+    }
+    const failedId = randomUUID();
+    await client.rpc('tutor_begin_turn', { ...args, p_request_id: failedId });
+    await client.rpc('tutor_fail_turn', { p_user_id: USER_A, p_request_id: failedId, p_code: 'TEST' });
+    // Old, deleted conversation: only the reservation-inclusive daily aggregate remains.
+    await pg.query("insert into tutor_usage(user_id,day,requests,tokens) values($1,current_date-10,3,22000)", [USER_A]);
+    await applyTutorUsageMigration(pg);
+    const snapshot = async () => (await client.rpc('tutor_usage_summary', { p_actor_id: USER_A, p_all_users: false })).data;
+    const before = await snapshot();
+    assert.deepEqual(before.users[0].today, { requests: 3, tokens: 1200, unreported: 2 });
+    assert.deepEqual(before.users[0].total, { requests: 6, tokens: 1200, unreported: 5 });
+    assert.equal((await pg.query('select count(*)::int n from tutor_turns')).rows[0].n, 3);
+    await applyTutorUsageMigration(pg);
+    assert.deepEqual(await snapshot(), before);
+    await pg.exec("update tutor_usage set last_request_at=now()-interval '10 seconds'");
+    const id = randomUUID();
+    await client.rpc('tutor_begin_turn', { ...args, p_request_id: id });
+    await client.rpc('tutor_finish_turn', { p_user_id: USER_A, p_request_id: id, p_feedback: feedbackFor(), p_tokens: 20000 });
+    assert.equal((await snapshot()).users[0].total.tokens, 21200, 'new exact 20,000 is reported, not treated as a reservation');
+    await applyTutorUsageMigration(pg);
+    assert.equal((await snapshot()).users[0].total.tokens, 21200);
+    await client.rpc('tutor_delete_session', { p_user_id: USER_A, p_session_id: SESSION_A });
+    await applyTutorUsageMigration(pg);
+    assert.equal((await snapshot()).users[0].total.tokens, 21200, 'delete and migration rerun never reset aggregates');
+  } finally { await close(); }
+});
+
+test('usage is self-only through RLS and bootstrap; admins see counters but never other conversations', async () => {
+  const { pg, client, close } = await createTutorDatabase();
+  const handler = createTutorHandler({ createClient: () => client, env: name => ({ SUPABASE_URL: 'https://fixture.invalid', SUPABASE_SERVICE_ROLE_KEY: 'test' })[name] });
+  const request = async (user, body) => {
+    const response = await handler(new Request('http://fixture.invalid', { method: 'POST', headers: { Authorization: `Bearer ${user}`, 'Content-Type': 'application/json' }, body: JSON.stringify(body) }));
+    return { status: response.status, body: await response.json() };
+  };
+  try {
+    await pg.query("insert into tutor_usage(user_id,day,requests,reported_tokens,reported_requests) values($1,(now() at time zone 'Asia/Seoul')::date,1,1100,1),($2,(now() at time zone 'Asia/Seoul')::date,2,2200,1)", [USER_A, USER_B]);
+    await pg.exec(`set role authenticated; set request.jwt.claim.sub='${USER_B}';`);
+    assert.deepEqual((await pg.query('select user_id,reported_tokens from tutor_usage')).rows, [{ user_id: USER_B, reported_tokens: 2200 }]);
+    await assert.rejects(pg.exec(`select tutor_usage_summary('${USER_A}',true)`), /permission denied/);
+    await pg.exec('reset role');
+    assert.match((await client.rpc('tutor_usage_summary', { p_actor_id: USER_B, p_all_users: true })).error.message, /ADMIN_REQUIRED/);
+    const own = await request(USER_B, { action: 'bootstrap', targetUserId: USER_A, allUsers: true });
+    assert.deepEqual(own.body.usage.today, { requests: 2, tokens: 2200, unreported: 1 });
+    assert.equal(own.body.usage.users, undefined);
+    assert.equal(own.body.usage.limit, undefined);
+    assert.equal((await request(USER_B, { action: 'admin-access-list' })).status, 403);
+    await pg.query('update tutor_access set enabled=false where user_id=$1', [USER_A]);
+    const admin = await request(USER_A, { action: 'admin-access-list' });
+    assert.equal(admin.status, 200, 'admin can audit counters while own tutor is disabled');
+    assert.deepEqual(admin.body.usage.users.map(row => row.total.tokens), [1100, 2200]);
+    assert.ok(admin.body.usage.users.every(row => Object.keys(row).sort().join(',') === 'today,total,user_id'));
+    assert.equal((await request('invalid', { action: 'admin-access-list' })).status, 401);
+  } finally { await close(); }
+});
+
+test('known usage survives invalid feedback and truncated answers; missing usage is not invented', async () => {
+  const { pg, client, close } = await createTutorDatabase();
+  let mode = 'invalid', calls = 0;
+  const handler = createTutorHandler({ createClient: () => client,
+    env: name => ({ SUPABASE_URL: 'https://fixture.invalid', SUPABASE_SERVICE_ROLE_KEY: 'test', HIVE_API_KEY: 'test', TUTOR_GLOBAL_DAILY_LIMIT: '1' })[name],
+    fetchImpl: async () => {
+      calls++;
+      return Response.json({ choices: [{ finish_reason: mode === 'truncated' ? 'length' : 'stop', message: { content: mode === 'invalid' ? 'not-json' : JSON.stringify(feedbackFor()) } }], ...(mode === 'missing' ? {} : { usage: { total_tokens: 400 } }) });
+    },
+  });
+  const request = async body => {
+    const response = await handler(new Request('http://fixture.invalid', { method: 'POST', headers: { Authorization: `Bearer ${USER_A}`, 'Content-Type': 'application/json' }, body: JSON.stringify(body) }));
+    return { status: response.status, body: await response.json() };
+  };
+  try {
+    for (const next of ['invalid', 'truncated', 'missing']) {
+      mode = next;
+      const body = { action: 'send', sessionId: SESSION_A, requestId: randomUUID(), content: 'I ate apple.', inputMode: 'text' };
+      const result = await request(body);
+      assert.equal(result.status, next === 'missing' ? 200 : 502);
+      await request(body);
+      await pg.exec("update tutor_usage set last_request_at=now()-interval '10 seconds'");
+    }
+    assert.equal(calls, 3, 'no duplicate paid calls; obsolete global limit 1 is ignored');
+    const usage = (await request({ action: 'bootstrap' })).body.usage;
+    assert.deepEqual(usage.today, { requests: 3, tokens: 800, unreported: 1 });
+    const turns = (await pg.query('select * from tutor_turns order by created_at')).rows;
+    assert.equal(turns.filter(turn => turn.reported_tokens === 400).length, 2);
+    const reported = turns.find(turn => turn.reported_tokens === 400);
+    await client.rpc('tutor_report_usage', { p_user_id: USER_A, p_request_id: reported.id, p_tokens: 400 });
+    await client.rpc('tutor_report_usage', { p_user_id: USER_A, p_request_id: reported.id, p_tokens: 9999 });
+    assert.match((await client.rpc('tutor_report_usage', { p_user_id: USER_B, p_request_id: reported.id, p_tokens: 1 })).error.message, /REQUEST_NOT_FOUND/);
+    assert.deepEqual((await request({ action: 'bootstrap' })).body.usage, usage);
   } finally { await close(); }
 });

@@ -1,5 +1,5 @@
 import { buildTutorMessages, cleanTutorFeedback, learningSummary, LEVELS, requireId, TutorError, validateSend } from './core.mjs';
-import { hiveConfiguration, requestHiveCompletion } from './hiveProvider.mjs';
+import { hiveConfiguration, requestHiveCompletion, reportedTokenCount } from './hiveProvider.mjs';
 import { getTutorTopic, makeTopicOpening } from './topics.mjs';
 
 const cors = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type', 'Access-Control-Allow-Methods': 'POST, OPTIONS' };
@@ -59,17 +59,17 @@ export function createTutorHandler({ createClient, env, fetchImpl = fetch }) {
         const profile = checked(await db.from('profiles').select('role').eq('id', userId).maybeSingle());
         if (!['owner', 'admin'].includes(profile?.role)) throw new TutorError('ADMIN_REQUIRED', 403);
         if (body.action === 'admin-access-list') {
-          const access = checked(await db.from('tutor_access').select('user_id,enabled,daily_limit').order('user_id').limit(1000));
-          return json({ access });
+          const access = checked(await db.from('tutor_access').select('user_id,enabled').order('user_id').limit(1000));
+          const usage = checked(await db.rpc('tutor_usage_summary', { p_actor_id: userId, p_all_users: true }));
+          return json({ access, usage });
         }
         requireId(body.targetUserId);
         if (typeof body.enabled !== 'boolean') throw new TutorError('INVALID_INPUT');
         const access = checked(await db.rpc('tutor_set_access', { p_actor_id: userId, p_target_id: body.targetUserId, p_enabled: body.enabled }));
         return json({ access });
       }
-      const access = checked(await db.from('tutor_access').select('enabled,daily_limit,daily_token_limit').eq('user_id', userId).maybeSingle());
+      const access = checked(await db.from('tutor_access').select('enabled').eq('user_id', userId).maybeSingle());
       if (!access?.enabled) throw new TutorError('TUTOR_FORBIDDEN', 403);
-      const day = new Date(Date.now() + 9 * 3600000).toISOString().slice(0, 10);
       const loadSession = async id => {
         requireId(id);
         const session = checked(await db.from('tutor_sessions').select('*').eq('id', id).eq('user_id', userId).maybeSingle());
@@ -80,9 +80,10 @@ export function createTutorHandler({ createClient, env, fetchImpl = fetch }) {
         checked(await db.from('tutor_profiles').upsert({ user_id: userId }, { onConflict: 'user_id', ignoreDuplicates: true }));
         const profile = checked(await db.from('tutor_profiles').select('level,improvements').eq('user_id', userId).single());
         const sessions = checked(await db.from('tutor_sessions').select('id,title,created_at,updated_at').eq('user_id', userId).order('updated_at', { ascending: false }).order('id').limit(50));
-        const usage = checked(await db.from('tutor_usage').select('requests,tokens').eq('user_id', userId).eq('day', day).maybeSingle());
+        const usage = checked(await db.rpc('tutor_usage_summary', { p_actor_id: userId, p_all_users: false }));
         const turns = checked(await db.from('tutor_turns').select('*').eq('user_id', userId).eq('state', 'completed').order('created_at', { ascending: false }).order('id').limit(200));
-        return json({ profile, sessions, usage: { day, used: usage?.requests || 0, tokens: usage?.tokens || 0, limit: access.daily_limit, tokenLimit: access.daily_token_limit },
+        const { user_id, ...ownUsage } = usage.users[0];
+        return json({ profile, sessions, usage: { day: usage.day, ...ownUsage },
           learning: learningSummary(turns, profile.level), review: turns.filter(turn => turn.feedback?.errors?.length || turn.feedback?.natural || turn.feedback?.english_version).map(publicTurn) });
       }
       if (body.action === 'start-topic') {
@@ -131,25 +132,33 @@ export function createTutorHandler({ createClient, env, fetchImpl = fetch }) {
       const input = validateSend(body);
       const provider = hiveConfiguration(env);
       const session = await loadSession(body.sessionId);
-      const limit = Number(env('TUTOR_GLOBAL_DAILY_LIMIT') || 100);
       const begin = checked(await db.rpc('tutor_begin_turn', { p_user_id: userId, p_session_id: body.sessionId, p_request_id: body.requestId,
-        p_content: input.content, p_input_mode: input.inputMode, p_voice_confirmed: input.voiceConfirmed,
-        p_global_limit: Number.isInteger(limit) && limit > 0 ? Math.min(limit, 1000) : 100 }));
+        p_content: input.content, p_input_mode: input.inputMode, p_voice_confirmed: input.voiceConfirmed }));
       if (!begin.fresh) return json({ turn: publicTurn(begin.turn) });
+      let tokenCount = null, usageSaved = false;
       try {
         const previous = checked(await db.from('tutor_turns').select('content,feedback').eq('user_id', userId).eq('session_id', session.id).eq('state', 'completed').order('created_at', { ascending: false }).order('id').limit(6));
         const messages = buildTutorMessages({ profile: begin.turn, session, turns: previous.reverse(), content: input.content, inputMode: input.inputMode });
         const completion = await requestHiveCompletion(provider, messages, fetchImpl);
+        tokenCount = reportedTokenCount(completion.usage);
+        if (tokenCount !== null) {
+          checked(await db.rpc('tutor_report_usage', { p_user_id: userId, p_request_id: body.requestId, p_tokens: tokenCount }));
+          usageSaved = true;
+        }
         if (completion.choices?.[0]?.finish_reason !== 'stop') throw new TutorError('INVALID_MODEL_OUTPUT', 502);
         let feedback;
         try { feedback = JSON.parse(completion.choices[0].message.content); } catch { throw new TutorError('INVALID_MODEL_OUTPUT', 502); }
         feedback = cleanTutorFeedback(feedback, { ...input, improvements: begin.turn.improvements, level: begin.turn.level,
           referenceSentences: previous.map(turn => turn.feedback?.natural?.sentence || turn.feedback?.english_version || (turn.feedback?.errors?.length ? turn.feedback.corrected : '')) });
-        const tokenCount = completion.usage?.total_tokens;
         const finished = checked(await db.rpc('tutor_finish_turn', { p_user_id: userId, p_request_id: body.requestId, p_feedback: feedback,
-          p_tokens: Number.isInteger(tokenCount) && tokenCount > 0 && tokenCount < 1000000 ? tokenCount : null }));
+          p_tokens: tokenCount }));
         return json({ turn: publicTurn(finished) });
       } catch (error) {
+        tokenCount ??= reportedTokenCount({ total_tokens: error.reportedTokens });
+        if (tokenCount !== null && !usageSaved) {
+          const settled = await db.rpc('tutor_report_usage', { p_user_id: userId, p_request_id: body.requestId, p_tokens: tokenCount });
+          if (settled.error) return json({ code: 'STATUS_UNKNOWN' }, 503);
+        }
         const code = error.name === 'AbortError' ? 'PROVIDER_TIMEOUT' : error instanceof TutorError ? error.code : 'PROVIDER_ERROR';
         // A lost commit response may already be completed; fail RPC never changes a completed turn.
         const failed = await db.rpc('tutor_fail_turn', { p_user_id: userId, p_request_id: body.requestId, p_code: code });

@@ -4,7 +4,6 @@ export const SPEC_VERSION = '1.0';
 export const LEVELS = ['A2', 'B1', 'B1+'];
 export const ERROR_TYPES = ['tense', 'verb_form', 'article', 'plural', 'preposition', 'word_order', 'word_choice', 'spelling', 'agreement', 'other'];
 export const MAX_INPUT = 1000;
-export const RESERVED_TOKENS = 20000;
 export const MAX_OUTPUT_TOKENS = 1400;
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const korean = /[\u1100-\u11ff\u3130-\u318f\uac00-\ud7a3]/;

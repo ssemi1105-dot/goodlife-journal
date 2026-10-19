@@ -4,6 +4,7 @@ import { tutorErrorMessage } from '../services/tutorClient';
 import CompactToggle from './ui/CompactToggle';
 import TutorFeedback, { ERROR_LABELS } from './TutorFeedback';
 import TutorTopics from './TutorTopics';
+import TutorUsageSummary, { TutorUsageNote } from './TutorUsageSummary';
 import './EnglishTutor.css';
 
 const LEVELS = ['A2', 'B1', 'B1+'];
@@ -100,7 +101,7 @@ export default function EnglishTutor({ userId, onBack }) {
     <header className="tutor-header">
       <button type="button" className="tutor-icon" title="뒤로" aria-label="뒤로" onClick={onBack}>←</button>
       <div><h1>영어 튜터</h1><span>Mina {tutor.data ? `· ${tutor.data.profile.level}` : ''}</span></div>
-      {tutor.data && <span className="tutor-usage" title="한국 시간 자정 기준 호출 횟수. 실패한 요청도 한도에 포함될 수 있습니다.">오늘 {tutor.data.usage.used}/{tutor.data.usage.limit}</span>}
+      {tutor.data && <span className="tutor-usage" title="하루 횟수 제한 없음 · 토큰 사용량은 학습 설정에서 확인">오늘 {tutor.data.usage.today.requests.toLocaleString('ko-KR')}회</span>}
     </header>
     {tutor.data && <div className="tutor-tabs" role="tablist" aria-label="영어 학습">
       {[['chat', '대화'], ['review', `복습${remaining.length ? ` ${remaining.length}` : ''}`], ['settings', '학습 설정']].map(([id, label]) => <button key={id} type="button" role="tab" id={`tutor-tab-${id}`} aria-controls={`tutor-panel-${id}`} aria-selected={tab === id} onClick={() => changeTab(id)}>{label}</button>)}
@@ -168,8 +169,8 @@ export default function EnglishTutor({ userId, onBack }) {
       </section>
       <section className="tutor-setting-section"><CompactToggle checked={tutor.data.profile.improvements} disabled={tutor.busy || !!tutor.pending} onChange={enabled => tutor.savePreferences(tutor.data.profile.level, enabled)} label="다른 표현도 함께 보기" /></section>
       <section className="tutor-setting-section"><h2>최근 교정 유형</h2>{counts.map(([type, count]) => <div className="tutor-stat-row" key={type}><span>{ERROR_LABELS[type] || type}</span><strong>{count}회</strong></div>)}{!counts.length && <p className="tutor-note">아직 교정 통계가 없습니다.</p>}<small className="tutor-note">최근 {tutor.data.learning.sampleSize}회 대화 기준 · 같은 유형은 대화당 한 번 집계</small></section>
-      <section className="tutor-setting-section"><h2>사용량·개인정보</h2><div className="tutor-stat-row"><span>오늘 요청</span><strong>{tutor.data.usage.used}/{tutor.data.usage.limit}회</strong></div><div className="tutor-stat-row"><span>사용·예약 토큰</span><strong>{tutor.data.usage.tokens.toLocaleString()}/{tutor.data.usage.tokenLimit.toLocaleString()}</strong></div>
-        <p className="tutor-note">학습 대화는 Hive의 DeepSeek 모델에 전송되며 API 사용료가 발생합니다. 다른 카테고리의 기록은 전송하지 않습니다. 실패하거나 결과가 불확실한 요청도 사용 한도에 포함될 수 있습니다.</p>
+      <section className="tutor-setting-section"><h2>내 사용량·개인정보</h2><TutorUsageSummary usage={tutor.data.usage} /><TutorUsageNote />
+        <p className="tutor-note">하루 횟수·토큰 제한은 없습니다. 사용한 만큼 Hive API 사용료가 발생합니다. 관리자는 회원별 사용량을 확인할 수 있지만 대화 내용은 볼 수 없습니다. 다른 카테고리의 기록은 전송하지 않습니다.</p>
         <p className="tutor-note">AI 교정과 수준 추천은 틀릴 수 있습니다. 음성은 원본 녹음 없이 인식된 문장만 저장합니다.</p>
       </section>
     </section>}

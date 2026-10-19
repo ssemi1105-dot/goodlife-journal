@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { SUPABASE_ANON_KEY, SUPABASE_URL, supabase } from '../lib/supabaseClient';
 import { callTutor } from '../services/tutorClient';
 import CompactToggle from './ui/CompactToggle';
+import TutorUsageSummary, { TutorUsageNote, totalTutorUsage } from './TutorUsageSummary';
 
 function describeAdminError(status, payload, error) {
   const serverMessage = payload?.error || error?.message || '';
@@ -70,6 +71,7 @@ export default function AdminUserList({ enabled, embedded = false }) {
   const [loading, setLoading] = useState(false);
   const [tutorAccess, setTutorAccess] = useState(null), [tutorError, setTutorError] = useState('');
   const [savingIds, setSavingIds] = useState([]), [accessLoading, setAccessLoading] = useState(false);
+  const [tutorUsage, setTutorUsage] = useState(null);
   const active = useRef(false), saving = useRef(new Set()), accessLoad = useRef(0);
 
   async function loadTutorAccess() {
@@ -77,7 +79,10 @@ export default function AdminUserList({ enabled, embedded = false }) {
     setAccessLoading(true); setTutorError('');
     try {
       const result = await callTutor('admin-access-list');
-      if (active.current && ticket === accessLoad.current) setTutorAccess(Object.fromEntries(result.access.map(item => [item.user_id, item])));
+      if (active.current && ticket === accessLoad.current) {
+        setTutorAccess(Object.fromEntries(result.access.map(item => [item.user_id, item])));
+        setTutorUsage(result.usage);
+      }
     } catch (err) { if (active.current && ticket === accessLoad.current) setTutorError(err.message); }
     finally { if (active.current && ticket === accessLoad.current) setAccessLoading(false); }
   }
@@ -128,8 +133,13 @@ export default function AdminUserList({ enabled, embedded = false }) {
     <>
       {loading && <p className="muted">회원 목록을 확인하는 중입니다.</p>}
       {error && <p className="form-error">{error}</p>}
-      {tutorError && <p className="form-error" role="alert">{tutorError} <button type="button" className="secondary-button compact" disabled={accessLoading || !!savingIds.length} onClick={loadTutorAccess}>권한 다시 확인</button></p>}
-      {accessLoading && <p className="muted" role="status">튜터 사용 권한 확인 중</p>}
+      {tutorError && <p className="form-error" role="alert">{tutorError} <button type="button" className="secondary-button compact" disabled={accessLoading || !!savingIds.length} onClick={loadTutorAccess}>다시 확인</button></p>}
+      {accessLoading && <p className="muted" role="status">튜터 권한·사용량 확인 중</p>}
+      <section className="admin-tutor-usage" aria-label="전체 회원 튜터 사용량" aria-busy={accessLoading}>
+        <div className="admin-tutor-usage-heading"><h3>영어 튜터 전체 사용량</h3><button type="button" className="icon-button" title="사용량 새로고침" aria-label="사용량 새로고침" disabled={accessLoading || !!savingIds.length} onClick={loadTutorAccess}>↻</button></div>
+        <TutorUsageSummary usage={tutorUsage ? totalTutorUsage(tutorUsage.users) : null} />
+        <TutorUsageNote />
+      </section>
 
       {!loading && !error && users.length === 0 && (
         <p className="empty-text">표시할 회원이 아직 없습니다.</p>
@@ -147,8 +157,9 @@ export default function AdminUserList({ enabled, embedded = false }) {
               <CompactToggle label="영어 튜터" checked={tutorAccess?.[user.id]?.enabled === true}
                 disabled={!tutorAccess || accessLoading || !!savingIds.length}
                 onChange={value => setTutorPermission(user.id, value)} />
-              <small role="status">{savingIds.includes(user.id) ? '저장 중' : !tutorAccess ? '연결 필요' : tutorAccess[user.id]?.enabled ? `허용 · 하루 ${tutorAccess[user.id].daily_limit}회` : '사용 안 함'}</small>
+              <small role="status">{savingIds.includes(user.id) ? '저장 중' : !tutorAccess ? '연결 필요' : tutorAccess[user.id]?.enabled ? '허용 · 일일 제한 없음' : '사용 안 함'}</small>
             </div>
+            <TutorUsageSummary compact usage={tutorUsage ? tutorUsage.users.find(item => item.user_id === user.id) || totalTutorUsage() : null} />
           </article>
         ))}
       </div>

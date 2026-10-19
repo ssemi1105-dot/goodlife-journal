@@ -3,7 +3,8 @@ import { supabase, SUPABASE_URL, SUPABASE_ANON_KEY } from '../lib/supabaseClient
 const messages = {
   UNAUTHORIZED: '로그인이 만료되었습니다. 다시 로그인해 주세요.',
   TUTOR_FORBIDDEN: '이 계정은 영어 튜터 사용 허가가 필요합니다. 관리자에게 요청해 주세요.',
-  ADMIN_REQUIRED: '영어 튜터 사용 권한은 관리자만 변경할 수 있습니다.',
+  ADMIN_REQUIRED: '전체 회원 사용량 조회와 사용 권한 변경은 관리자만 가능합니다.',
+  SERVER_UPDATE_REQUIRED: '사용량 화면 업데이트를 위해 english-tutor SQL 적용과 Edge Function 재배포가 필요합니다.',
   TARGET_USER_NOT_FOUND: '해당 회원을 찾을 수 없습니다. 회원 목록을 다시 확인해 주세요.',
   SETUP_REQUIRED: '영어 튜터 DB 또는 서버 설정이 아직 준비되지 않았습니다.',
   API_KEY_MISSING: 'Supabase에 HIVE_API_KEY를 등록해 주세요.',
@@ -20,8 +21,8 @@ const messages = {
   REQUEST_EXPIRED: '이전 요청이 완료되지 않았습니다. 입력 내용은 유지됩니다.',
   SESSION_FULL: '이 대화가 200회에 도달했습니다. 새 대화를 시작해 주세요.',
   TOO_MANY_SESSIONS: '대화는 50개까지 보관할 수 있습니다. 이전 대화를 삭제해 주세요.',
-  DAILY_LIMIT: '오늘의 이용 한도에 도달했습니다. 한국 시간 자정에 초기화됩니다.',
-  GLOBAL_LIMIT: '앱 전체의 오늘 이용 한도에 도달했습니다. 내일 다시 이용해 주세요.',
+  DAILY_LIMIT: '서버에 이전 일일 제한이 남아 있습니다. 최신 튜터 SQL을 적용해 주세요.',
+  GLOBAL_LIMIT: '서버에 이전 전체 이용 제한이 남아 있습니다. 최신 튜터 SQL을 적용해 주세요.',
   RATE_LIMIT: '잠시만 기다렸다가 다시 전송해 주세요.',
   PROVIDER_BALANCE: 'Hive 조직이 중지되었거나 잔액이 부족합니다. 관리자에게 알려 주세요.',
   PROVIDER_AUTH: 'Hive API 인증에 실패했습니다. V3 Secret Key와 모델 사용 권한을 확인해 주세요.',
@@ -53,6 +54,10 @@ export async function callTutor(action, body = {}) {
       throw Object.assign(new Error(tutorErrorMessage(code)), { code, status: response.status });
     }
     if (!result || typeof result !== 'object') throw Object.assign(new Error(messages.SERVER_ERROR), { code: 'SERVER_ERROR' });
+    if ((action === 'bootstrap' && (!result.usage?.today || !result.usage?.total)) ||
+        (action === 'admin-access-list' && !Array.isArray(result.usage?.users))) {
+      throw Object.assign(new Error(messages.SERVER_UPDATE_REQUIRED), { code: 'SERVER_UPDATE_REQUIRED' });
+    }
     return result;
   } catch (error) {
     if (error.code) throw error;

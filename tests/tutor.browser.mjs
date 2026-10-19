@@ -214,8 +214,11 @@ try {
   rejectAdminWrite = true; await ownerSwitch.click();
   await page.getByRole('alert').filter({ hasText: '현재 상태를 다시 확인' }).waitFor();
   assert.equal(await ownerSwitch.getAttribute('aria-checked'), 'true'); rejectAdminWrite = false;
-  await page.getByRole('button', { name: '권한 다시 확인' }).click();
+  await page.getByRole('button', { name: '다시 확인', exact: true }).click();
   await page.waitForFunction(() => !document.querySelector('.admin-panel [role="alert"]'));
+  const ownerTokens = (await db.pg.query('select sum(reported_tokens)::int n from tutor_usage where user_id=$1', [USER_A])).rows[0].n;
+  assert.deepEqual(await page.locator('.admin-tutor-usage .tutor-token-summary strong').allTextContents(), [ownerTokens.toLocaleString('ko-KR'), ownerTokens.toLocaleString('ko-KR')]);
+  assert.match(await page.locator('.admin-tutor-usage').textContent(), /사용량 미확인 1건/);
   await page.screenshot({ path: 'test-results/tutor-admin-mobile.png' });
   const learner = await context.newPage(); learner.on('pageerror', error => errors.push(error.message));
   await learner.goto(`${server.resolvedUrls.local[0]}?account=B`);
@@ -237,6 +240,28 @@ try {
   await learner.waitForFunction(() => document.querySelector('#tutor-message').value === '');
   assert.equal((await db.pg.query('select count(*)::int n from tutor_turns where user_id=$1', [USER_A])).rows[0].n, 0);
   assert.equal((await db.pg.query('select count(*)::int n from tutor_turns where user_id=$1', [USER_B])).rows[0].n, 1);
+  await learner.getByRole('tab', { name: '학습 설정' }).click();
+  assert.deepEqual(await learner.locator('.tutor-token-summary strong').allTextContents(), ['400', '400']);
+  assert.equal(await learner.locator('.admin-tutor-usage').count(), 0);
+  assert.doesNotMatch(await learner.locator('.tutor-header').textContent(), /\/20/);
+  await page.getByRole('button', { name: '사용량 새로고침' }).click();
+  await page.waitForFunction(() => document.querySelector('.admin-tutor-usage').getAttribute('aria-busy') === 'false');
+  const allTokens = (ownerTokens + 400).toLocaleString('ko-KR');
+  assert.deepEqual(await page.locator('.admin-tutor-usage .tutor-token-summary strong').allTextContents(), [allTokens, allTokens]);
+  assert.deepEqual(await page.locator('.admin-user-list article').filter({ hasText: 'learner@example.invalid' }).locator('.tutor-token-summary strong').allTextContents(), ['400', '400']);
+  const beforeUsageReads = calls;
+  for (const width of [320, 390, 768, 1440]) {
+    await page.setViewportSize({ width, height: 844 }); await learner.setViewportSize({ width, height: 844 });
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
+    assert.equal(await learner.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
+    await learner.locator('.tutor-token-summary').scrollIntoViewIfNeeded();
+    await page.locator('.admin-tutor-usage').scrollIntoViewIfNeeded();
+    await learner.screenshot({ path: `test-results/tutor-own-usage-${width}.png` });
+    await page.screenshot({ path: `test-results/tutor-admin-usage-${width}.png` });
+  }
+  assert.equal(calls, beforeUsageReads, 'viewing counters never invokes the provider');
+  await page.setViewportSize({ width: 390, height: 844 });
+  await learner.getByRole('tab', { name: '대화', exact: true }).click();
   const beforeRevoke = calls;
   await learnerSwitch.click();
   await page.waitForFunction(() => document.querySelectorAll('.admin-user-list article [role="switch"]')[1].getAttribute('aria-checked') === 'false');
@@ -281,7 +306,7 @@ try {
   assert.equal(calls, beforePractice + 1);
   assert.ok(network.every(origin => origin === 'https://cdn.jsdelivr.net'), 'only the existing font CDN was requested, and was intercepted');
   assert.deepEqual(errors, []);
-  console.log('Tutor browser passed: topics/first questions, recovery without charge, coaching/practice, mock speech confirmation, legacy review, IME, 4 viewports, admin permissions and account isolation. No production network.');
+  console.log('Tutor browser passed: topics, coaching, IME, 4 viewports, own/admin usage and refresh, no paid reads, permissions and account isolation. No production network.');
 } catch (error) {
   await page.screenshot({ path: 'test-results/tutor-failure.png' });
   console.error(await page.locator('body').innerText()); throw error;

@@ -7,6 +7,11 @@ const ENDPOINTS = {
 };
 const MAX_RESPONSE_BYTES = 192000;
 
+export function reportedTokenCount(usage) {
+  const count = usage?.total_tokens;
+  return Number.isInteger(count) && count >= 0 && count < 1000000 ? count : null;
+}
+
 export function hiveConfiguration(env) {
   const apiKey = env('HIVE_API_KEY'), model = env('HIVE_MODEL') || HIVE_MODEL;
   const region = env('HIVE_REGION') || 'global';
@@ -63,12 +68,17 @@ export async function readHiveCompletion(response) {
     buffer += decoder.decode();
     if (!streaming) {
       let completion; try { completion = JSON.parse(buffer); } catch { invalid(); }
+      usage = completion?.usage;
       if (completion?.choices?.[0]?.finish_reason !== 'stop' || typeof completion.choices[0].message?.content !== 'string') invalid();
       return completion;
     }
     if (!doneMarker) { buffer += '\n\n'; consumeLines(); }
     if (!doneMarker || reason !== 'stop' || !content.trim()) invalid();
     return { choices: [{ finish_reason: reason, message: { content } }], usage };
+  } catch (error) {
+    // A paid but invalid/truncated reply may still include reliable usage metadata.
+    error.reportedTokens = reportedTokenCount(usage);
+    throw error;
   } finally { await reader.cancel().catch(() => {}); reader.releaseLock(); }
 }
 
