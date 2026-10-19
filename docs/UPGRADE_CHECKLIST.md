@@ -138,3 +138,46 @@ node --test tests/tutor-database.test.mjs tests/japanese-tutor-database.test.mjs
 ```
 
 브라우저 테스트에는 별도로 Playwright와 Edge가 필요합니다. 기존 `PLAYWRIGHT_PACKAGE` 경로 설정을 사용합니다. 일반 개발을 계속하려면 앱 폴더에서 `npm run dev`만 실행하면 됩니다.
+
+## 프로필 권한 및 라이브러리 보안 보완 (2026-10-19)
+
+범위는 관리자 권한 변경 차단과 취약 라이브러리 업데이트뿐입니다. 앱 버전은 `0.2.12`를 유지하며 영수증 OCR, 다른 Edge Function, 화면, 기존 기록/계정 데이터는 변경하지 않았습니다.
+
+### 운영 DB 적용 완료
+
+`jllhaavazvyjjfqgnylb`에 `202610190005_enforce_profile_write_permissions.sql` 하나를 트랜잭션으로 적용했습니다. 전체 `db push`나 `schema.sql` 재실행은 하지 않았습니다. 새 migration은 재실행 가능하며 CLI의 migration 이력에는 자동 등록되지 않는 직접 SQL 적용 방식입니다.
+
+- 일반 로그인 계정과 비로그인 계정의 `profiles.role`, `id`, `created_at` UPDATE 권한을 차단했습니다. 기존 테이블 권한뿐 아니라 별도로 남아 있을 수 있는 컬럼 권한과 PUBLIC 권한도 회수합니다.
+- 로그인 계정은 본인의 `display_name`, `avatar_color`, `updated_at`만 수정할 수 있습니다. 브라우저에서도 해당 필드만 저장 요청에 포함합니다.
+- INSERT는 본인 ID와 일반 회원 역할만 허용합니다. 제한적 RLS 정책을 추가해 다른 허용 정책이 있어도 본인 범위/일반 회원 역할을 넘어갈 수 없게 합니다.
+- 기존 관리자 계정, 회원 목록 조회, 서버의 service-role 관리 권한, 가입 트리거는 유지했습니다. 개인 기록의 접근 정책도 변경하지 않았습니다.
+- 운영 서버 재확인 결과: `authenticated`/`anon`의 role UPDATE는 false, 본인 이름/색상 UPDATE와 service-role의 role UPDATE는 true입니다. 운영 계정을 실제로 승격/강등하는 테스트는 하지 않았습니다.
+
+다른 Supabase 프로젝트에 적용할 때는 전체 스키마가 아니라 위 migration만 실행하세요. 일반 사용자의 관리자 승격은 앱/브라우저에서 처리하지 않고 신뢰할 수 있는 서버나 관리자가 DB에서 수행해야 합니다. 의도적으로 기존 취약 권한을 다시 부여하는 롤백은 하지 않습니다.
+
+### 라이브러리 업데이트
+
+- Vite: `8.0.11` → `8.0.16` (8.0 계열 유지)
+- PostCSS: `8.5.14` → `8.5.31`
+- nanoid: `3.3.12` → `3.3.20`
+- source-map-js: `1.2.1` → `1.2.2`
+- ws: `8.20.0` → `8.22.0`
+- 위 버전에 필요한 빌드 의존성과 잠금 파일도 갱신했습니다. `--force`를 사용하지 않았으며 React/Supabase SDK 주요 버전은 변경하지 않았습니다.
+- 검사 시점의 `npm audit`: 높음 5건 → 전체 0건. 이는 알려진 라이브러리 취약점 검사 결과이며 앱 전체의 무결점 보증은 아닙니다.
+
+로컬 소스는 커밋/push 전입니다. 라이브러리 변경은 GitHub push와 Vercel 재배포가 필요하며, 이미 실행 중인 로컬 개발 서버는 재시작해야 새 버전이 로드됩니다. DB 차단은 이미 운영에 적용되어 있고 Edge Function 재배포는 필요 없습니다.
+
+### 검증
+
+- `npm test`: 69개 통과, 1개 건너뜀(별도 Zepp 원본 샘플 없음).
+- `npm run test:security`: 임시 PostgreSQL에서 5개 통과. 본인 권한 변경/관리자 역할 INSERT/upsert/타인 수정 차단, 정상 이름 수정, 서비스 권한, 재실행 및 기존 데이터 보존을 검증합니다.
+- 튜터 DB 테스트: 영어/일본어 9개 통과.
+- `npm run build`: 성공. 기존 큰 번들 안내 경고는 별도 최적화 대상으로 남겨 둡니다.
+- `tests/browser-smoke.mjs`: 모바일 포함 4개 화면 크기, 기간 순환/수입 상세/한글 포커스/금액/저장 재시도/내비게이션 검증 통과. 운영 API 통신은 차단한 테스트입니다.
+
+보안 DB 테스트는 위의 고급 튜터 DB 검증 도구 설치 절차로 PGlite를 준비한 뒤 실행합니다. 앱 의존성이나 운영 번들에 테스트 DB를 추가하지 않았습니다.
+
+```powershell
+$env:PGLITE_PACKAGE = (Resolve-Path "..\.tutor-test-runtime\node_modules\@electric-sql\pglite").Path
+npm run test:security
+```

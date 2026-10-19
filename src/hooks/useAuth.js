@@ -85,9 +85,15 @@ export function useAuth() {
   }
 
   async function updateProfile(updates) {
+    if (!session?.user?.id) throw new Error('로그인이 필요합니다.');
+    // The database enforces this allowlist too; never send a profile's role or id.
+    const editable = {};
+    for (const key of ['display_name', 'avatar_color']) {
+      if (Object.hasOwn(updates, key)) editable[key] = updates[key];
+    }
     const { data, error } = await supabase
       .from('profiles')
-      .update({ ...updates, updated_at: new Date().toISOString() })
+      .update({ ...editable, updated_at: new Date().toISOString() })
       .eq('id', session.user.id)
       .select()
       .single();
