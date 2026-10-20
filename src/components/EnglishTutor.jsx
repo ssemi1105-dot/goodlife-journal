@@ -32,7 +32,7 @@ export default function EnglishTutor({ userId, onBack }) {
     const last = area.querySelector('.tutor-turn:last-of-type');
     const target = last?.querySelector('.tutor-feedback') || last;
     if (target) area.scrollTop += target.getBoundingClientRect().top - area.getBoundingClientRect().top;
-  }, [tutor.turns.length, tutor.busy, tab, tutor.session?.id, choosingTopic]);
+  }, [tutor.turns.length, tutor.busy, tutor.loading, tab, tutor.session?.id, choosingTopic]);
   useEffect(() => { if (practiceText && tab === 'chat') inputRef.current?.focus(); }, [practiceText, tab]);
   // Only this screen tracks the visual viewport, keeping the composer above Android/iOS keyboards.
   const [viewportHeight, setViewportHeight] = useState(() => window.visualViewport?.height || window.innerHeight);
@@ -74,11 +74,11 @@ export default function EnglishTutor({ userId, onBack }) {
   }
   async function send(event) {
     event.preventDefault();
-    if (!draft.text.trim() || tutor.busy || tutor.pending || listening || (draft.mode === 'voice' && !draft.confirmed)) return;
+    if (!draft.text.trim() || tutor.loading || tutor.busy || tutor.pending || listening || (draft.mode === 'voice' && !draft.confirmed)) return;
     if (await tutor.send(draft.text, draft.mode, draft.confirmed)) { clearSubmittedDraft(draft.text); setPracticeText(''); }
   }
   function practice(expression) {
-    if (tutor.busy || tutor.pending || listening) return;
+    if (tutor.loading || tutor.busy || tutor.pending || listening) return;
     if (draft.text.trim() && !window.confirm('작성 중인 문장을 지우고 연습할까요?')) return;
     stopAudio(); setTab('chat'); setChoosingTopic(false); setPracticeText(expression);
     setDraft({ text: '', mode: 'text', confirmed: false }); setLanguage('en-US');
@@ -86,28 +86,34 @@ export default function EnglishTutor({ userId, onBack }) {
     if (Recognition) startVoice('en-US');
   }
   async function startConversation(topicId) {
-    if (tutor.busy || tutor.pending || listening) return;
+    if (tutor.loading || tutor.busy || tutor.pending || listening) return;
     if (draft.text.trim() && !window.confirm('작성 중인 문장은 입력창에 유지됩니다. 새 대화를 시작할까요?')) return;
     stopAudio();
     const id = topicId ? await tutor.startTopic(topicId) : await tutor.createSession();
     if (id) { setChoosingTopic(false); setPracticeText(''); }
   }
   function changeTab(next) { stopAudio(); setTab(next); }
+  function chooseTopic() {
+    if (locked) return;
+    stopAudio(); setTab('chat'); setChoosingTopic(true);
+  }
   const reviewItems = tutor.data?.review || [];
   const remaining = reviewItems.filter(turn => !turn.reviewed_at);
   const counts = Object.entries(tutor.data?.learning.counts || {}).sort((a, b) => b[1] - a[1]);
   const unavailable = !tutor.data && !tutor.loading;
+  const ready = !!tutor.data && !tutor.loading;
   const showTopics = choosingTopic || (!tutor.session && !tutor.turns.length);
-  const locked = tutor.busy || !!tutor.pending || listening;
+  const locked = tutor.loading || tutor.busy || !!tutor.pending || listening;
   return <main className={`screen tutor-screen ${keyboardOpen ? 'tutor-keyboard-open' : ''}`} style={{ '--tutor-height': `${viewportHeight}px` }}>
-    <TutorHeader title="영어 튜터" subtitle={`Mina${tutor.data ? ` · ${tutor.data.profile.level}` : ''}`} onBack={onBack} ready={!!tutor.data} tab={tab}
+    <TutorHeader title="영어 튜터" subtitle={`Mina${tutor.data ? ` · ${tutor.data.profile.level}` : ''}`} onBack={onBack} ready={ready} tab={tab}
+      onChooseTopic={chooseTopic} topicsOpen={showTopics} topicDisabled={locked}
       tabs={[[ 'chat', '대화' ], ['review', `복습${remaining.length ? ` ${remaining.length}` : ''}`], ['settings', '학습 설정']]} onTabChange={changeTab} onOpenMenu={stopAudio}>
       {close => <div className="tutor-session-bar">
         <select aria-label="대화 선택" value={tutor.session?.id || ''} disabled={locked} onChange={async event => { stopAudio(); if (await tutor.selectSession(event.target.value)) { setTab('chat'); setChoosingTopic(false); setPracticeText(''); close(); } }}>
           {!tutor.session && <option value="">새 대화</option>}
           {tutor.data.sessions.map(session => <option key={session.id} value={session.id}>{session.title} · {new Date(session.created_at).toLocaleDateString('ko-KR')}</option>)}
         </select>
-        <button type="button" className="tutor-icon" aria-label="새 주제 선택" title="새 주제 선택" disabled={locked} onClick={() => { stopAudio(); setTab('chat'); setChoosingTopic(true); close(); }}>＋</button>
+        <button type="button" className="tutor-icon" aria-label="새 주제 선택" title="새 주제 선택" disabled={locked} onClick={() => { chooseTopic(); close(); }}>＋</button>
         <button type="button" className="tutor-icon" aria-label="대화 삭제" title="대화 삭제" disabled={!tutor.session || locked} onClick={async () => { if (window.confirm('이 대화와 교정·복습 기록을 삭제할까요? 사용량은 초기화되지 않습니다.')) { stopAudio(); await tutor.deleteSession(tutor.session.id); close(); } }}>×</button>
       </div>}
     </TutorHeader>
@@ -116,7 +122,7 @@ export default function EnglishTutor({ userId, onBack }) {
       {!tutor.pending && <button type="button" disabled={tutor.busy} onClick={() => { setVoiceError(''); tutor.reload(); }}>다시 확인</button>}
     </div>}
     {unavailable && <div className="tutor-state"><h2>아직 연결되지 않았어요</h2><p>서버 배포와 계정 사용 허가가 완료되면 시작할 수 있습니다.</p></div>}
-    {tutor.data && tab === 'chat' && <section className="tutor-chat" role="tabpanel" aria-label="영어 대화">
+    {ready && tab === 'chat' && <section className="tutor-chat" role="tabpanel" aria-label="영어 대화">
       <div className="tutor-conversation" ref={scrollRef} aria-label="영어 대화 내역" aria-busy={tutor.busy}>
         {showTopics && <TutorTopics disabled={locked} onSelect={startConversation} onFree={() => startConversation(null)} onClose={tutor.session ? () => setChoosingTopic(false) : null} />}
         {!showTopics && tutor.session?.opening && <section className="tutor-opening" aria-label="튜터 시작 질문">
@@ -144,7 +150,7 @@ export default function EnglishTutor({ userId, onBack }) {
         {!!tutor.pending && <div className="tutor-pending"><span>이전 요청 확인이 필요합니다.</span><button type="button" disabled={tutor.busy} onClick={async () => { const content = tutor.pending.content; if (await tutor.resolvePending()) clearSubmittedDraft(content); }}>저장 상태 확인</button></div>}
       </TutorComposer>
     </section>}
-    {tutor.data && tab === 'review' && <section className="tutor-scroll-panel" role="tabpanel" aria-label="영어 복습">
+    {ready && tab === 'review' && <section className="tutor-scroll-panel" role="tabpanel" aria-label="영어 복습">
       <div className="tutor-review-heading"><h2>다시 볼 표현</h2><span>{remaining.length}건 남음</span></div>
       {reviewItems.map(turn => <article className={`tutor-review-item ${turn.reviewed_at ? 'is-reviewed' : ''}`} key={turn.id}><time>{timestamp(turn.created_at)}</time>
         <TutorFeedback feedback={turn.feedback} onSpeak={canSpeak ? speak : null} onPractice={practice} disabled={locked} showReply={false} />
@@ -153,7 +159,7 @@ export default function EnglishTutor({ userId, onBack }) {
       {!reviewItems.length && <p className="tutor-state">아직 복습할 표현이 없습니다.</p>}
       <small className="tutor-note">최근 학습 200회를 기준으로 표시합니다.</small>
     </section>}
-    {tutor.data && tab === 'settings' && <section className="tutor-scroll-panel" role="tabpanel" aria-label="영어 학습 설정">
+    {ready && tab === 'settings' && <section className="tutor-scroll-panel" role="tabpanel" aria-label="영어 학습 설정">
       <section className="tutor-setting-section"><h2>학습 수준</h2><div className="tutor-levels">{LEVELS.map(level => <button type="button" key={level} aria-pressed={tutor.data.profile.level === level} disabled={tutor.busy || !!tutor.pending} onClick={() => tutor.savePreferences(level, tutor.data.profile.improvements)}>{level}</button>)}</div>
         {tutor.data.learning.recommendation && <div className="tutor-recommendation"><span>{tutor.data.learning.recommendation} 단계도 연습해 볼까요?</span><button type="button" disabled={tutor.busy} onClick={() => tutor.savePreferences(tutor.data.learning.recommendation, tutor.data.profile.improvements)}>변경</button></div>}
         <p className="tutor-note">공인 시험 점수가 아닌 학습 난이도입니다. 수준은 자동으로 바뀌지 않습니다.</p>

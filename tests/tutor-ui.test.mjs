@@ -8,7 +8,7 @@ import { japaneseFeedback } from './helpers/japaneseFeedback.mjs';
 import { cleanTutorFeedback as cleanEnglish } from '../supabase/functions/english-tutor/core.mjs';
 import { cleanTutorFeedback as cleanJapanese } from '../supabase/functions/japanese-tutor/core.mjs';
 
-let server, Feedback, Topics, Usage, totalUsage, JapanesePhrase, Composer, JapaneseFeedback;
+let server, Feedback, Topics, Usage, totalUsage, JapanesePhrase, Composer, JapaneseFeedback, Header;
 before(async () => {
   server = await createServer({ server: { middlewareMode: true, hmr: false }, appType: 'custom', logLevel: 'silent' });
   Feedback = (await server.ssrLoadModule('/src/components/TutorFeedback.jsx')).default;
@@ -18,8 +18,21 @@ before(async () => {
   JapanesePhrase = (await server.ssrLoadModule('/src/components/JapanesePhrase.jsx')).default;
   Composer = (await server.ssrLoadModule('/src/components/TutorComposer.jsx')).default;
   JapaneseFeedback = (await server.ssrLoadModule('/src/components/JapaneseFeedback.jsx')).default;
+  Header = (await server.ssrLoadModule('/src/components/TutorHeader.jsx')).default;
 });
 after(async () => { await server?.close(); });
+
+test('shared header exposes topic change only in a ready conversation and respects pending work', () => {
+  let calls = 0;
+  const props = { title: '영어 튜터', subtitle: 'Mina · A2', tab: 'chat', ready: true,
+    tabs: [['chat', '대화'], ['review', '복습']], onChooseTopic() { calls++; }, children: () => null };
+  const render = overrides => renderToStaticMarkup(createElement(Header, { ...props, ...overrides }));
+  assert.match(render(), /class="tutor-topic-trigger" aria-expanded="false"/);
+  assert.match(render({ topicsOpen: true, topicDisabled: true }), /aria-expanded="true" disabled=""/);
+  assert.doesNotMatch(render({ ready: false }), /tutor-topic-trigger|tutor-menu-trigger/);
+  assert.doesNotMatch(render({ tab: 'review' }), /tutor-topic-trigger/);
+  assert.equal(calls, 0);
+});
 
 test('failed reply messages describe the actual lost response, safe reasons and additional retry cost', async () => {
   const { tutorErrorMessage } = await server.ssrLoadModule('/src/services/tutorClient.js');

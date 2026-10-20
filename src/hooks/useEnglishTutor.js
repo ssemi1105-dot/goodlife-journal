@@ -28,12 +28,15 @@ export function useTutor(userId, { call = callTutor, storagePrefix = 'goodlife-t
   async function refresh(withSession = true) {
     const result = await call('bootstrap');
     if (!mounted.current) return;
-    setData(result);
     const current = active.current || pendingRef.current?.sessionId || read(lastKey) || result.sessions[0]?.id;
     if (pendingRef.current && !result.sessions.some(item => item.id === pendingRef.current.sessionId)) keepPending(null);
     const id = result.sessions.some(item => item.id === current) ? current : result.sessions[0]?.id;
-    if (withSession && id) return loadSession(id);
+    const loaded = withSession && id ? await loadSession(id) : undefined;
+    if (!mounted.current || (withSession && id && !loaded)) return;
     if (!id) { active.current = null; setSession(null); setTurns([]); write(lastKey, null); keepPending(null); }
+    // Publish readiness only after restoring the conversation, not between the two requests.
+    setData(result);
+    return loaded;
   }
   useEffect(() => {
     mounted.current = true;
