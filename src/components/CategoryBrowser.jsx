@@ -4,7 +4,7 @@ import { X } from 'lucide-react';
 import { getCategoryNavigation } from '../utils/categoryNavigation';
 import CategoryIcon from './ui/CategoryIcon';
 
-export default function CategoryBrowser({ mode = 'all', settings, records, onClose, onOpenCategory, onManage, onOpenTutor, onOpenJapaneseTutor }) {
+export default function CategoryBrowser({ mode = 'all', settings, records, onClose, onOpenCategory, onManage, onOpenTutor, japaneseTutorUrl }) {
   const dialogRef = useRef(null);
   const closeRef = useRef(onClose);
   closeRef.current = onClose;
@@ -22,7 +22,7 @@ export default function CategoryBrowser({ mode = 'all', settings, records, onClo
     function handleKey(event) {
       if (event.key === 'Escape') { event.preventDefault(); closeRef.current(); }
       if (event.key !== 'Tab') return;
-      const controls = [...dialogRef.current.querySelectorAll('button:not([disabled])')];
+      const controls = [...dialogRef.current.querySelectorAll('button:not([disabled]), a[href]')];
       const first = controls[0], last = controls.at(-1);
       if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
       if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
@@ -47,7 +47,7 @@ export default function CategoryBrowser({ mode = 'all', settings, records, onClo
             <CategoryIcon categoryId={category.id} /><strong>{category.label}</strong><small>{count}건{hidden ? ' · 홈 숨김' : ''}</small>
           </button>)}
           {!frequent && onOpenTutor && <button type="button" className="category-browser-card" onClick={onOpenTutor}><CategoryIcon categoryId="english-tutor" /><strong>영어 튜터</strong><small>Mina</small></button>}
-          {!frequent && onOpenJapaneseTutor && <button type="button" className="category-browser-card" onClick={onOpenJapaneseTutor}><CategoryIcon categoryId="japanese-tutor" /><strong>일본어 튜터</strong><small>Haru</small></button>}
+          {!frequent && japaneseTutorUrl && <a className="category-browser-card" href={japaneseTutorUrl} target="_blank" rel="noopener noreferrer" aria-label="일본어 튜터 · 미캉 (새 탭)" title="미캉 일본어 학습 (새 탭)"><CategoryIcon categoryId="japanese-tutor" /><strong>일본어 튜터</strong><small>미캉 · 새 탭</small></a>}
         </div>
         {!items.length && <p className="empty-text">아직 기록한 카테고리가 없습니다.</p>}
       </div>

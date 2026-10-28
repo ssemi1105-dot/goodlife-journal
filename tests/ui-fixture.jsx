@@ -7,6 +7,7 @@ import SettingsScreen from '../src/components/SettingsScreen';
 import CategoryBrowser from '../src/components/CategoryBrowser';
 import { House, LayoutGrid, Settings } from 'lucide-react';
 import { CATEGORIES, DEFAULT_FINANCE_MODES } from '../src/data/categoryDefinitions';
+import { MIKAN_URL } from '../src/lib/externalLinks';
 import { cleanRecordData } from '../src/services/recordStorage';
 import { deriveRecordColumns, todayIso } from '../src/utils/recordUtils';
 import '../src/styles.css';
@@ -52,7 +53,7 @@ function Fixture() {
   return <div className="app-shell journal-ui">
     {view === 'home' && <Dashboard profile={profile} records={records} settings={settings} filters={filters} onFiltersChange={setFilters}
       onAdd={onAdd} onOpenCategory={openCategory} onOpenRecord={onEdit} onEdit={onEdit} onDelete={() => {}}
-      onBrowseCategories={setBrowserMode} onManageCategories={() => setView('settings')} />}
+      onBrowseCategories={setBrowserMode} onManageCategories={() => setView('settings')} japaneseTutorUrl={MIKAN_URL} onOpenTutor={() => { window.fixture.englishOpened = true; }} />}
     {view === 'category' && <CategoryView categoryId={category} records={records} onBack={() => setView('home')} onAdd={onAdd}
       onOpenRecord={onEdit} onEdit={onEdit} onDelete={() => {}} quotesPaused />}
     {view === 'settings' && <SettingsScreen userId="fixture" profile={profile} records={records} settings={settings}
@@ -64,7 +65,7 @@ function Fixture() {
       <button type="button" aria-expanded={Boolean(browserMode)} onClick={() => setBrowserMode('all')}><LayoutGrid size={23} /><span>전체 카테고리</span></button>
       <button type="button" className={view === 'settings' ? 'is-active' : ''} onClick={() => setView('settings')}><Settings size={23} /><span>설정</span></button>
     </nav>
-    {browserMode && <CategoryBrowser mode={browserMode} settings={settings} records={records} onOpenCategory={openCategory} onClose={() => setBrowserMode(null)} onManage={() => { setBrowserMode(null); setView('settings'); }} />}
+    {browserMode && <CategoryBrowser mode={browserMode} settings={settings} records={records} japaneseTutorUrl={MIKAN_URL} onOpenTutor={() => { window.fixture.englishOpened = true; }} onOpenCategory={openCategory} onClose={() => setBrowserMode(null)} onManage={() => { setBrowserMode(null); setView('settings'); }} />}
     {modal && <RecordModal key={`${modal.categoryId}-${modal.record?.id || 'new'}`} {...modal} onClose={() => setModal(null)}
       onSave={async (categoryId, formData, record, draftId) => {
         window.fixture.attemptIds = [...(window.fixture.attemptIds || []), draftId];

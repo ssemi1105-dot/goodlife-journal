@@ -15,6 +15,7 @@ import { useAuth } from './hooks/useAuth';
 import { useRecords } from './hooks/useRecords';
 import { runTactileTransition } from './utils/tactileTransition';
 import { deriveRecordColumns, getInvestmentAssetKey, validateInvestmentLedger } from './utils/recordUtils';
+import { MIKAN_URL } from './lib/externalLinks';
 
 const EMPTY_FILTERS = { query: '', dateFrom: '', dateTo: '', minAmount: '', maxAmount: '', minRating: '' };
 const APP_HISTORY_KEY = 'goodlifeNavigation';
@@ -421,7 +422,7 @@ export default function App() {
           onBrowseCategories={browseCategories}
           onManageCategories={manageCategories}
           onOpenTutor={() => navigateToView('tutor')}
-          onOpenJapaneseTutor={() => navigateToView('japanese-tutor')}
+          japaneseTutorUrl={MIKAN_URL}
         />
       )}
 
@@ -496,7 +497,7 @@ export default function App() {
 
       {categoryBrowser && <CategoryBrowser mode={categoryBrowser} settings={normalizedSettings} records={records}
         onClose={() => navigateBack(currentBaseNavigation())} onOpenCategory={openCategory} onManage={manageCategories}
-        onOpenTutor={() => navigateToView('tutor')} onOpenJapaneseTutor={() => navigateToView('japanese-tutor')} />}
+        onOpenTutor={() => navigateToView('tutor')} japaneseTutorUrl={MIKAN_URL} />}
 
       {showPicker && (
         <CategoryPicker

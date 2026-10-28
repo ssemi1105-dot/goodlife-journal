@@ -12,12 +12,32 @@ const context = await browser.newContext({ viewport: { width: 390, height: 844 }
 await context.route('**/*', route => {
   const url = new URL(route.request().url());
   if (url.hostname === '127.0.0.1' || ['data:', 'blob:'].includes(url.protocol)) return route.continue();
+  if (url.origin === 'https://mikan.day') {
+    assert.equal(url.href, 'https://mikan.day/');
+    assert.equal(route.request().headers().referer, undefined);
+    return route.fulfill({ contentType: 'text/html', body: '<!doctype html><title>External link fixture</title><p>Test destination</p>' });
+  }
   return route.fulfill({ json: [] });
 });
 const page = await context.newPage();
 const errors = [];
 page.on('pageerror', error => errors.push(error.message));
 await mkdir('test-results', { recursive: true });
+
+async function checkJapaneseLink(link) {
+  assert.equal(await link.getAttribute('href'), 'https://mikan.day/');
+  assert.equal(await link.getAttribute('rel'), 'noopener noreferrer');
+  const original = page.url();
+  const opened = context.waitForEvent('page');
+  await link.tap();
+  const popup = await opened;
+  try {
+    await popup.waitForLoadState('domcontentloaded');
+    assert.equal(popup.url(), 'https://mikan.day/');
+    assert.equal(await popup.evaluate(() => window.opener), null);
+    assert.equal(page.url(), original);
+  } finally { await popup.close(); await page.bringToFront(); }
+}
 
 try {
   await page.goto(`${server.resolvedUrls.local[0]}tests/ui.html`);
@@ -43,6 +63,8 @@ try {
     assert.ok(Math.abs(navBox.y + navBox.height - 844) < 2);
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
     await page.screenshot({ path: `test-results/journal-home-${width}.png` });
+    await checkJapaneseLink(page.getByRole('link', { name: '일본어 튜터 · 미캉 (새 탭)', exact: true }));
+    await page.screenshot({ path: `test-results/journal-tutor-links-${width}.png` });
     await nav.getByRole('button', { name: '전체 카테고리', exact: true }).tap();
     const dialog = page.getByRole('dialog', { name: '전체 카테고리', exact: true });
     await dialog.waitFor();
@@ -63,6 +85,13 @@ try {
     assert.ok(await scroll.evaluate(el => { el.scrollTop = el.scrollHeight; return el.scrollHeight <= el.clientHeight || el.scrollTop > 0; }));
     await scroll.evaluate(el => { el.scrollTop = 0; });
     await page.screenshot({ path: `test-results/journal-categories-${width}.png` });
+    const japaneseLink = dialog.getByRole('link', { name: '일본어 튜터 · 미캉 (새 탭)', exact: true });
+    const englishButton = dialog.getByRole('button', { name: /영어 튜터/ });
+    await englishButton.focus();
+    await page.keyboard.press('Tab');
+    assert.equal(await japaneseLink.evaluate(el => document.activeElement === el), true, 'external link participates in the dialog focus order');
+    await checkJapaneseLink(japaneseLink);
+    await page.screenshot({ path: `test-results/journal-category-tutor-links-${width}.png` });
     // A background tap must dismiss only, never open an underlying category.
     await page.locator('.category-browser-backdrop').tap({ position: { x: 2, y: 2 } });
     await dialog.waitFor({ state: 'detached' });
@@ -70,6 +99,7 @@ try {
     assert.equal(await page.locator('.app-shell').evaluate(el => el.inert), false);
     await page.getByRole('button', { name: '자주 사용한 카테고리 보기', exact: true }).tap();
     const frequent = page.getByRole('dialog', { name: '자주 사용한 카테고리', exact: true });
+    assert.equal(await frequent.locator('a[href="https://mikan.day/"]').count(), 0);
     assert.deepEqual(await frequent.locator('[data-category-id]').evaluateAll(nodes => nodes.map(el => el.dataset.categoryId)), ['dining', ...categoryIds.filter(id => ['workMeal', 'salary'].includes(id))]);
     assert.equal(await frequent.locator('.category-browser-grid').evaluate(el => getComputedStyle(el).gridTemplateColumns.split(' ').length), 3);
     await page.screenshot({ path: `test-results/journal-frequent-${width}.png` });
@@ -99,7 +129,7 @@ try {
   await page.locator('.settings-screen').evaluate(el => { el.scrollTop = el.scrollHeight; });
   assert.ok(await page.locator('.settings-screen').evaluate(el => el.scrollTop > 0));
   assert.deepEqual(errors, []);
-  console.log('PASS: all categories retained, 3-column centered all/frequent cards at 4 widths, favorites, recent 3, no click-through, scroll, unchanged records/settings, dining and settings preserved. Production network blocked.');
+  console.log('PASS: Japanese links open isolated new tabs without a referrer from home/all categories, keyboard focus includes links, all categories retained, 3-column cards at 4 widths, unchanged records/settings. Production network blocked.');
 } finally {
   await browser.close();
   await server.close();

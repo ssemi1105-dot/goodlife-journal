@@ -24,6 +24,17 @@ before(async () => {
 });
 after(async () => { await server?.close(); });
 
+test('Japanese home entry is a safe external link while English remains an internal action', async () => {
+  const Dashboard = (await server.ssrLoadModule('/src/components/Dashboard.jsx')).default;
+  const { MIKAN_URL } = await server.ssrLoadModule('/src/lib/externalLinks.js');
+  const props = { profile: {}, records: [], settings: { finance_modes: {} }, filters: {}, onOpenTutor() {}, japaneseTutorUrl: MIKAN_URL };
+  const html = renderToStaticMarkup(createElement(Dashboard, props));
+  assert.match(html, /<a[^>]*href="https:\/\/mikan\.day\/"[^>]*target="_blank"[^>]*rel="noopener noreferrer"/);
+  assert.match(html, /aria-label="일본어 튜터 · 미캉 \(새 탭\)"/);
+  assert.match(html, /<button[^>]*class="tutor-launch-button"[^>]*>[\s\S]*?영어 튜터<\/button>/);
+  assert.doesNotMatch(renderToStaticMarkup(createElement(Dashboard, { ...props, japaneseTutorUrl: undefined })), /mikan\.day/);
+});
+
 test('category navigation retains every definition, hidden access, saved favorites and immutable data', () => {
   const records = [{ category_id: 'dining' }, { category_id: 'dining' }, { category_id: 'workMeal' }, { category_id: 'shopping' }];
   const settings = { category_order: ['workMeal', 'dining', 'workMeal', 'legacy-unknown'], hidden_categories: ['dining'], favorite_categories: ['shopping', 'dining', 'workMeal'], sort_by_record_count: true, finance_modes: { workMeal: 'excluded' } };

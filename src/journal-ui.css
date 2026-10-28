@@ -130,6 +130,8 @@
 .category-browser-card strong { font-size: 13px; line-height: 1.4; font-weight: 650; width: 100%; overflow-wrap: anywhere; }
 .category-browser-card small { font-size: 11px; color: var(--text-muted); line-height: 1.35; }
 .category-browser-card:active { transform: scale(.97); background: var(--accent-soft); }
+.journal-ui a.tutor-launch-button, .journal-ui a.category-browser-card { text-decoration: none; }
+.journal-ui a.tutor-launch-button:focus-visible, .journal-ui a.category-browser-card:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
 .category-browser footer { padding: 10px 16px 14px; border-top: 1px solid var(--border); text-align: right; }
 
 .journal-ui .settings-screen { display: grid; gap: 12px; grid-auto-rows: max-content; align-content: start; }

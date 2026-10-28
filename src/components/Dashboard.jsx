@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { BookOpen, ChartNoAxesColumnIncreasing, ChevronRight, Languages, Plus, Repeat2, Search } from 'lucide-react';
+import { BookOpen, ChartNoAxesColumnIncreasing, ChevronRight, ExternalLink, Languages, Plus, Repeat2, Search } from 'lucide-react';
 import { CATEGORY_ICONS, CATEGORY_MAP } from '../data/categoryDefinitions';
 import { APP_VERSION } from '../lib/appVersion';
 import { formatMoney, summarizeCategoryTotals, summarizePeriod } from '../utils/recordUtils';
@@ -81,7 +81,7 @@ export default function Dashboard({
   onEdit,
   onDelete,
   onOpenTutor,
-  onOpenJapaneseTutor,
+  japaneseTutorUrl,
   onBrowseCategories,
   onManageCategories,
 }) {
@@ -163,9 +163,9 @@ export default function Dashboard({
 
       <button type="button" className="journal-frequent-link" onClick={() => onBrowseCategories('frequent')}><ChartNoAxesColumnIncreasing size={23} /><strong>자주 사용한 카테고리 보기</strong><ChevronRight size={17} /></button>
 
-      {(onOpenTutor || onOpenJapaneseTutor) && <div className="tutor-entry-bar">
+      {(onOpenTutor || japaneseTutorUrl) && <div className="tutor-entry-bar">
         {onOpenTutor && <button type="button" className="tutor-launch-button" onClick={onOpenTutor}><BookOpen size={19} />영어 튜터</button>}
-        {onOpenJapaneseTutor && <button type="button" className="tutor-launch-button" onClick={onOpenJapaneseTutor}><Languages size={19} />일본어 튜터</button>}
+        {japaneseTutorUrl && <a className="tutor-launch-button" href={japaneseTutorUrl} target="_blank" rel="noopener noreferrer" aria-label="일본어 튜터 · 미캉 (새 탭)" title="미캉 일본어 학습 (새 탭)"><Languages size={19} aria-hidden="true" />일본어 튜터<ExternalLink size={13} aria-hidden="true" /></a>}
       </div>}
       <button type="button" className="journal-add-record" onClick={event => onAdd(null, null, event.currentTarget)}><Plus size={18} />기록 추가</button>
 
