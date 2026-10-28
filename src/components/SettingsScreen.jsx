@@ -5,6 +5,8 @@ import AdminUserList from './AdminUserList';
 import DataExportPanel from './DataExportPanel';
 import ShareSettingsPanel from './ShareSettingsPanel';
 import CompactToggle from './ui/CompactToggle';
+import { Bell, ChevronDown, ChevronRight, Database, LayoutGrid, ShieldCheck, UserRound, Users } from 'lucide-react';
+import CategoryIcon from './ui/CategoryIcon';
 
 const DEFAULT_SECTION_OPEN = {
   profile: true,
@@ -30,24 +32,21 @@ function loadSectionState(userId) {
 }
 
 function SettingsSection({ sectionId, eyebrow, title, summary, open, onToggle, action, className = '', children }) {
+  const Icon = { profile: UserRound, sharing: Users, categories: LayoutGrid, data: Database, integrations: Bell, admin: ShieldCheck }[sectionId] || LayoutGrid;
   return (
     <section className={`settings-panel collapsible-settings-section ${className} ${open ? 'is-open' : 'is-collapsed'}`}>
       <div className="settings-section-header">
         <button type="button" className="settings-section-toggle" onClick={() => onToggle(sectionId)} aria-expanded={open}>
-          <span className="settings-section-chevron" aria-hidden="true">{open ? '⌄' : '›'}</span>
+          <span className={`settings-section-symbol is-${sectionId}`} aria-hidden="true"><Icon size={21} /></span>
           <div>
             <p className="eyebrow">{eyebrow}</p>
             <h2>{title}</h2>
           </div>
           {summary && <small>{summary}</small>}
+          {open ? <ChevronDown className="settings-section-arrow" size={17} aria-hidden="true" /> : <ChevronRight className="settings-section-arrow" size={17} aria-hidden="true" />}
         </button>
-        {action && (
-          <div className="settings-section-action" onClick={(event) => event.stopPropagation()}>
-            {action}
-          </div>
-        )}
       </div>
-      {open && <div className="settings-section-body">{children}</div>}
+      {open && <div className="settings-section-body">{action && <div className="settings-section-action">{action}</div>}{children}</div>}
     </section>
   );
 }
@@ -280,7 +279,7 @@ export default function SettingsScreen({
                 onClick={() => setSelectedCategoryId(category.id)}
               >
                 <div className="category-setting-head">
-                  <span className="tile-icon" style={getCategoryThemeStyle(category.id)}>{CATEGORY_ICONS[category.id]}</span>
+                  <CategoryIcon categoryId={category.id} />
                   <div>
                     <strong>{category.label}</strong>
                     <small>
@@ -447,7 +446,7 @@ export default function SettingsScreen({
                 label={selectedFavorite ? '즐겨찾기 등록됨' : '즐겨찾기에 추가'}
               />
               <p className="muted compact-help">
-                하단 중앙의 별 버튼에서 이 카테고리로 바로 이동할 수 있습니다.
+                홈의 즐겨찾기에서 이 카테고리로 바로 이동할 수 있습니다.
               </p>
             </div>
 

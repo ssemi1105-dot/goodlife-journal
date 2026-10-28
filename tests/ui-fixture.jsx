@@ -4,11 +4,13 @@ import Dashboard from '../src/components/Dashboard';
 import CategoryView from '../src/components/CategoryView';
 import RecordModal from '../src/components/RecordModal';
 import SettingsScreen from '../src/components/SettingsScreen';
-import FavoriteCategoryNav from '../src/components/FavoriteCategoryNav';
+import CategoryBrowser from '../src/components/CategoryBrowser';
+import { House, LayoutGrid, Settings } from 'lucide-react';
 import { CATEGORIES, DEFAULT_FINANCE_MODES } from '../src/data/categoryDefinitions';
 import { cleanRecordData } from '../src/services/recordStorage';
 import { deriveRecordColumns, todayIso } from '../src/utils/recordUtils';
 import '../src/styles.css';
+import '../src/journal-ui.css';
 import { useRecords } from '../src/hooks/useRecords';
 import { useAppSettings } from '../src/hooks/useAppSettings';
 import RecordCardsFixture from './record-cards-fixture';
@@ -37,18 +39,20 @@ function Fixture() {
   const [view, setView] = useState('home');
   const [category, setCategory] = useState('workMeal');
   const [modal, setModal] = useState(null);
+  const [browserMode, setBrowserMode] = useState(null);
   const [records, setRecords] = useState(initialRecords);
   const [settings, setSettings] = useState({ category_order: CATEGORIES.map((item) => item.id), hidden_categories: [],
     favorite_categories: ['workMeal', 'shopping'], finance_modes: DEFAULT_FINANCE_MODES, sort_by_record_count: true, reminder_settings: {} });
   const [filters, setFilters] = useState({});
   const [profile, setProfile] = useState({ display_name: '테스트 사용자' });
-  const openCategory = (id) => { setCategory(id); setView('category'); };
+  const openCategory = (id) => { setBrowserMode(null); setCategory(id); setView('category'); };
   const onAdd = (id) => setModal({ categoryId: id || 'workMeal' });
   const onEdit = (record) => setModal({ categoryId: record.category_id, record });
-  window.fixture = { ...(window.fixture || {}), openForm: onAdd, editMeal: () => onEdit(records[0]) };
-  return <div className="app-shell">
+  window.fixture = { ...(window.fixture || {}), records, settings, setRecords, setSettings, openForm: onAdd, editMeal: () => onEdit(records[0]) };
+  return <div className="app-shell journal-ui">
     {view === 'home' && <Dashboard profile={profile} records={records} settings={settings} filters={filters} onFiltersChange={setFilters}
-      onAdd={onAdd} onOpenCategory={openCategory} onOpenRecord={onEdit} onEdit={onEdit} onDelete={() => {}} />}
+      onAdd={onAdd} onOpenCategory={openCategory} onOpenRecord={onEdit} onEdit={onEdit} onDelete={() => {}}
+      onBrowseCategories={setBrowserMode} onManageCategories={() => setView('settings')} />}
     {view === 'category' && <CategoryView categoryId={category} records={records} onBack={() => setView('home')} onAdd={onAdd}
       onOpenRecord={onEdit} onEdit={onEdit} onDelete={() => {}} quotesPaused />}
     {view === 'settings' && <SettingsScreen userId="fixture" profile={profile} records={records} settings={settings}
@@ -56,10 +60,11 @@ function Fixture() {
       onBack={() => setView('home')} onSignOut={() => {}} onBackfillWeather={async () => ({ total: 0, updated: 0, failed: 0 })}
       onExportRecords={async () => records} />}
     <nav className="bottom-nav" aria-label="하단 내비게이션">
-      <button type="button" className={view === 'home' ? 'is-active' : ''} onClick={() => setView('home')}><span className="bottom-nav-icon">⌂</span><span>홈</span></button>
-      <FavoriteCategoryNav settings={settings} onOpenCategory={openCategory} onManage={() => setView('settings')} />
-      <button type="button" className={view === 'settings' ? 'is-active' : ''} onClick={() => setView('settings')}><span className="bottom-nav-icon">⚙</span><span>설정</span></button>
+      <button type="button" className={view === 'home' ? 'is-active' : ''} onClick={() => setView('home')}><House size={23} /><span>홈</span></button>
+      <button type="button" aria-expanded={Boolean(browserMode)} onClick={() => setBrowserMode('all')}><LayoutGrid size={23} /><span>전체 카테고리</span></button>
+      <button type="button" className={view === 'settings' ? 'is-active' : ''} onClick={() => setView('settings')}><Settings size={23} /><span>설정</span></button>
     </nav>
+    {browserMode && <CategoryBrowser mode={browserMode} settings={settings} records={records} onOpenCategory={openCategory} onClose={() => setBrowserMode(null)} onManage={() => { setBrowserMode(null); setView('settings'); }} />}
     {modal && <RecordModal key={`${modal.categoryId}-${modal.record?.id || 'new'}`} {...modal} onClose={() => setModal(null)}
       onSave={async (categoryId, formData, record, draftId) => {
         window.fixture.attemptIds = [...(window.fixture.attemptIds || []), draftId];

@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { CATEGORY_ICONS, CATEGORY_MAP, getCategoryThemeStyle } from '../data/categoryDefinitions';
+import { CATEGORY_MAP } from '../data/categoryDefinitions';
+import { ArrowLeft, Search } from 'lucide-react';
+import CategoryIcon from './ui/CategoryIcon';
 import { buildInvestmentLedger, calcAnnualLeave, formatMoney, getInvestmentRecordType, toNumber } from '../utils/recordUtils';
 import { fetchKisPrice } from '../services/kisApiClient';
 import RecordCard from './RecordCard';
@@ -435,13 +437,13 @@ export default function CategoryView({ categoryId, records, onBack, onAdd, onOpe
   return (
     <main className="screen category-screen" data-transition-surface="category-surface" style={{ viewTransitionName: 'category-surface' }}>
       <header className="sub-header mobile-sub-header">
-        <button className="icon-button" onClick={onBack} aria-label="뒤로">←</button>
-        <div className="tile-icon" style={getCategoryThemeStyle(category.id)}>{CATEGORY_ICONS[category.id]}</div>
+        <button className="icon-button" onClick={onBack} aria-label="뒤로"><ArrowLeft size={21} /></button>
+        <CategoryIcon categoryId={category.id} />
         <div className="sub-header-title">
           <p className="eyebrow">Category</p>
           <h1>{category.label}</h1>
         </div>
-        <button type="button" className={hasSearch ? 'search-icon-button is-active' : 'search-icon-button'} onClick={() => setShowSearch(true)} aria-label="검색">🔍</button>
+        <button type="button" className={hasSearch ? 'search-icon-button is-active' : 'search-icon-button'} onClick={() => setShowSearch(true)} aria-label="검색"><Search size={20} /></button>
         <button className="primary-button compact" onClick={(event) => onAdd(categoryId, null, event.currentTarget)}>추가</button>
       </header>
 

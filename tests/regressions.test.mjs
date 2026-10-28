@@ -6,7 +6,7 @@ import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 
 process.env.TZ = 'Asia/Seoul';
-let server, utils, storage, weather, exports, RecordCard, kpassComponents, presentation, summaries, DetailFields, LeaveGrid, categories;
+let server, utils, storage, weather, exports, RecordCard, kpassComponents, presentation, summaries, DetailFields, LeaveGrid, categories, categoryNavigation;
 before(async () => {
   server = await createServer({ server: { middlewareMode: true }, appType: 'custom', logLevel: 'silent' });
   utils = await server.ssrLoadModule('/src/utils/recordUtils.js');
@@ -20,8 +20,24 @@ before(async () => {
   DetailFields = (await server.ssrLoadModule('/src/components/RecordDetailFields.jsx')).default;
   LeaveGrid = (await server.ssrLoadModule('/src/components/AnnualLeaveGrid.jsx')).default;
   categories = (await server.ssrLoadModule('/src/data/categoryDefinitions.js')).CATEGORIES;
+  categoryNavigation = await server.ssrLoadModule('/src/utils/categoryNavigation.js');
 });
 after(async () => { await server?.close(); });
+
+test('category navigation retains every definition, hidden access, saved favorites and immutable data', () => {
+  const records = [{ category_id: 'dining' }, { category_id: 'dining' }, { category_id: 'workMeal' }, { category_id: 'shopping' }];
+  const settings = { category_order: ['workMeal', 'dining', 'workMeal', 'legacy-unknown'], hidden_categories: ['dining'], favorite_categories: ['shopping', 'dining', 'workMeal'], sort_by_record_count: true, finance_modes: { workMeal: 'excluded' } };
+  const original = JSON.stringify({ records, settings });
+  const result = categoryNavigation.getCategoryNavigation(records, settings);
+  assert.equal(result.all.length, categories.length);
+  assert.equal(new Set(result.all.map(item => item.category.id)).size, categories.length);
+  assert.equal(result.all.find(item => item.category.id === 'dining').hidden, true);
+  assert.deepEqual(result.favorites.map(item => item.category.id), ['shopping', 'workMeal']);
+  assert.deepEqual(result.frequent.map(item => item.category.id), ['workMeal', 'shopping']);
+  assert.equal(JSON.stringify({ records, settings }), original);
+  assert.equal(categoryNavigation.getCategoryNavigation().all.length, categories.length);
+  assert.deepEqual(categoryNavigation.getCategoryNavigation().frequent, []);
+});
 
 test('K-pass groups split charges/refunds by assigned month and sorts real transaction dates without mutation', () => {
   const records = [

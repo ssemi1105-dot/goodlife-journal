@@ -3,8 +3,9 @@ import { createPortal } from 'react-dom';
 import { getInvestmentRecordType } from '../utils/recordUtils';
 import CompactRecordContent from './CompactRecordContent';
 import RecordSummaryContent from './RecordSummaryContent';
+import RecentRecordContent from './RecentRecordContent';
 
-export default function RecordCard({ record, onOpen, onEdit, onDelete, onInvestmentSell, showCategory = true }) {
+export default function RecordCard({ record, onOpen, onEdit, onDelete, onInvestmentSell, showCategory = true, homePreview = false }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [menuPosition, setMenuPosition] = useState({ top: 0, left: 0 });
   const menuButtonRef = useRef(null);
@@ -56,11 +57,11 @@ export default function RecordCard({ record, onOpen, onEdit, onDelete, onInvestm
     </div></div>
   );
   return (
-    <article className={`record-card is-presented-record${compact ? ' is-compact-record' : ''}`} role="button" tabIndex={0}
+    <article className={`record-card is-presented-record${compact ? ' is-compact-record' : ''}${homePreview ? ' journal-home-record' : ''}`} role="button" tabIndex={0}
       onClick={(event) => onOpen?.(record, event.currentTarget)} onKeyDown={(event) => {
         if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); onOpen?.(record, event.currentTarget); }
       }}>
-      {compact ? <CompactRecordContent record={record} actions={actions} showCategory={showCategory} />
+      {homePreview ? <RecentRecordContent record={record} actions={actions} /> : compact ? <CompactRecordContent record={record} actions={actions} showCategory={showCategory} />
         : <RecordSummaryContent record={record} actions={actions} showCategory={showCategory} />}
       {menuOpen && createPortal(
         <div ref={menuPopoverRef} className="record-menu-popover" role="menu" style={menuPosition}

@@ -48,7 +48,7 @@ export default function PresentationFixture() {
   const [action, setAction] = useState('');
   window.presentationFixture = { records, setRecords, setCategory };
   const onOpen = (record) => { setMonth(null); setViewing(record); };
-  return <div className="app-shell">
+  return <div className="app-shell journal-ui">
     <label className="test-category-select">테스트 카테고리 <select aria-label="테스트 카테고리" value={category} onChange={e => setCategory(e.target.value)}><option value="all">전체</option>{CATEGORIES.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}</select></label>
     <output data-testid="presentation-action">{action}</output>
     {category === 'all' ? <main className="screen"><section className="record-list">{records.map(record => <div data-record-id={record.id} key={record.id}><RecordCard record={record} onOpen={onOpen} onEdit={r => setAction(`edit:${r.id}`)} onDelete={r => setAction(`delete:${r.id}`)} /></div>)}</section></main>

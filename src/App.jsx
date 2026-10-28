@@ -2,7 +2,8 @@ import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import AuthScreen from './components/AuthScreen';
 import CategoryView from './components/CategoryView';
 import Dashboard from './components/Dashboard';
-import FavoriteCategoryNav from './components/FavoriteCategoryNav';
+import CategoryBrowser from './components/CategoryBrowser';
+import { House, LayoutGrid, Settings } from 'lucide-react';
 import { KpassMonthModal } from './components/KpassRecords';
 import { WorkoutMonthModal } from './components/WorkoutRecords';
 import RecordDetailModal from './components/RecordDetailModal';
@@ -123,6 +124,7 @@ export default function App() {
   const [viewingKpassMonth, setViewingKpassMonth] = useState(null);
   const [viewingWorkoutMonth, setViewingWorkoutMonth] = useState(null);
   const [showPicker, setShowPicker] = useState(false);
+  const [categoryBrowser, setCategoryBrowser] = useState(null);
   const [filters, setFilters] = useState(EMPTY_FILTERS);
   const recordsRef = useRef(records);
   const today = todayLocalIso();
@@ -144,6 +146,7 @@ export default function App() {
     setView(nextView);
     setActiveCategory(nextView === 'category' ? navigationState?.activeCategory || null : null);
     setShowPicker(nextLayer === 'picker');
+    setCategoryBrowser(nextLayer === 'categories' ? navigationState.categoryMode || 'all' : null);
     setViewingRecord(nextLayer === 'record' ? targetRecord : null);
     setViewingKpassMonth(nextLayer === 'kpass-month' ? navigationState?.kpassMonth || null : null);
     setViewingWorkoutMonth(nextLayer === 'workout-month' ? navigationState?.workoutMonth || null : null);
@@ -163,6 +166,7 @@ export default function App() {
       initialData: navigationState.initialData || null,
       kpassMonth: navigationState.kpassMonth || null,
       workoutMonth: navigationState.workoutMonth || null,
+      categoryMode: navigationState.categoryMode || null,
     };
     const method = replace ? 'replaceState' : 'pushState';
     window.history[method](nextState, '', window.location.href);
@@ -186,8 +190,21 @@ export default function App() {
   }
 
   function navigateToView(nextView) {
-    if (view === nextView && !showPicker && !viewingRecord && !viewingKpassMonth && !viewingWorkoutMonth && !modalCategory) return;
-    setNavigationState({ view: nextView });
+    if (view === nextView && !categoryBrowser && !showPicker && !viewingRecord && !viewingKpassMonth && !viewingWorkoutMonth && !modalCategory) return;
+    setNavigationState({ view: nextView }, { replace: Boolean(categoryBrowser) });
+  }
+
+  function browseCategories(mode = 'all') {
+    setNavigationState({ ...currentBaseNavigation(), layer: 'categories', categoryMode: mode });
+  }
+
+  function manageCategories() {
+    const key = `goodlife-settings-sections-${auth.userId || 'guest'}`;
+    try {
+      const saved = JSON.parse(window.localStorage.getItem(key) || '{}');
+      window.localStorage.setItem(key, JSON.stringify({ ...saved, categories: true }));
+    } catch { /* Settings retains its defaults when local storage is unavailable. */ }
+    navigateToView('settings');
   }
 
   useEffect(() => {
@@ -279,7 +296,7 @@ export default function App() {
 
   function openCategory(categoryId, sourceElement) {
     return runTactileTransition(sourceElement, 'category-surface', () => {
-      setNavigationState({ view: 'category', activeCategory: categoryId });
+      setNavigationState({ view: 'category', activeCategory: categoryId }, { replace: Boolean(categoryBrowser) });
     });
   }
 
@@ -362,6 +379,7 @@ export default function App() {
 
   useEffect(() => {
     window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+    document.querySelector('.app-shell > .screen')?.scrollTo({ top: 0, left: 0, behavior: 'auto' });
   }, [view, activeCategory]);
 
   async function confirmDelete(record) {
@@ -387,7 +405,7 @@ export default function App() {
   }
 
   return (
-    <div className={`app-shell ${viewingRecord ? 'has-pushed-detail' : ''}`}>
+    <div className={`app-shell journal-ui ${viewingRecord ? 'has-pushed-detail' : ''}`}>
       {view === 'home' && (
         <Dashboard
           profile={auth.profile}
@@ -400,6 +418,8 @@ export default function App() {
           onOpenRecord={openRecord}
           onEdit={openEdit}
           onDelete={confirmDelete}
+          onBrowseCategories={browseCategories}
+          onManageCategories={manageCategories}
           onOpenTutor={() => navigateToView('tutor')}
           onOpenJapaneseTutor={() => navigateToView('japanese-tutor')}
         />
@@ -427,7 +447,7 @@ export default function App() {
           onUpdateRecord={updateRecordData}
           onOpenKpassMonth={(month) => setNavigationState({ ...currentBaseNavigation(), layer: 'kpass-month', kpassMonth: month })}
           onOpenWorkoutMonth={(month) => setNavigationState({ ...currentBaseNavigation(), layer: 'workout-month', workoutMonth: month })}
-          quotesPaused={Boolean(modalCategory || viewingRecord)}
+          quotesPaused={Boolean(modalCategory || viewingRecord || categoryBrowser)}
         />
       )}
 
@@ -464,28 +484,19 @@ export default function App() {
 
       {!['tutor', 'japanese-tutor'].includes(view) && <nav className="bottom-nav" aria-label="하단 내비게이션">
         <button type="button" className={view === 'home' ? 'is-active' : ''} onClick={() => navigateToView('home')}>
-          <span className="bottom-nav-icon" aria-hidden="true">⌂</span>
+          <House size={23} aria-hidden="true" />
           <span>홈</span>
         </button>
-        <FavoriteCategoryNav
-          settings={normalizedSettings}
-          onOpenCategory={openCategory}
-          onManage={() => {
-            const key = `goodlife-settings-sections-${auth.userId || 'guest'}`;
-            try {
-              const saved = JSON.parse(window.localStorage.getItem(key) || '{}');
-              window.localStorage.setItem(key, JSON.stringify({ ...saved, categories: true }));
-            } catch {
-              // SettingsScreen falls back to its defaults when storage is unavailable.
-            }
-            navigateToView('settings');
-          }}
-        />
+        <button type="button" aria-haspopup="dialog" aria-expanded={Boolean(categoryBrowser)} onClick={() => browseCategories('all')}><LayoutGrid size={23} aria-hidden="true" /><span>전체 카테고리</span></button>
         <button type="button" className={view === 'settings' ? 'is-active' : ''} onClick={() => navigateToView('settings')}>
-          <span className="bottom-nav-icon" aria-hidden="true">⚙</span>
+          <Settings size={23} aria-hidden="true" />
           <span>설정</span>
         </button>
       </nav>}
+
+      {categoryBrowser && <CategoryBrowser mode={categoryBrowser} settings={normalizedSettings} records={records}
+        onClose={() => navigateBack(currentBaseNavigation())} onOpenCategory={openCategory} onManage={manageCategories}
+        onOpenTutor={() => navigateToView('tutor')} onOpenJapaneseTutor={() => navigateToView('japanese-tutor')} />}
 
       {showPicker && (
         <CategoryPicker

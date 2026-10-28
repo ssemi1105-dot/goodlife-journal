@@ -1,9 +1,12 @@
 import { useMemo, useState } from 'react';
-import { CATEGORY_ICONS, CATEGORY_MAP, getCategoryThemeStyle } from '../data/categoryDefinitions';
+import { BookOpen, ChartNoAxesColumnIncreasing, ChevronRight, Languages, Plus, Repeat2, Search } from 'lucide-react';
+import { CATEGORY_ICONS, CATEGORY_MAP } from '../data/categoryDefinitions';
 import { APP_VERSION } from '../lib/appVersion';
 import { formatMoney, summarizeCategoryTotals, summarizePeriod } from '../utils/recordUtils';
 import RecordCard from './RecordCard';
 import SearchModal from './SearchModal';
+import CategoryIcon from './ui/CategoryIcon';
+import { getCategoryNavigation } from '../utils/categoryNavigation';
 
 const PERIODS = [
   { key: 'week', label: '주간' },
@@ -79,6 +82,8 @@ export default function Dashboard({
   onDelete,
   onOpenTutor,
   onOpenJapaneseTutor,
+  onBrowseCategories,
+  onManageCategories,
 }) {
   const [showSearch, setShowSearch] = useState(false);
   const [periodIndex, setPeriodIndex] = useState(1);
@@ -87,35 +92,16 @@ export default function Dashboard({
   const summary = summarizePeriod(records, settings.finance_modes, activePeriod.key);
   const categoryTotals = summarizeCategoryTotals(records, settings.finance_modes, activePeriod.key);
 
-  const visibleCategories = useMemo(() => {
-    const orderIndex = Object.fromEntries(settings.category_order.map((id, index) => [id, index]));
-    const mapped = settings.category_order
-      .map((id) => CATEGORY_MAP[id])
-      .filter(Boolean)
-      .filter((category) => !settings.hidden_categories.includes(category.id))
-      .map((category) => ({
-        category,
-        count: records.filter((record) => record.category_id === category.id).length,
-      }));
-
-    if (!settings.sort_by_record_count) return mapped;
-    return mapped.sort((a, b) => b.count - a.count || orderIndex[a.category.id] - orderIndex[b.category.id]);
-  }, [records, settings]);
+  const navigation = useMemo(() => getCategoryNavigation(records, settings), [records, settings]);
 
   const hasSearch = Boolean(filters.query || filters.dateFrom || filters.dateTo || filters.minAmount || filters.maxAmount || filters.minRating);
-  const quickCategories = useMemo(() => {
-    const orderIndex = Object.fromEntries(settings.category_order.map((id, index) => [id, index]));
-    return [...visibleCategories]
-      .sort((a, b) => b.count - a.count || orderIndex[a.category.id] - orderIndex[b.category.id])
-      .slice(0, 4);
-  }, [settings.category_order, visibleCategories]);
 
   function cyclePeriod() {
     setPeriodIndex((index) => (index + 1) % PERIODS.length);
   }
 
   return (
-    <main className="screen">
+    <main className="screen journal-home">
       <section className="topbar compact-topbar">
         <div>
           <p className="eyebrow app-version-label">
@@ -128,103 +114,60 @@ export default function Dashboard({
           </h1>
         </div>
         <button type="button" className={hasSearch ? 'search-icon-button is-active' : 'search-icon-button'} onClick={() => setShowSearch(true)} aria-label="검색">
-          🔍
+          <Search size={22} aria-hidden="true" />
         </button>
       </section>
 
-      <section className="summary-strip">
-        <div>
-          <span>{activePeriod.label} 기록</span>
-          <strong>{summary.count}건</strong>
-        </div>
-        <button type="button" className="summary-money-cell summary-cycle-button" onClick={cyclePeriod}>
-          <small>{activePeriod.label}</small>
-          <span className="expense-text">지출 {formatMoney(summary.expense)}</span>
-          <span className="income-text">수입 {formatMoney(summary.income)}</span>
+      <section className="journal-finance">
+        <header><h2>나의 기록</h2><button type="button" className="journal-period" onClick={cyclePeriod} aria-label={`집계 기간 ${activePeriod.label}, 다음 기간으로 변경`}>{activePeriod.label}<Repeat2 size={14} /></button></header>
+        <button type="button" className="journal-finance-values summary-cycle-button" onClick={cyclePeriod} aria-label={`${activePeriod.label} 지출 ${formatMoney(summary.expense)}, 수입 ${formatMoney(summary.income)}. 다음 기간으로 변경`}>
+          <span><small>지출</small><strong className="expense-text">{formatMoney(summary.expense)}</strong></span>
+          <span><small>수입</small><strong className="income-text">{formatMoney(summary.income)}</strong></span>
         </button>
-        <div>
-          <button
-            type="button"
-            className="stats-placeholder-button"
-            onClick={() => setShowFinanceSummary(true)}
-          >
-            통계
-          </button>
-        </div>
+        <footer><span>{activePeriod.label} 기록 <strong>{summary.count}건</strong></span><button type="button" aria-label="통계" onClick={() => setShowFinanceSummary(true)}>자세히 보기<ChevronRight size={14} /></button></footer>
       </section>
 
-      {(onOpenTutor || onOpenJapaneseTutor) && <div className="tutor-entry-bar">
-        {onOpenTutor && <button type="button" className="tutor-launch-button" onClick={onOpenTutor}>영어 튜터 <span aria-hidden="true">↗</span></button>}
-        {onOpenJapaneseTutor && <button type="button" className="tutor-launch-button" onClick={onOpenJapaneseTutor}>일본어 튜터 <span aria-hidden="true">↗</span></button>}
-      </div>}
-
-      <section className="section-block quick-record-section">
+      <section className="section-block journal-favorites-section">
         <div className="section-title">
-          <h2>빠른 기록</h2>
-          <span>기록이 많은 순</span>
+          <h2>즐겨찾기</h2>
+          <button type="button" className="journal-text-button" onClick={onManageCategories}>편집<ChevronRight size={14} /></button>
         </div>
-        <div className="quick-category-grid">
-          {quickCategories.map(({ category, count }) => (
+        <div className="journal-favorites-grid">
+          {navigation.favorites.map(({ category }) => (
             <button
               type="button"
-              className="quick-category-button"
-              style={getCategoryThemeStyle(category.id)}
+              className="journal-favorite-button"
               key={category.id}
-              onClick={(event) => onAdd(category.id, null, event.currentTarget)}
+              onClick={(event) => onOpenCategory(category.id, event.currentTarget)}
             >
-              <span className="tile-icon">{CATEGORY_ICONS[category.id]}</span>
+              <CategoryIcon categoryId={category.id} />
               <strong>{category.label}</strong>
-              <small>{count}건</small>
             </button>
           ))}
         </div>
+        {!navigation.favorites.length && <button type="button" className="journal-empty-favorites" onClick={onManageCategories}><Plus size={18} />즐겨찾기 추가</button>}
       </section>
 
-      <section className="section-block">
+      <section className="section-block journal-recent-section">
         <div className="section-title">
           <h2>최근 기록</h2>
-          <span>{records.length}개</span>
+          <button type="button" className="journal-text-button" onClick={() => setShowSearch(true)}>전체 {records.length}건<ChevronRight size={14} /></button>
         </div>
         <div className="record-list">
-          {records.slice(0, 8).map((record) => (
-            <RecordCard key={record.id} record={record} onOpen={onOpenRecord} onEdit={onEdit} onDelete={onDelete} />
+          {records.slice(0, 3).map((record) => (
+            <RecordCard key={record.id} record={record} homePreview onOpen={onOpenRecord} onEdit={onEdit} onDelete={onDelete} />
           ))}
           {records.length === 0 && <p className="empty-text">아직 기록이 없습니다. 첫 기록을 추가해보세요.</p>}
         </div>
       </section>
 
-      <section className="section-block">
-        <div className="section-title">
-          <h2>전체 카테고리</h2>
-          <button className="primary-button compact" onClick={(event) => onAdd(null, null, event.currentTarget)}>기록 추가</button>
-        </div>
-        <div className="category-grid">
-          {onOpenTutor && (
-            <button type="button" className="category-tile tutor-category-tile" style={{ '--category-hue': '250' }} onClick={onOpenTutor} aria-label="영어 튜터 열기">
-              <span className="tile-icon" aria-hidden="true">📖</span>
-              <span className="category-tile-copy">
-                <strong>영어 튜터</strong>
-                <small>Mina</small>
-              </span>
-            </button>
-          )}
-          {onOpenJapaneseTutor && (
-            <button type="button" className="category-tile tutor-category-tile" style={{ '--category-hue': '15' }} onClick={onOpenJapaneseTutor} aria-label="일본어 튜터 열기">
-              <span className="tile-icon" aria-hidden="true">あ</span>
-              <span className="category-tile-copy"><strong>일본어 튜터</strong><small>Haru · 말하기</small></span>
-            </button>
-          )}
-          {visibleCategories.map(({ category, count }) => (
-            <button className="category-tile" style={getCategoryThemeStyle(category.id)} key={category.id} onClick={(event) => onOpenCategory(category.id, event.currentTarget)}>
-              <span className="tile-icon">{CATEGORY_ICONS[category.id]}</span>
-              <span className="category-tile-copy">
-                <strong>{category.label}</strong>
-                <small>{count}개 기록</small>
-              </span>
-            </button>
-          ))}
-        </div>
-      </section>
+      <button type="button" className="journal-frequent-link" onClick={() => onBrowseCategories('frequent')}><ChartNoAxesColumnIncreasing size={23} /><strong>자주 사용한 카테고리 보기</strong><ChevronRight size={17} /></button>
+
+      {(onOpenTutor || onOpenJapaneseTutor) && <div className="tutor-entry-bar">
+        {onOpenTutor && <button type="button" className="tutor-launch-button" onClick={onOpenTutor}><BookOpen size={19} />영어 튜터</button>}
+        {onOpenJapaneseTutor && <button type="button" className="tutor-launch-button" onClick={onOpenJapaneseTutor}><Languages size={19} />일본어 튜터</button>}
+      </div>}
+      <button type="button" className="journal-add-record" onClick={event => onAdd(null, null, event.currentTarget)}><Plus size={18} />기록 추가</button>
 
       {showFinanceSummary && (
         <FinanceSummaryModal

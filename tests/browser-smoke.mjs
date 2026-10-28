@@ -36,10 +36,10 @@ try {
   const navBox = await page.locator('.bottom-nav').boundingBox();
   assert.ok(Math.abs(navBox.y + navBox.height - 844) < 2);
   assert.ok(navBox.height < 100);
-  assert.deepEqual(await page.locator('.section-title h2').allTextContents(), ['빠른 기록', '최근 기록', '전체 카테고리']);
+  assert.deepEqual(await page.locator('.section-title h2').allTextContents(), ['즐겨찾기', '최근 기록']);
   for (const period of ['분기별', '연간', '주간', '월간']) {
     await page.locator('.summary-cycle-button').click();
-    assert.equal(await page.locator('.summary-cycle-button small').textContent(), period);
+    assert.equal(await page.locator('.journal-period').textContent(), period);
     assert.equal(await page.locator('.finance-summary-modal').count(), 0);
   }
   await page.getByRole('button', { name: '통계', exact: true }).click();
@@ -55,7 +55,8 @@ try {
   assert.equal(await page.evaluate(() => window.fixture.saved.amount), 12000);
   await page.evaluate(() => { window.fixture.attemptIds = []; });
 
-  await page.locator('.quick-category-button').filter({ hasText: '회사식사' }).click();
+  await page.locator('.journal-favorite-button').filter({ hasText: '회사식사' }).click();
+  await page.locator('.sub-header').getByRole('button', { name: '추가', exact: true }).click();
   assert.equal(await page.locator('.record-modal').count(), 1);
   await page.locator('.field').filter({ has: page.locator('span', { hasText: '식당명' }) }).locator('input').fill('테스트 식당');
   assert.equal(await page.locator('.line-item-row').count(), 1);
