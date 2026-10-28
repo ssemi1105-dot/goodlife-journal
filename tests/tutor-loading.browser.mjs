@@ -138,7 +138,7 @@ try {
             await page.locator('.tutor-opening').waitFor();
             assert.equal(await input.inputValue(), '작성 중인 문장은 유지');
             assert.equal(await trigger.getAttribute('aria-expanded'), 'false');
-            assert.equal(actions.filter(action => action === 'start-topic').length, 1);
+            assert.equal(actions.filter(action => action === 'start-topic').length, language === 'en' ? 0 : 1);
             await page.reload();
             await page.locator('.tutor-opening').waitFor();
             assert.equal(await input.inputValue(), '작성 중인 문장은 유지');

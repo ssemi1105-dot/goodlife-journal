@@ -29,6 +29,8 @@ export async function createTutorDatabase({ usageMigration = true, japanese = fa
   await pg.exec(coachingMigration);
   await pg.exec(coachingMigration);
   if (usageMigration) { await applyTutorUsageMigration(pg); await applyTutorUsageMigration(pg); }
+  const historyMigration = await readFile(new URL('../../supabase/migrations/202610280002_tutor_session_history.sql', import.meta.url), 'utf8');
+  await pg.exec(historyMigration); await pg.exec(historyMigration);
   if (japanese) {
     const sql = await readFile(new URL('../../supabase/migrations/202610190004_japanese_tutor.sql', import.meta.url), 'utf8');
     await pg.exec(sql); await pg.exec(sql);

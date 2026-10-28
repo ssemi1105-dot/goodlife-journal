@@ -3,16 +3,16 @@ import { useEnglishTutor } from '../hooks/useEnglishTutor';
 import { callTutor, tutorErrorMessage } from '../services/tutorClient';
 import { useTutorStudy } from '../hooks/useTutorStudy';
 import { TutorStudyReview, TutorSaveTurn, StudyError } from './TutorStudy';
-import { Plus, Trash2 } from 'lucide-react';
 import CompactToggle from './ui/CompactToggle';
 import TutorFeedback, { ERROR_LABELS } from './TutorFeedback';
 import TutorTopics from './TutorTopics';
 import TutorUsageSummary, { TutorUsageNote } from './TutorUsageSummary';
 import TutorHeader from './TutorHeader';
+import TutorSessionHistory from './TutorSessionHistory';
 import TutorComposer from './TutorComposer';
 import './EnglishTutor.css';
 
-const LEVELS = ['A2', 'B1', 'B1+'];
+const LEVELS = [['A2', '쉬운 대화'], ['B1', '일상 대화'], ['B1+', '표현 확장']];
 function loadDraft(key) { try { const value = JSON.parse(sessionStorage.getItem(key) || '{}'); return typeof value.text === 'string' ? value : { text: '', mode: 'text', confirmed: false }; } catch { return { text: '', mode: 'text', confirmed: false }; } }
 function timestamp(value) { return new Date(value).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }); }
 
@@ -95,6 +95,7 @@ export default function EnglishTutor({ userId, onBack }) {
     stopAudio();
     const id = topicId ? await tutor.startTopic(topicId) : await tutor.createSession();
     if (id) { setChoosingTopic(false); setPracticeText(''); }
+    return id;
   }
   function changeTab(next) { stopAudio(); setTab(next); }
   function chooseTopic() {
@@ -109,17 +110,13 @@ export default function EnglishTutor({ userId, onBack }) {
   const showTopics = choosingTopic;
   const locked = tutor.loading || tutor.busy || !!tutor.pending || listening;
   return <main className={`screen tutor-screen ${keyboardOpen ? 'tutor-keyboard-open' : ''}`} style={{ '--tutor-height': `${viewportHeight}px` }}>
-    <TutorHeader title="영어 튜터" subtitle={`Mina${tutor.data ? ` · ${tutor.data.profile.level}` : ''}`} onBack={onBack} ready={ready} tab={tab}
+    <TutorHeader title="영어 튜터" subtitle={`Mina${tutor.data ? ` · ${LEVELS.find(([id]) => id === tutor.data.profile.level)?.[1] || tutor.data.profile.level}` : ''}`} onBack={onBack} ready={ready} tab={tab} historyFirst
       onChooseTopic={chooseTopic} topicsOpen={showTopics} topicDisabled={locked}
       tabs={[[ 'chat', '대화' ], ['review', `복습${remaining.length ? ` ${remaining.length}` : ''}`], ['settings', '학습 설정']]} onTabChange={changeTab} onOpenMenu={stopAudio}>
-      {close => <div className="tutor-session-bar">
-        <select aria-label="대화 선택" value={tutor.session?.id || ''} disabled={locked} onChange={async event => { stopAudio(); if (await tutor.selectSession(event.target.value)) { setTab('chat'); setChoosingTopic(false); setPracticeText(''); close(); } }}>
-          {!tutor.session && <option value="">새 대화</option>}
-          {tutor.data.sessions.map(session => <option key={session.id} value={session.id}>{session.title} · {new Date(session.created_at).toLocaleDateString('ko-KR')}</option>)}
-        </select>
-        <button type="button" className="tutor-icon" aria-label="새 대화" title="새 대화" disabled={locked} onClick={async () => { await startConversation(null); setTab('chat'); close(); }}><Plus size={18} /></button>
-        <button type="button" className="tutor-icon" aria-label="대화 삭제" title="대화 삭제" disabled={!tutor.session || locked} onClick={async () => { if (window.confirm('이 대화와 교정 기록을 삭제할까요? 별도로 저장한 표현과 사용량은 유지됩니다.')) { stopAudio(); await tutor.deleteSession(tutor.session.id); close(); } }}><Trash2 size={18} /></button>
-      </div>}
+      {close => <TutorSessionHistory sessions={tutor.data.sessions} selectedId={tutor.session?.id} disabled={locked} error={tutor.error}
+        onSelect={async id => { stopAudio(); if (await tutor.selectSession(id)) { setTab('chat'); setChoosingTopic(false); setPracticeText(''); close(); } }}
+        onCreate={async () => { if (await startConversation(null)) { setTab('chat'); close(); } }}
+        onDelete={async id => { if (window.confirm('이 대화와 교정 기록을 삭제할까요? 별도로 저장한 표현과 사용량은 유지됩니다.')) { stopAudio(); await tutor.deleteSession(id); } }} />}
     </TutorHeader>
     {tutor.loading && <p className="tutor-state" role="status">학습 기록 불러오는 중…</p>}
     {(tutor.error || voiceError) && <div className="tutor-error" role="alert"><span>{tutor.error || voiceError}</span>
@@ -169,9 +166,9 @@ export default function EnglishTutor({ userId, onBack }) {
       </details>
     </section>}
     {ready && tab === 'settings' && <section className="tutor-scroll-panel" role="tabpanel" aria-label="영어 학습 설정">
-      <section className="tutor-setting-section"><h2>학습 수준</h2><div className="tutor-levels">{LEVELS.map(level => <button type="button" key={level} aria-pressed={tutor.data.profile.level === level} disabled={tutor.busy || !!tutor.pending} onClick={() => tutor.savePreferences(level, tutor.data.profile.improvements)}>{level}</button>)}</div>
+      <section className="tutor-setting-section"><h2>답변 난이도</h2><div className="tutor-levels tutor-difficulty">{LEVELS.map(([level, label]) => <button type="button" key={level} aria-pressed={tutor.data.profile.level === level} disabled={tutor.busy || !!tutor.pending} onClick={() => tutor.savePreferences(level, tutor.data.profile.improvements)}><strong>{label}</strong><small>{level}</small></button>)}</div>
         {tutor.data.learning.recommendation && <div className="tutor-recommendation"><span>{tutor.data.learning.recommendation} 단계도 연습해 볼까요?</span><button type="button" disabled={tutor.busy} onClick={() => tutor.savePreferences(tutor.data.learning.recommendation, tutor.data.profile.improvements)}>변경</button></div>}
-        <p className="tutor-note">말투와 설명 난이도에 반영합니다. 대화 중 수준을 자동 평가하거나 변경하지 않습니다.</p>
+        <p className="tutor-note">내 실력을 매기는 등급이 아니라 튜터가 답하는 난이도입니다. 쉬운 대화는 짧고 익숙한 표현, 일상 대화는 이유와 경험, 표현 확장은 더 다양한 표현을 연습합니다. 자동으로 변경하지 않습니다.</p>
       </section>
       <section className="tutor-setting-section"><CompactToggle checked={tutor.data.profile.improvements} disabled={tutor.busy || !!tutor.pending} onChange={enabled => tutor.savePreferences(tutor.data.profile.level, enabled)} label="다른 표현도 함께 보기" /></section>
       {!!counts.length && <details className="tutor-setting-section"><summary>이전 교정 통계</summary>{counts.map(([type, count]) => <div className="tutor-stat-row" key={type}><span>{ERROR_LABELS[type] || type}</span><strong>{count}회</strong></div>)}<small className="tutor-note">이전 방식의 저장된 교정입니다. 자유 대화는 자동 채점하지 않습니다.</small></details>}

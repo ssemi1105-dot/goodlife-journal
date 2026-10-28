@@ -8,7 +8,7 @@ import { japaneseFeedback } from './helpers/japaneseFeedback.mjs';
 import { cleanTutorFeedback as cleanEnglish } from '../supabase/functions/english-tutor/core.mjs';
 import { cleanTutorFeedback as cleanJapanese } from '../supabase/functions/japanese-tutor/core.mjs';
 
-let server, Feedback, Topics, Usage, totalUsage, JapanesePhrase, Composer, JapaneseFeedback, Header;
+let server, Feedback, Topics, Usage, totalUsage, JapanesePhrase, Composer, JapaneseFeedback, Header, History;
 before(async () => {
   server = await createServer({ server: { middlewareMode: true, hmr: false }, appType: 'custom', logLevel: 'silent' });
   Feedback = (await server.ssrLoadModule('/src/components/TutorFeedback.jsx')).default;
@@ -19,6 +19,19 @@ before(async () => {
   Composer = (await server.ssrLoadModule('/src/components/TutorComposer.jsx')).default;
   JapaneseFeedback = (await server.ssrLoadModule('/src/components/JapaneseFeedback.jsx')).default;
   Header = (await server.ssrLoadModule('/src/components/TutorHeader.jsx')).default;
+  History = (await server.ssrLoadModule('/src/components/TutorSessionHistory.jsx')).default;
+});
+
+test('English history is a visible list before menu tabs, with escaped previews, current state and an empty state', () => {
+  const sessions = [{ id: 'one', title: '카페', preview: '<script>private</script>', last_message_at: '2026-10-28T00:00:00Z' }];
+  const renderHistory = values => createElement(History, { sessions, selectedId: 'one', disabled: true, ...values });
+  const html = renderToStaticMarkup(createElement(Header, { title: '영어 튜터', subtitle: 'Mina', ready: true, tab: 'chat', historyFirst: true,
+    tabs: [['chat', '대화'], ['review', '복습']], children: () => renderHistory() }));
+  assert.ok(html.indexOf('tutor-history-list') < html.indexOf('role="tablist"'));
+  assert.match(html, /aria-current="true"/); assert.match(html, /카페 대화 삭제/);
+  assert.match(html, /&lt;script&gt;private/); assert.doesNotMatch(html, /<select|<script>/);
+  assert.match(html, /새 대화/); assert.match(html, /2026-10-28T00:00:00Z/);
+  assert.match(renderToStaticMarkup(renderHistory({ sessions: [] })), /아직 보낸 대화가 없어요/);
 });
 after(async () => { await server?.close(); });
 

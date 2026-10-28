@@ -11,7 +11,7 @@ const statuses = { INVALID_INPUT: 400, ADMIN_REQUIRED: 403, TARGET_USER_NOT_FOUN
 const outputReasons = new Set(['EMPTY_REPLY', 'RESPONSE_TOO_LARGE', 'INVALID_JSON', 'SCHEMA_MISMATCH', 'INVALID_STREAM', 'OUTPUT_LIMIT', 'INCOMPLETE_STREAM']);
 function checked(result) {
   if (!result.error) return result.data;
-  if (['42P01', '42703', 'PGRST202', 'PGRST205'].includes(result.error.code)) throw new TutorError('SETUP_REQUIRED', 503);
+  if (['42P01', '42703', '42883', 'PGRST202', 'PGRST205'].includes(result.error.code)) throw new TutorError('SETUP_REQUIRED', 503);
   const code = [...Object.keys(statuses), 'STUDY_FULL'].find(key => result.error.message?.includes(key));
   throw new TutorError(code || 'DATABASE_ERROR', statuses[code] || 503);
 }
@@ -129,7 +129,9 @@ export function createTutorHandler({ createClient, env, fetchImpl = fetch, curri
       if (body.action === 'bootstrap') {
         checked(await db.from('tutor_profiles').upsert({ user_id: userId }, { onConflict: 'user_id', ignoreDuplicates: true }));
         const profile = checked(await db.from('tutor_profiles').select('level,improvements').eq('user_id', userId).single());
-        const sessions = checked(await db.from('tutor_sessions').select('id,title,created_at,updated_at').eq('user_id', userId).order('updated_at', { ascending: false }).order('id').limit(50));
+        const sessions = curriculum
+          ? checked(await db.from('tutor_sessions').select('id,title,created_at,updated_at').eq('user_id', userId).order('updated_at', { ascending: false }).order('id').limit(50))
+          : checked(await db.rpc('tutor_session_history', { p_user_id: userId }));
         const usage = checked(await db.rpc('tutor_usage_summary', { p_actor_id: userId, p_all_users: false }));
         const turns = checked(await db.from('tutor_turns').select('*').eq('user_id', userId).eq('state', 'completed').order('created_at', { ascending: false }).order('id').limit(200));
         const { user_id, ...ownUsage } = usage.users[0];
@@ -181,9 +183,23 @@ export function createTutorHandler({ createClient, env, fetchImpl = fetch, curri
       if (body.action !== 'send') throw new TutorError('INVALID_INPUT');
       const input = validateSend(body);
       const provider = hiveConfiguration(env);
-      const session = await loadSession(body.sessionId);
-      const begin = checked(await db.rpc('tutor_begin_turn', { p_user_id: userId, p_session_id: body.sessionId, p_request_id: body.requestId,
-        p_content: input.content, p_input_mode: input.inputMode, p_voice_confirmed: input.voiceConfirmed }));
+      let session, begin;
+      const beginArgs = { p_user_id: userId, p_session_id: body.sessionId, p_request_id: body.requestId,
+        p_content: input.content, p_input_mode: input.inputMode, p_voice_confirmed: input.voiceConfirmed };
+      if (!curriculum && body.draftSession !== undefined) {
+        const draft = body.draftSession;
+        if (!draft || typeof draft !== 'object' || Array.isArray(draft) || Object.keys(draft).some(key => key !== 'topicId')) throw new TutorError('INVALID_INPUT');
+        const topic = draft.topicId == null ? null : getTutorTopic(draft.topicId);
+        if (draft.topicId != null && !topic) throw new TutorError('INVALID_INPUT');
+        const profile = checked(await db.from('tutor_profiles').select('level').eq('user_id', userId).maybeSingle());
+        const started = checked(await db.rpc('tutor_begin_session_turn', { ...beginArgs,
+          p_title: topic?.label || input.content.replace(/\s+/g, ' ').slice(0, 80), p_topic_id: topic?.id || null,
+          p_opening: topic ? makeTopicOpening(topic.id, profile?.level) : null }));
+        session = started.session; begin = started.begin;
+      } else {
+        session = await loadSession(body.sessionId);
+        begin = checked(await db.rpc('tutor_begin_turn', beginArgs));
+      }
       if (!begin.fresh) return json({ turn: publicTurn(begin.turn) });
       let tokenCount = null, usageSaved = false, stage = 'context';
       try {

@@ -74,6 +74,7 @@ try {
       const content = language === 'en' ? 'I always using the air conditioner.' : '커피 주세요';
       // Use fresh local sessions; never read or write real user data.
       await db.pg.exec(`delete from ${prefix}sessions where user_id='${USER_A}'; update ${prefix}usage set last_request_at=now()-interval '10 seconds'`);
+      if (language === 'en') await db.pg.query("update tutor_profiles set level='A2' where user_id=$1", [USER_A]);
       const created = await handlers[language === 'en' ? 'english-tutor' : 'japanese-tutor'](new Request('http://fixture.invalid', {
         method: 'POST', headers: { Authorization: `Bearer ${USER_A}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'create-session', title: 'Response regression' }),
@@ -85,6 +86,8 @@ try {
       await page.goto(`${server.resolvedUrls.local[0]}response-test.html?language=${language}`);
       const input = page.locator(language === 'en' ? '#tutor-message' : '#japanese-message');
       const answer = language === 'en' ? page.locator('.tutor-turn .tutor-answer') : page.locator('.tutor-turn .japanese-phrase').filter({ has: page.getByRole('heading', { name: 'HARU', exact: true }) });
+      const sessionCount = async () => (await db.pg.query(`select count(*)::int n from ${prefix}sessions where user_id=$1`, [USER_A])).rows[0].n;
+      const emptyCount = await sessionCount();
       await page.getByRole('button', { name: '주제 변경', exact: true }).click();
       await page.getByRole('button', { name: language === 'en' ? '카페 주제 시작' : '카페 일본어 시작', exact: true }).click();
       if (language === 'ja') {
@@ -109,6 +112,13 @@ try {
         await input.waitFor();
         assert.equal(await page.locator('.tutor-study-tools, .tutor-lesson').count(), 0);
         assert.equal(calls, before, 'choosing an optional topic creates no paid call');
+        assert.equal(await sessionCount(), emptyCount, 'choosing a topic never writes a session');
+        await page.getByRole('button', { name: '학습 메뉴', exact: true }).click();
+        await page.getByText('아직 보낸 대화가 없어요.', { exact: true }).waitFor();
+        assert.equal(await page.locator('.tutor-history-select').count(), 0);
+        await page.keyboard.press('Escape');
+        await page.reload(); await page.locator('.tutor-opening').waitFor();
+        assert.equal(await sessionCount(), emptyCount, 'reloading a draft retains only local topic state');
       }
       await input.fill(content);
       await page.locator('.tutor-send').click();
@@ -125,6 +135,7 @@ try {
         assert.match(await answer.textContent(), /What temperature do you usually set it to/);
       } else assert.ok((await answer.textContent()).length > 0);
       assert.equal(calls, before + 1);
+      if (language === 'en') assert.equal(await sessionCount(), emptyCount + 1, 'first submission materializes exactly one session');
       await page.reload();
       await answer.waitFor();
       assert.equal(calls, before + 1, 'reload only loads persisted data');
@@ -150,13 +161,27 @@ try {
 
       if (language === 'en') {
         await page.getByRole('button', { name: '학습 메뉴', exact: true }).click();
-        const originalSession = await page.getByRole('combobox', { name: '대화 선택', exact: true }).inputValue();
+        assert.equal(await page.locator('.tutor-history-select').count(), 1);
+        assert.equal(await page.locator('.tutor-history-select[aria-current="true"]').count(), 1);
+        assert.equal(await page.getByRole('combobox', { name: '대화 선택', exact: true }).count(), 0);
+        await page.locator('.tutor-history-menu').evaluate(el => Promise.all(el.getAnimations().map(animation => animation.finished)));
+        assert.ok((await page.locator('.tutor-history-menu').boundingBox()).height < 400, 'short history does not leave a tall empty panel');
+        await page.screenshot({ path: `test-results/tutor-history-${viewport.width}.png` });
+        await page.getByRole('button', { name: '학습 메뉴 닫기', exact: true }).click();
+        assert.equal(await page.getByRole('button', { name: '학습 메뉴', exact: true }).getAttribute('aria-expanded'), 'false');
+        await page.getByRole('button', { name: '학습 메뉴', exact: true }).click();
+        await page.mouse.click(1, 1);
+        assert.equal(await page.locator('dialog[open]').count(), 0, 'backdrop closes without sending a click to the page');
+        await page.getByRole('button', { name: '학습 메뉴', exact: true }).click();
         await page.getByRole('button', { name: '새 대화', exact: true }).click();
         await page.locator('.tutor-welcome').waitFor();
         assert.equal(await page.locator('.tutor-turn').count(), 0);
         await input.waitFor(); assert.equal(calls, before + 1);
+        assert.equal(await sessionCount(), emptyCount + 1);
+        await page.reload(); await page.locator('.tutor-welcome').waitFor();
         await page.getByRole('button', { name: '학습 메뉴', exact: true }).click();
-        await page.getByRole('combobox', { name: '대화 선택', exact: true }).selectOption(originalSession);
+        assert.equal(await page.locator('.tutor-history-select').count(), 1, 'unsubmitted new conversation never enters history');
+        await page.locator('.tutor-history-select').first().click();
         await answer.waitFor();
         await page.reload(); await answer.waitFor(); assert.equal(calls, before + 1);
       }
@@ -177,6 +202,58 @@ try {
       const composer = await page.locator('.tutor-composer').boundingBox();
       assert.ok(composer.y + composer.height <= viewport.height + 2);
       await page.screenshot({ path: `test-results/response-failed-${language}-${viewport.width}.png` });
+      if (language === 'en') {
+        await db.pg.exec("update tutor_usage set last_request_at=now()-interval '10 seconds'"); mode = 'ok';
+        await page.getByRole('button', { name: '학습 메뉴', exact: true }).click();
+        page.once('dialog', dialog => dialog.accept());
+        await page.getByRole('button', { name: '새 대화', exact: true }).click();
+        await page.locator('.tutor-welcome').waitFor();
+        let sendRequests = 0;
+        await page.route('**/response-fixture/functions/v1/english-tutor', async route => {
+          if (route.request().postDataJSON().action !== 'send') return route.continue();
+          sendRequests++;
+          await route.fetch(); // Persist the first response, then simulate losing its HTTP reply.
+          await route.abort('connectionreset');
+        });
+        await input.fill('Can we talk about movies?'); await page.locator('.tutor-send').click();
+        await answer.waitFor();
+        await page.waitForFunction(() => document.querySelector('#tutor-message')?.value === '');
+        assert.equal(sendRequests, 1); assert.equal(calls, before + 3, 'uncertain first send resolves without another paid call');
+        await page.unroute('**/response-fixture/functions/v1/english-tutor');
+        await page.reload(); await answer.waitFor();
+        await page.getByRole('button', { name: '학습 메뉴', exact: true }).click();
+        assert.equal(await page.locator('.tutor-history-select').count(), 2);
+        assert.equal(await page.locator('.tutor-history-select').first().getAttribute('aria-current'), 'true');
+        await page.getByRole('tab', { name: '학습 설정', exact: true }).click();
+        await page.getByRole('heading', { name: '답변 난이도', exact: true }).waitFor();
+        assert.equal(await page.getByRole('button', { name: '쉬운 대화 A2', exact: true }).getAttribute('aria-pressed'), 'true');
+        await page.getByRole('button', { name: '일상 대화 B1', exact: true }).click();
+        await page.waitForFunction(() => document.querySelector('.tutor-difficulty button:nth-child(2)')?.getAttribute('aria-pressed') === 'true');
+        await page.reload();
+        await page.getByRole('button', { name: '학습 메뉴', exact: true }).click();
+        await page.getByRole('tab', { name: '학습 설정', exact: true }).click();
+        assert.equal(await page.getByRole('button', { name: '일상 대화 B1', exact: true }).getAttribute('aria-pressed'), 'true');
+        await page.screenshot({ path: `test-results/tutor-difficulty-${viewport.width}.png` });
+        await db.pg.query(`with added as (
+          insert into tutor_sessions(user_id,title) select $1,'이전 대화 '||n from generate_series(1,18) n returning id
+        ) insert into tutor_turns(id,user_id,session_id,content,input_mode,level,improvements,usage_day,state,created_at)
+          select gen_random_uuid(),$1,id,'A longer example preview about a trip with friends.','text','A2',false,'2026-01-01','failed','2026-01-01T00:00:00Z' from added`, [USER_A]);
+        await page.reload();
+        await page.getByRole('button', { name: '학습 메뉴', exact: true }).click();
+        assert.equal(await page.locator('.tutor-history-select').count(), 20);
+        await page.locator('.tutor-history-menu').evaluate(el => Promise.all(el.getAnimations().map(animation => animation.finished)));
+        const dialogBox = await page.locator('.tutor-history-menu').boundingBox();
+        const tabBox = await page.getByRole('tab', { name: '학습 설정', exact: true }).boundingBox();
+        assert.ok(dialogBox.y >= 0 && dialogBox.y + dialogBox.height <= viewport.height);
+        assert.ok(tabBox.y + tabBox.height <= dialogBox.y + dialogBox.height);
+        await page.locator('.tutor-history-list').evaluate(el => { el.scrollTop = el.scrollHeight; });
+        assert.ok(await page.locator('.tutor-history-list').evaluate(el => el.scrollTop > 0), 'long history scrolls inside the panel');
+        await page.screenshot({ path: `test-results/tutor-history-long-${viewport.width}.png` });
+        page.once('dialog', dialog => dialog.accept());
+        await page.locator('.tutor-history-delete').last().click();
+        await page.waitForFunction(() => document.querySelectorAll('.tutor-history-select').length === 19);
+        assert.equal(calls, before + 3, 'menu, preferences and delete do not call AI');
+      }
       await page.close();
     }
     assert.deepEqual(errors, []); assert.deepEqual(external, []);

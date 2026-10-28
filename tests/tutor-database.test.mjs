@@ -100,7 +100,8 @@ test('admin grants only API access; learner ownership, levels and history remain
     await request(USER_A, { action: 'admin-set-access', targetUserId: USER_B, enabled: false });
     await request(USER_A, { action: 'admin-set-access', targetUserId: USER_B, enabled: true });
     const restored = await request(USER_B, { action: 'bootstrap' });
-    assert.equal(restored.body.profile.level, 'B1+'); assert.equal(restored.body.sessions[0].id, SESSION_B);
+    assert.equal(restored.body.profile.level, 'B1+'); assert.deepEqual(restored.body.sessions, []);
+    assert.equal((await request(USER_B, { action: 'session', sessionId: SESSION_B })).status, 200, 'empty legacy sessions are preserved, not deleted');
     assert.equal(calls, 0);
   } finally { await close(); }
 });
@@ -120,7 +121,7 @@ test('Edge handler + PostgreSQL: owner checks, bounded provider body, failed cal
     return { status: response.status, body: await response.json() };
   };
   try {
-    assert.equal((await request({ action: 'bootstrap' })).body.sessions.length, 1);
+    assert.equal((await request({ action: 'bootstrap' })).body.sessions.length, 0);
     assert.equal((await request({ action: 'session', sessionId: SESSION_B })).status, 404);
     assert.equal((await request({ action: 'delete-session', sessionId: SESSION_B })).status, 404);
     assert.equal((await request({ action: 'send', user_id: USER_B })).status, 400);
