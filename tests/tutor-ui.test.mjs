@@ -55,7 +55,7 @@ test('recovered short answer visibly presents the correction and tutor follow-up
   assert.equal(feedback.assessment_eligible, false);
 });
 
-test('feedback renders complete expression, grammar explanation, then the conversational answer', () => {
+test('feedback renders the conversational answer before optional expression and grammar aids', () => {
   const feedback = feedbackFor("can you recommended dinner menu it's with my wife");
   const html = renderToStaticMarkup(createElement(Feedback, { feedback, onSpeak() {}, onPractice() {} }));
   assert.match(html, /이렇게 말해보세요/);
@@ -65,7 +65,7 @@ test('feedback renders complete expression, grammar explanation, then the conver
   assert.match(html, /<strong lang="en">recommend<\/strong>/);
   assert.match(html, /다시 말해보기/);
   assert.ok(html.indexOf('tutor-expression') < html.indexOf('tutor-correction'));
-  assert.ok(html.indexOf('tutor-correction') < html.indexOf('tutor-answer'));
+  assert.ok(html.indexOf('tutor-answer') < html.indexOf('tutor-expression'));
 });
 
 test('legacy feedback, translations and style-only coaching remain distinct', () => {
@@ -141,7 +141,7 @@ test('shared tutor composer labels both actions and requires voice confirmation 
   assert.match(stopping, /인식 마무리/); assert.match(stopping, /class="tutor-voice-button" disabled=""/);
 });
 
-test('both tutors display Korean-gap coaching before replies, keep practice and listening, and escape all tips', () => {
+test('both tutors retain Korean-gap coaching after replies, practice and listening, and escape all tips', () => {
   const english = cleanEnglish(feedbackFor('I want to 아내랑 저녁 먹다.'), { content: 'I want to 아내랑 저녁 먹다.', inputMode: 'text', level: 'A2', improvements: false });
   const japanese = cleanJapanese(japaneseFeedback('コーヒーを 두 잔 주세요'), { content: 'コーヒーを 두 잔 주세요', inputMode: 'text' });
   const en = renderToStaticMarkup(createElement(Feedback, { feedback: english, onSpeak() {}, onPractice() {}, disabled: true }));
@@ -151,7 +151,7 @@ test('both tutors display Korean-gap coaching before replies, keep practice and 
     assert.match(html, /상황별 표현 설명/);
     assert.match(html, /이 표현으로 연습하기/);
     assert.match(html, /disabled=""/);
-    assert.ok(html.indexOf('tutor-expression-tips') < html.indexOf(html === en ? 'MINA' : 'HARU'));
+    assert.ok(html.indexOf(html === en ? 'MINA' : 'HARU') < html.indexOf('tutor-expression-tips'));
   }
   assert.match(en, /아내랑 저녁 먹다/); assert.match(en, /have dinner with my wife/);
   assert.doesNotMatch(en, /핵심 교정/);

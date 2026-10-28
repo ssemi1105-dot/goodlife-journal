@@ -103,7 +103,25 @@ export function useTutor(userId, { call = callTutor, storagePrefix = 'goodlife-t
       const id = active.current || await create();
       return submit({ requestId: crypto.randomUUID(), sessionId: id, content: content.trim(), inputMode, voiceConfirmed });
     }),
-    resolvePending: () => run(async () => { const value = pendingRef.current; return value ? submit(value) : false; }),
+    resolvePending: () => run(async () => {
+      const value = pendingRef.current;
+      if (!value) return false;
+      // Status checks must never generate or bill another model response.
+      const result = await loadSession(value.sessionId);
+      if (!result) return false;
+      const turn = result.turns.find(item => item.id === value.requestId);
+      if (turn?.state === 'completed') {
+        try { await refresh(false); }
+        catch { if (mounted.current) setError('답변은 저장됐습니다. 최신 사용량은 다시 확인해 주세요.'); }
+        return true;
+      }
+      if (turn?.state === 'failed') { setError(tutorErrorMessage(turn.error_code)); return false; }
+      if (!turn) {
+        keepPending(null);
+        setError('저장된 요청이 없습니다. 입력 내용을 확인한 뒤 다시 제출해 주세요.');
+      } else setError('아직 답변을 처리 중입니다. 잠시 후 저장 상태를 다시 확인해 주세요.');
+      return false;
+    }),
     savePreferences: (level, improvements) => run(async () => { await call('preferences', { level, improvements }); await refresh(false); return true; }),
     markReviewed: (turnId, reviewed) => run(async () => { await call('review', { turnId, reviewed }); await refresh(false); }),
     deleteSession: id => run(async () => {

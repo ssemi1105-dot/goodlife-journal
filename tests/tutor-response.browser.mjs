@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
-import { mkdir } from 'node:fs/promises';
+import { mkdir, readFile } from 'node:fs/promises';
 import { createServer } from 'vite';
 import { createTutorDatabase, feedbackFor, USER_A } from './helpers/tutorDatabase.mjs';
 import { japaneseFeedback } from './helpers/japaneseFeedback.mjs';
@@ -10,6 +10,7 @@ import * as japanese from '../supabase/functions/japanese-tutor/core.mjs';
 const require = createRequire(import.meta.url);
 const { chromium } = require(process.env.PLAYWRIGHT_PACKAGE || 'playwright');
 const db = await createTutorDatabase({ japanese: true });
+await db.pg.exec(await readFile(new URL('../supabase/migrations/202610280001_tutor_expression_review.sql', import.meta.url), 'utf8'));
 await db.pg.query('insert into japanese_tutor_access(user_id,enabled) values ($1,true)', [USER_A]);
 let calls = 0, mode = 'ok';
 const handlers = Object.fromEntries([['english-tutor', null], ['japanese-tutor', japanese]].map(([name, curriculum]) => [name,
@@ -82,7 +83,26 @@ try {
       page.on('pageerror', error => errors.push(error.message));
       await page.goto(`${server.resolvedUrls.local[0]}response-test.html?language=${language}`);
       const input = page.locator(language === 'en' ? '#tutor-message' : '#japanese-message');
-      const answer = language === 'en' ? page.locator('.tutor-answer') : page.locator('.japanese-phrase').filter({ has: page.getByRole('heading', { name: 'HARU', exact: true }) });
+      const answer = language === 'en' ? page.locator('.tutor-turn .tutor-answer') : page.locator('.tutor-turn .japanese-phrase').filter({ has: page.getByRole('heading', { name: 'HARU', exact: true }) });
+      await page.getByRole('button', { name: '주제 변경', exact: true }).click();
+      await page.getByRole('button', { name: language === 'en' ? '카페 주제 시작' : '카페 일본어 시작', exact: true }).click();
+      const saveExpression = page.getByRole('button', { name: '연습 표현 저장', exact: true });
+      if (!(await saveExpression.isDisabled())) await saveExpression.click();
+      await page.waitForFunction(() => document.querySelector('[aria-label="연습 표현 저장"]')?.disabled);
+      await page.getByRole('button', { name: '2. 따라 말하기', exact: true }).click();
+      await page.getByRole('textbox', { name: '내 연습 문장', exact: true }).fill(content);
+      await page.screenshot({ path: `test-results/study-lesson-${language}-${viewport.width}.png` });
+      assert.equal(calls, before, 'preparation and expression saving do not call AI');
+      page.once('dialog', dialog => dialog.accept());
+      await page.getByRole('button', { name: '이 주제로 대화 시작', exact: true }).click();
+      await input.waitFor();
+      assert.equal(await input.inputValue(), content, 'practice draft carries into conversation without auto-submit');
+      await page.getByRole('button', { name: '힌트', exact: true }).click();
+      assert.ok((await page.locator('.study-tool-content').innerText()).length > 0);
+      await page.getByRole('button', { name: '표현', exact: true }).click();
+      assert.equal(await page.locator('.study-tool-phrase').count(), 3);
+      assert.equal(calls, before);
+      await page.getByRole('button', { name: '표현', exact: true }).click();
       await input.fill(content);
       await page.locator('.tutor-send').click();
       try { await answer.waitFor(); }
@@ -101,6 +121,23 @@ try {
       await answer.waitFor();
       assert.equal(calls, before + 1, 'reload only loads persisted data');
       await page.screenshot({ path: `test-results/response-${language}-${viewport.width}.png` });
+
+      await page.getByRole('button', { name: '추천 표현 저장', exact: true }).click();
+      await page.getByRole('button', { name: '추천 표현 저장됨', exact: true }).waitFor();
+      await page.getByRole('button', { name: '학습 메뉴', exact: true }).click();
+      await page.getByRole('tab', { name: /^복습/ }).click();
+      await page.locator('.study-review-card').first().waitFor();
+      await page.locator('.study-review-card').first().getByRole('button', { name: '표현 확인', exact: true }).click();
+      await page.screenshot({ path: `test-results/study-review-${language}-${viewport.width}.png` });
+      await page.getByRole('button', { name: /기억나요/ }).click();
+      await page.locator('.tutor-study-review .study-upcoming').waitFor();
+      assert.equal(calls, before + 1, 'scheduled review is free and never resends a chat');
+      await page.reload();
+      await page.getByRole('button', { name: '학습 메뉴', exact: true }).click();
+      await page.getByRole('tab', { name: /^복습/ }).click();
+      await page.locator('.tutor-study-review .study-upcoming').waitFor();
+      await page.getByRole('button', { name: '학습 메뉴', exact: true }).click();
+      await page.getByRole('tab', { name: language === 'en' ? '대화' : '말하기', exact: true }).click();
 
       await db.pg.exec(`update ${prefix}usage set last_request_at=now()-interval '10 seconds'`);
       mode = 'limit';
@@ -123,5 +160,5 @@ try {
     assert.deepEqual(errors, []); assert.deepEqual(external, []);
     await context.close();
   }
-  console.log('Both tutors passed mobile response recovery, persisted reload, failed-draft retention, accurate errors and no automatic paid retries. Mock provider; no external API calls.');
+  console.log('Both tutors passed mobile lessons, hints, persisted scheduled review, reply recovery, failed-draft retention, accurate errors and no automatic paid retries. Mock provider; no external API calls.');
 } finally { await browser?.close(); await server.close(); await db.close(); }

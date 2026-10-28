@@ -45,6 +45,7 @@ export async function createTutorDatabase({ usageMigration = true, japanese = fa
       eq(column, value) { state.where.push(`${identifier(column)}=${param(value)}`); return query; },
       order(column, options = {}) { state.order.push(`${identifier(column)} ${options.ascending === false ? 'desc' : 'asc'}`); return query; },
       limit(value) { state.limit = value; return query; },
+      range(start, end) { state.offset = start; state.limit = end - start + 1; return query; },
       single() { state.cardinality = 'one'; return query; }, maybeSingle() { state.cardinality = 'maybe'; return query; },
       insert(value) { state.op = 'insert'; state.value = value; return query; },
       upsert(value, options = {}) { state.op = 'upsert'; state.value = value; state.upsert = options; return query; },
@@ -66,6 +67,7 @@ export async function createTutorDatabase({ usageMigration = true, japanese = fa
             }
             if (state.op === 'update') sql = `update ${name} set ${Object.entries(state.value).map(([key, value]) => `${identifier(key)}=${param(value)}`).join(',')}${where} returning ${cols}`;
             if (state.op === 'delete') sql = `delete from ${name}${where} returning ${cols}`;
+            if (state.op === 'select' && state.offset) sql += ` offset ${Number(state.offset)}`;
             const result = await pg.query(sql, state.params);
             if (state.cardinality === 'one' && result.rows.length !== 1) throw new Error('Missing row');
             return { data: state.cardinality ? result.rows[0] || null : result.rows, count: state.options.count ? result.rows[0]?.count : null, error: null };

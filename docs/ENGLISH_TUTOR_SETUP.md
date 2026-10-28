@@ -1,4 +1,58 @@
-# Goodlife 영어 튜터 설치 안내: TheHive API (v0.2.11)
+# Goodlife 영어·일본어 튜터 설치 안내: TheHive API (v0.2.14)
+
+## 0.2.14: 짧은 회화·표현 연습·간격 복습 적용
+
+이미 영어·일본어 튜터를 사용하는 경우, 아래 순서로 적용합니다. 이전 SQL은 다시 실행하지 않아도 됩니다.
+기존 Hive 키, 사용 허가, 대화, 수준 설정, 토큰 사용량은 유지됩니다. 일일 제한을 다시 추가하지 않습니다.
+
+1. Supabase SQL Editor에서 `supabase/migrations/202610280001_tutor_expression_review.sql` 전체를 실행합니다.
+   기존 영어/일본어 튜터 SQL(202610190001~004)이 먼저 적용되어 있어야 합니다.
+   새 테이블 `tutor_study_items`, `tutor_study_reviews`와 전용 함수만 추가합니다. `records`는 변경하지 않습니다.
+2. 프로젝트 폴더에서 두 함수를 모두 배포합니다. 공통 파일도 함께 업로드되므로 한쪽만 배포하면 안 됩니다.
+
+```powershell
+cd "C:\Users\ssemi\Documents\Goodlife\goodlife-journal"
+npx supabase functions deploy english-tutor --project-ref "jllhaavazvyjjfqgnylb" --no-verify-jwt --use-api
+npx supabase functions deploy japanese-tutor --project-ref "jllhaavazvyjjfqgnylb" --no-verify-jwt --use-api
+```
+
+`--no-verify-jwt`는 함수 내부 인증을 끄지 않습니다. 두 함수는 기존처럼 `auth.getUser(jwt)`와 언어별 사용 허가를 직접 검증합니다.
+
+3. 프론트 변경을 검토한 뒤 커밋·푸시하여 Vercel을 배포합니다. 홈에서 `VERSION 0.2.14`를 확인합니다.
+4. 두 언어에서 주제 변경 → 카페 → 표현 익히기 → 따라 말하기 → 짧은 대화를 확인합니다.
+   표현 저장 후 학습 메뉴 → 복습에서 다시 연습/어려웠어요/기억나요를 선택하고 새로고침해 일정이 유지되는지 확인합니다.
+
+### 작동 방식
+
+- `conversation.mjs`: 답변을 먼저 받는 작은 출력 규격을 사용합니다. 완성된 답변이 있으면 선택적인 교정/발음 누락 때문에 전체 대화를 실패시키지 않습니다. 잘린 JSON이나 미완료 스트림은 여전히 실패 처리합니다.
+- `handler.mjs`: 인증/계정 소유권/요청 ID/실제 보고된 토큰 집계는 유지합니다. 자동 유료 재시도는 없으며 저장 상태 확인은 DB 조회만 합니다. 로그에는 진단 코드만 남기고 대화·키·계정 ID는 기록하지 않습니다.
+- `lessons.mjs`: 기존 12개 영어/10개 일본어 주제에 자체 작성한 표현 3개씩을 제공합니다. 기본 표현·힌트·복습은 Hive 호출 없이 이용합니다. 음성 인식은 브라우저의 외부 서비스를 사용할 수 있고, 발음 자체를 채점하지는 않습니다.
+- `TutorStudy.jsx`, `useTutorStudy.js`: 표현 확인, 기기 음성/직접 입력 연습, 3회 짧은 회화 안내, 표현 저장, 복습 일정, 삭제를 공통 구현합니다. 대화는 3회 이후에도 계속할 수 있습니다.
+- 일본어는 원문+한글 근사 발음, 펼쳐 보는 한국어 뜻/가나를 제공합니다. API가 발음을 누락하면 만들어내지 않고 원문을 유지합니다.
+- 새 간단 회화는 공식 수준 평가로 계산하지 않습니다. 기존 평가/교정 이력과 수동 수준 선택, 다른 표현 보기 설정은 유지됩니다.
+- `study-list/save/grade/delete`는 로그인 계정과 함수의 언어를 서버에서 결정합니다. 클라이언트가 임의 학습 문장을 저장하도록 하지 않고, 자체 연습 자료 또는 본인의 완료된 답변에서만 선택합니다.
+- RLS는 본인의 학습 표현/복습 이력 조회만 허용하고, 변경은 서버 전용입니다. 관리자 API 사용량 조회 권한이 타인의 대화/복습 내용 조회 권한으로 확대되지 않습니다.
+- 복습은 다시 연습=10분 뒤, 어려움=1일 뒤, 기억남=1/3/7/14/30/60일 간격입니다. 응답 유실 후 같은 요청 ID로 재확인하면 일정이 중복 변경되지 않습니다. 저장된 표현을 삭제하면 그 표현의 복습 이벤트도 삭제됩니다.
+- 대화를 삭제해도 별도로 저장한 표현은 유지됩니다. 복습 화면의 삭제 버튼으로 개별 삭제할 수 있으며 계정 삭제 시 함께 삭제됩니다.
+- 표현은 언어별 최대 2,000개를 보관하고 목록은 500개씩 읽습니다. SQL/함수 미적용 시 안내 메시지를 표시하며 기존 대화 기능과 분리합니다.
+
+### 검증
+
+`npm test`, `npm run build` 및 기존 PostgreSQL 기반 튜터 테스트에 추가하여 아래를 실행합니다.
+테스트용 DB와 모의 AI만 사용하므로 실제 사용자 데이터나 유료 API는 변경하지 않습니다.
+
+```powershell
+node --test tests/tutor-study-database.test.mjs tests/tutor-response-database.test.mjs
+node tests/tutor-loading.browser.mjs
+node tests/tutor-response.browser.mjs
+```
+
+기존 안내와 같이 `PGLITE_PACKAGE`와 `PLAYWRIGHT_PACKAGE` 환경변수를 테스트 도구 경로에 지정합니다.
+실제 Hive 응답 시간·품질과 iPhone/Android 실기기 마이크는 별도 확인 대상입니다. 이번 코드 수정만으로 Hive 잔액/장애/잘못된 키까지 해결되는 것은 아닙니다.
+
+---
+
+아래는 최초 설치 및 이전 버전 안내입니다.
 
 코드는 준비되어 있지만, 실제 사용 전에는 아래 1~5단계가 필요합니다.
 기존 카테고리, records, 친구 공유, 사진 저장, KIS/TMDB/영수증 함수는 수정하지 않습니다.

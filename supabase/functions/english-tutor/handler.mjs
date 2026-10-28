@@ -1,6 +1,8 @@
-import { buildTutorMessages, cleanTutorFeedback, parseTutorFeedback, learningSummary, LEVELS, requireId, TutorError, validateSend } from './core.mjs';
+import { cleanTutorFeedback, learningSummary, LEVELS, requireId, TutorError, validateSend } from './core.mjs';
 import { hiveConfiguration, requestHiveCompletion, reportedTokenCount } from './hiveProvider.mjs';
 import { getTutorTopic, makeTopicOpening } from './topics.mjs';
+import { buildConversationMessages, readConversationFeedback } from './conversation.mjs';
+import { getStudyLesson, expressionFromTurn } from './lessons.mjs';
 
 const cors = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type', 'Access-Control-Allow-Methods': 'POST, OPTIONS' };
 const json = (body, status = 200) => new Response(JSON.stringify(body), { status, headers: { ...cors, 'Content-Type': 'application/json', 'Cache-Control': 'no-store' } });
@@ -9,7 +11,7 @@ const outputReasons = new Set(['EMPTY_REPLY', 'RESPONSE_TOO_LARGE', 'INVALID_JSO
 function checked(result) {
   if (!result.error) return result.data;
   if (['42P01', '42703', 'PGRST202', 'PGRST205'].includes(result.error.code)) throw new TutorError('SETUP_REQUIRED', 503);
-  const code = Object.keys(statuses).find(key => result.error.message?.includes(key));
+  const code = [...Object.keys(statuses), 'STUDY_FULL'].find(key => result.error.message?.includes(key));
   throw new TutorError(code || 'DATABASE_ERROR', statuses[code] || 503);
 }
 function publicTurn(turn) {
@@ -42,7 +44,7 @@ export async function readSmallJson(req) {
 
 export function createTutorHandler({ createClient, env, fetchImpl = fetch, curriculum = null, logDiagnostic = entry => console.warn(JSON.stringify(entry)) }) {
   // Curriculum is server configuration, never a browser-supplied language/table name.
-  const lesson = curriculum || { buildTutorMessages, cleanTutorFeedback, learningSummary, LEVELS, getTutorTopic, makeTopicOpening };
+  const lesson = curriculum || { cleanTutorFeedback, learningSummary, LEVELS, getTutorTopic, makeTopicOpening };
   const prefix = curriculum ? 'japanese_tutor_' : 'tutor_';
   return async function handler(req) {
     if (req.method === 'OPTIONS') return new Response('ok', { headers: cors });
@@ -76,6 +78,47 @@ export function createTutorHandler({ createClient, env, fetchImpl = fetch, curri
       }
       const access = checked(await db.from('tutor_access').select('enabled').eq('user_id', userId).maybeSingle());
       if (!access?.enabled) throw new TutorError('TUTOR_FORBIDDEN', 403);
+      const language = curriculum ? 'ja' : 'en';
+      // Shared study table is always scoped by BOTH authenticated owner and server-selected language.
+      if (body.action === 'study-list') {
+        const items = [];
+        for (let offset = 0; offset < 2000; offset += 500) {
+          const page = checked(await client.from('tutor_study_items').select('id,source_key,phrase,due_at,repetitions,last_reviewed_at,created_at')
+            .eq('user_id', userId).eq('language', language).order('due_at').order('id').range(offset, offset + 499));
+          items.push(...page);
+          if (page.length < 500) break;
+        }
+        return json({ items });
+      }
+      if (body.action === 'study-save') {
+        let phrase, sourceKey;
+        if (body.topicId) {
+          const study = getStudyLesson(language, body.topicId);
+          const item = study?.phrases.find(item => item.id === body.phraseId);
+          if (!item) throw new TutorError('INVALID_INPUT');
+          const { id, ...value } = item; phrase = value; sourceKey = `lesson:${study.id}:${id}`;
+        } else {
+          requireId(body.turnId);
+          if (!['practice', 'reply'].includes(body.kind)) throw new TutorError('INVALID_INPUT');
+          const turn = checked(await db.from('tutor_turns').select('feedback').eq('user_id', userId).eq('id', body.turnId).eq('state', 'completed').maybeSingle());
+          if (!turn) throw new TutorError('REQUEST_NOT_FOUND', 404);
+          phrase = expressionFromTurn(turn, body.kind); sourceKey = `turn:${body.turnId}:${body.kind}`;
+          if (!phrase?.sentence) throw new TutorError('INVALID_INPUT');
+        }
+        const item = checked(await client.rpc('tutor_study_save', { p_user_id: userId, p_language: language, p_source_key: sourceKey, p_phrase: phrase }));
+        return json({ item });
+      }
+      if (body.action === 'study-grade') {
+        requireId(body.itemId); requireId(body.requestId);
+        if (!['again', 'hard', 'good'].includes(body.grade)) throw new TutorError('INVALID_INPUT');
+        const item = checked(await client.rpc('tutor_study_grade', { p_user_id: userId, p_language: language, p_item_id: body.itemId, p_request_id: body.requestId, p_grade: body.grade }));
+        return json({ item });
+      }
+      if (body.action === 'study-delete') {
+        requireId(body.itemId);
+        checked(await client.from('tutor_study_items').delete().eq('id', body.itemId).eq('user_id', userId).eq('language', language));
+        return json({ ok: true });
+      }
       const loadSession = async id => {
         requireId(id);
         const session = checked(await db.from('tutor_sessions').select('*').eq('id', id).eq('user_id', userId).maybeSingle());
@@ -144,7 +187,7 @@ export function createTutorHandler({ createClient, env, fetchImpl = fetch, curri
       let tokenCount = null, usageSaved = false, stage = 'context';
       try {
         const previous = checked(await db.from('tutor_turns').select('content,feedback').eq('user_id', userId).eq('session_id', session.id).eq('state', 'completed').order('created_at', { ascending: false }).order('id').limit(6));
-        const messages = lesson.buildTutorMessages({ profile: begin.turn, session, turns: previous.reverse(), content: input.content, inputMode: input.inputMode });
+        const messages = buildConversationMessages({ language: curriculum ? 'ja' : 'en', profile: begin.turn, session, turns: previous.reverse(), content: input.content, inputMode: input.inputMode });
         stage = 'provider';
         const completion = await requestHiveCompletion(provider, messages, fetchImpl);
         tokenCount = reportedTokenCount(completion.usage);
@@ -155,9 +198,8 @@ export function createTutorHandler({ createClient, env, fetchImpl = fetch, curri
         }
         stage = 'json';
         if (completion.choices?.[0]?.finish_reason !== 'stop') throw new TutorError('INVALID_MODEL_OUTPUT', 502, 'INCOMPLETE_STREAM');
-        let feedback = parseTutorFeedback(completion.choices[0].message.content);
-        stage = 'schema';
-        feedback = lesson.cleanTutorFeedback(feedback, { ...input, improvements: begin.turn.improvements, level: begin.turn.level,
+        let feedback = readConversationFeedback(completion.choices[0].message.content, { language: curriculum ? 'ja' : 'en', lesson,
+          ...input, improvements: begin.turn.improvements, level: begin.turn.level,
           referenceSentences: previous.map(turn => turn.feedback?.natural?.sentence || turn.feedback?.english_version || (turn.feedback?.errors?.length ? turn.feedback.corrected : '')) });
         // Missing optional memory must not erase the owner's existing conversation summary.
         feedback.memory ??= session.summary || '';
@@ -169,9 +211,9 @@ export function createTutorHandler({ createClient, env, fetchImpl = fetch, curri
         tokenCount ??= reportedTokenCount({ total_tokens: error.reportedTokens });
         const reason = error.code === 'INVALID_MODEL_OUTPUT'
           ? (outputReasons.has(error.reason) ? error.reason : 'SCHEMA_MISMATCH') : null;
-        if (reason) {
+        if (reason || error.code || error.name === 'AbortError') {
           // Diagnostics contain no prompts, learner text, model output, account IDs or secrets.
-          try { logDiagnostic({ event: 'tutor_response_rejected', tutor: curriculum ? 'japanese' : 'english', stage, reason, reported_tokens: tokenCount }); } catch { /* Logging never changes persistence or billing. */ }
+          try { logDiagnostic({ event: 'tutor_response_rejected', tutor: curriculum ? 'japanese' : 'english', stage, reason: reason || error.code || 'PROVIDER_TIMEOUT', reported_tokens: tokenCount }); } catch { /* Logging never changes persistence or billing. */ }
         }
         if (tokenCount !== null && !usageSaved) {
           const settled = await db.rpc('tutor_report_usage', { p_user_id: userId, p_request_id: body.requestId, p_tokens: tokenCount });

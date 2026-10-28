@@ -53,6 +53,7 @@ try {
         const url = new URL(route.request().url());
         if (url.pathname.startsWith('/fixture/functions/v1/')) {
           const body = route.request().postDataJSON(); actions.push(body.action);
+          if (body.action === 'study-list') return route.fulfill({ json: { items: [] } });
           if (body.action === 'bootstrap') {
             await bootstrapGate.promise;
             if (fail && scenario === 'bootstrap-error') return route.fulfill({ status: 503, json: { code: 'DATABASE_ERROR' } });
@@ -66,7 +67,7 @@ try {
             return route.fulfill({ json: { session: selection || session, turns: selection ? [] : turns } });
           }
           if (body.action === 'start-topic') {
-            selection = { ...session, id: body.sessionId, title: '카페', opening: (language === 'en' ? englishOpening : japaneseOpening)(body.topicId) };
+            selection = { ...session, id: body.sessionId, topic_id: body.topicId, title: '카페', opening: (language === 'en' ? englishOpening : japaneseOpening)(body.topicId) };
             return route.fulfill({ json: { session: selection } });
           }
           errors.push(`Unexpected API action: ${body.action}`);
@@ -101,12 +102,17 @@ try {
         assert.equal(await page.evaluate(() => window.__topicDuringLoading), false, 'topics never mount while restoring history');
         if (scenario === 'empty') {
           assert.equal(await page.locator('.tutor-topic-grid button').count(), language === 'en' ? 12 : 10);
-          assert.deepEqual(actions, ['bootstrap']);
+          assert.deepEqual(actions.filter(action => action !== 'study-list'), ['bootstrap']);
         } else {
           const input = page.locator(language === 'en' ? '#tutor-message' : '#japanese-message');
           await input.waitFor();
           assert.equal(await page.locator('.tutor-topic-picker').count(), 0);
           assert.equal(await trigger.isDisabled(), scenario === 'pending');
+          if (scenario === 'pending') {
+            await page.getByRole('button', { name: '저장 상태 확인', exact: true }).click();
+            await page.getByRole('alert').filter({ hasText: '아직 답변을 처리 중' }).waitFor();
+            assert.equal(actions.filter(action => action === 'send').length, 0, 'pending checks only load server state');
+          }
           if (scenario === 'existing') {
             await input.fill('작성 중인 문장은 유지');
             const before = actions.length, headerBox = await trigger.boundingBox();
@@ -123,9 +129,11 @@ try {
             assert.equal(actions.length, before, 'opening/closing topics is local, never a paid call');
             await trigger.click();
             const cafe = page.getByRole('button', { name: language === 'en' ? '카페 주제 시작' : '카페 일본어 시작', exact: true });
-            page.once('dialog', dialog => dialog.dismiss()); await cafe.click();
+            await cafe.click();
+            const startLesson = page.getByRole('button', { name: '이 주제로 대화 시작', exact: true });
+            page.once('dialog', dialog => dialog.dismiss()); await startLesson.click();
             assert.equal(actions.length, before, 'cancelled topic switch creates no session');
-            page.once('dialog', dialog => dialog.accept()); await cafe.click();
+            page.once('dialog', dialog => dialog.accept()); await startLesson.click();
             await page.locator('.tutor-opening').waitFor();
             assert.equal(await input.inputValue(), '작성 중인 문장은 유지');
             assert.equal(await trigger.getAttribute('aria-expanded'), 'false');
@@ -142,6 +150,10 @@ try {
         assert.deepEqual(errors, []); assert.deepEqual(external, []);
         assert.ok(!actions.includes('send'));
         console.log(`${language} ${viewport.width}px ${scenario}: passed`);
+      } catch (error) {
+        console.error({ language, viewport, scenario, errors, actions, text: (await page.locator('body').innerText()).slice(0, 1800) });
+        await page.screenshot({ path: `test-results/tutor-loading-failed-${language}-${viewport.width}.png` });
+        throw error;
       } finally { bootstrapGate.release(); sessionGate.release(); await context.close(); }
     }
   }

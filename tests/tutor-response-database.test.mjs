@@ -58,7 +58,13 @@ test('both tutors recover complete fenced replies, preserve summary, and diagnos
       assert.equal(loaded.body.turns.length, 2);
       assert.equal((await request({ action: 'session', sessionId: session.id }, USER_B)).status, 404);
 
-      for (const [failure, reason, stage] of [['json', 'INVALID_JSON', 'json'], ['schema', 'SCHEMA_MISMATCH', 'schema'], ['limit', 'OUTPUT_LIMIT', 'provider'], ['incomplete', 'INCOMPLETE_STREAM', 'provider']]) {
+      await pg.exec(`update ${prefix}usage set last_request_at=now()-interval '10 seconds'`);
+      mode = 'schema';
+      const incompleteAids = await request(send());
+      assert.equal(incompleteAids.status, 200, 'optional coaching no longer discards the conversational reply');
+      assert.equal(incompleteAids.body.turn.feedback.assessment_eligible, false);
+
+      for (const [failure, reason, stage] of [['json', 'INVALID_JSON', 'json'], ['limit', 'OUTPUT_LIMIT', 'provider'], ['incomplete', 'INCOMPLETE_STREAM', 'provider']]) {
         await pg.exec(`update ${prefix}usage set last_request_at=now()-interval '10 seconds'`);
         mode = failure;
         const payload = send(), before = calls;

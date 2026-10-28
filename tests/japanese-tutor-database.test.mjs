@@ -42,7 +42,7 @@ test('Japanese tutor: default deny, isolated permissions/history/levels, RLS, us
     assert.equal(answer.status, 200, JSON.stringify(answer));
     assert.equal(answer.body.turn.feedback.natural.pronunciation_ko, '코오히이오 히토츠 쿠다사이.');
     assert.equal(answer.body.turn.feedback.memory, undefined);
-    assert.match(providerBody.messages[0].content, /Japanese speaking-practice/);
+    assert.match(providerBody.messages[0].content, /Japanese at beginner level/);
     assert.equal(providerBody.messages[2].content, opened.body.session.opening.question);
     assert.equal((await request(send)).body.turn.state, 'completed'); assert.equal(calls, 1);
     const usage = (await request({ action: 'bootstrap' })).body.usage;

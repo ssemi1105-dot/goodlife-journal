@@ -59,7 +59,7 @@
 .tutor-tip-reading > span { color: var(--text-muted); font-size: 11px; }
 .tutor-expression-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 10px; }
 .tutor-expression-actions > button:not(.tutor-icon) { min-height: 36px; border: 1px solid var(--border); border-radius: 8px; background: transparent; color: var(--accent); padding: 6px 10px; font-size: 12px; box-shadow: none; }
-.tutor-feedback > .tutor-answer { margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--border); }
+.tutor-feedback > .tutor-answer { margin-bottom: 12px; }
 .tutor-feedback > .tutor-answer:only-child { margin-top: 0; padding-top: 0; border-top: 0; }
 .tutor-improvements { margin-top: 12px; font-size: 12px; }
 .tutor-improvements summary { cursor: pointer; color: var(--text-muted); padding: 4px 0; }

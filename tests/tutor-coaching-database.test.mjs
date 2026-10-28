@@ -20,7 +20,7 @@ test('expression tips persist in existing JSONB, enter private review, and reuse
         fetchImpl: async (_url, options) => {
           calls++;
           const body = JSON.parse(options.body);
-          assert.match(body.messages[0].content, /expression_tips/);
+          assert.match(body.messages[0].content, /useful reusable pattern in Korean/);
           assert.equal(body.max_completion_tokens, 1400);
           return Response.json({ choices: [{ finish_reason: 'stop', message: { content: JSON.stringify(fixture(body.messages.at(-1).content)) } }], usage: { total_tokens: 900 } });
         },

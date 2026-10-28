@@ -16,6 +16,7 @@ const messages = {
   INPUT_TOO_LARGE: '메시지가 너무 깁니다. 내용을 줄여 주세요.',
   SESSION_NOT_FOUND: '대화를 찾을 수 없습니다. 대화 목록을 다시 불러와 주세요.',
   REQUEST_NOT_FOUND: '학습 기록을 찾을 수 없습니다.',
+  STUDY_FULL: '저장 가능한 표현 수에 도달했습니다. 관리자에게 문의해 주세요.',
   REQUEST_BUSY: '이 계정의 다른 답변이 생성 중입니다. 잠시 후 확인해 주세요.',
   REQUEST_CONFLICT: '진행 중인 요청과 내용이 다릅니다. 먼저 저장 상태를 확인해 주세요.',
   REQUEST_EXPIRED: '이전 요청이 완료되지 않았습니다. 입력 내용은 유지됩니다.',
@@ -33,6 +34,7 @@ const messages = {
   CONTEXT_TOO_LARGE: '대화 내용이 너무 깁니다. 새 대화를 시작해 주세요.',
   STATUS_UNKNOWN: '저장 결과를 확인하지 못했습니다. 새로 보내기 전에 저장 상태를 확인해 주세요.',
   NETWORK_ERROR: '서버에 연결하지 못했습니다. 인터넷과 함수 배포 상태를 확인해 주세요.',
+  CLIENT_TIMEOUT: '서버 응답 확인 시간이 초과됐습니다. 입력은 유지됩니다. 다시 제출하기 전에 저장 상태를 확인해 주세요.',
   SERVER_ERROR: '영어 튜터 서버가 응답하지 않습니다. 잠시 후 다시 확인해 주세요.',
   FUNCTION_MISSING: 'english-tutor Edge Function이 아직 배포되지 않았습니다.',
 };
@@ -64,7 +66,7 @@ async function callTutorEndpoint(endpoint, action, body = {}) {
       headers: { Authorization: `Bearer ${data.session.access_token}`, apikey: SUPABASE_ANON_KEY, 'Content-Type': 'application/json' },
       body: JSON.stringify({ ...body, action }),
     });
-    const result = await response.json().catch(() => null);
+    const result = await response.json().catch(error => { if (error.name === 'AbortError') throw error; return null; });
     if (!response.ok) {
       const code = result?.code && messages[result.code] ? result.code : response.status === 401 ? 'UNAUTHORIZED' : response.status === 404 ? 'FUNCTION_MISSING' : response.status === 403 ? 'TUTOR_FORBIDDEN' : 'SERVER_ERROR';
       throw Object.assign(new Error(tutorErrorMessage(code, result?.reason)), { code, status: response.status });
@@ -76,6 +78,7 @@ async function callTutorEndpoint(endpoint, action, body = {}) {
     }
     return result;
   } catch (error) {
+    if (error.name === 'AbortError') throw Object.assign(new Error(messages.CLIENT_TIMEOUT), { code: 'CLIENT_TIMEOUT' });
     if (error.code) throw error;
     throw Object.assign(new Error(messages.NETWORK_ERROR), { code: 'NETWORK_ERROR' });
   } finally { clearTimeout(timeout); }
