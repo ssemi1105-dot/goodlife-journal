@@ -125,3 +125,9 @@ export function feedbackFor(content = 'I ate apple.') {
     level_signal: { observed_level: null, confidence: 'low', evidence_ko: '짧은 문장이라 판단을 보류해요.' },
     flags: { korean_input: /[가-힣]/.test(content), stt_suspected: false, off_topic: false, sensitive: false }, memory: 'Talked about today.' };
 }
+
+export function chatReplyFor(content) {
+  const old = feedbackFor(content);
+  return [old.tutor_reply, old.english_version || old.natural?.sentence, old.natural?.explanation_ko,
+    ...(old.expression_tips || []).map(item => item.explanation_ko)].filter(Boolean).join('\n\n');
+}

@@ -76,9 +76,12 @@ export async function readHiveCompletion(response) {
     }
     if (!doneMarker) { buffer += '\n\n'; consumeLines(); }
     if (reason === 'length') invalid('OUTPUT_LIMIT');
-    if (!doneMarker || reason !== 'stop') invalid('INCOMPLETE_STREAM');
+    // Hive also documents content + usage + [DONE], without a separate stop choice.
+    // A disconnected stream, missing usage, or explicit non-stop reason is not success.
+    const documentedEnd = reason === null && reportedTokenCount(usage) !== null;
+    if (!doneMarker || (reason !== 'stop' && !documentedEnd)) invalid('INCOMPLETE_STREAM');
     if (!content.trim()) invalid('EMPTY_REPLY');
-    return { choices: [{ finish_reason: reason, message: { content } }], usage };
+    return { choices: [{ finish_reason: 'stop', message: { content } }], usage };
   } catch (error) {
     // A paid but invalid/truncated reply may still include reliable usage metadata.
     error.reportedTokens = reportedTokenCount(usage);

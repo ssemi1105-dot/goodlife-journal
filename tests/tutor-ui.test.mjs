@@ -36,13 +36,23 @@ test('shared header exposes topic change only in a ready conversation and respec
 
 test('failed reply messages describe the actual lost response, safe reasons and additional retry cost', async () => {
   const { tutorErrorMessage } = await server.ssrLoadModule('/src/services/tutorClient.js');
-  assert.match(tutorErrorMessage('INVALID_MODEL_OUTPUT'), /교정과 응답을 저장하지 못했습니다/);
+  assert.match(tutorErrorMessage('INVALID_MODEL_OUTPUT'), /답변을 끝까지 확인하지 못했습니다/);
   assert.match(tutorErrorMessage('INVALID_MODEL_OUTPUT'), /추가 비용/);
   assert.doesNotMatch(tutorErrorMessage('INVALID_MODEL_OUTPUT'), /학습 평가에 반영하지/);
   assert.match(tutorErrorMessage('INVALID_MODEL_OUTPUT', 'OUTPUT_LIMIT'), /길이 제한/);
   assert.match(tutorErrorMessage('INVALID_MODEL_OUTPUT', 'SCHEMA_MISMATCH'), /필요한 교정 정보/);
   assert.equal(tutorErrorMessage('INVALID_MODEL_OUTPUT', '<script>secret</script>'), tutorErrorMessage('INVALID_MODEL_OUTPUT'));
   assert.equal(tutorErrorMessage('UNAUTHORIZED', 'OUTPUT_LIMIT'), tutorErrorMessage('UNAUTHORIZED'));
+  assert.match(tutorErrorMessage('INVALID_MODEL_OUTPUT:INCOMPLETE_STREAM'), /수신이 끝까지 완료되지/);
+  assert.equal(tutorErrorMessage('INVALID_MODEL_OUTPUT:private-untrusted-detail'), tutorErrorMessage('INVALID_MODEL_OUTPUT'));
+});
+
+test('free conversation displays escaped ordinary text without schema warnings or fabricated correction cards', () => {
+  const feedback = { response_format: 'free_chat', tutor_reply: 'Hello!\n\n이렇게 말해요: I am from Korea. <script>unsafe()</script>' };
+  const html = renderToStaticMarkup(createElement(Feedback, { feedback, onSpeak() {} }));
+  assert.match(html, /Hello!/); assert.match(html, /I am from Korea/);
+  assert.match(html, /&lt;script&gt;/); assert.doesNotMatch(html, /<script>|tutor-coaching-notice|tutor-correction/);
+  assert.match(html, /답변 듣기/);
 });
 
 test('recovered short answer visibly presents the correction and tutor follow-up instead of a failed turn', () => {

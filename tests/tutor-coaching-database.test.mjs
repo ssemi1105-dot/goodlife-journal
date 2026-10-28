@@ -1,17 +1,17 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
-import { createTutorDatabase, feedbackFor, USER_A, USER_B } from './helpers/tutorDatabase.mjs';
+import { createTutorDatabase, chatReplyFor, USER_A, USER_B } from './helpers/tutorDatabase.mjs';
 import { japaneseFeedback } from './helpers/japaneseFeedback.mjs';
 import { createTutorHandler } from '../supabase/functions/english-tutor/handler.mjs';
 import * as japanese from '../supabase/functions/japanese-tutor/core.mjs';
 
-test('expression tips persist in existing JSONB, enter private review, and reuse the single normal API call', async () => {
+test('English plain coaching and Japanese structured tips stay private and reuse a single normal API call', async () => {
   const { pg, client, close } = await createTutorDatabase({ japanese: true });
   try {
     await pg.query('insert into japanese_tutor_access(user_id,enabled) values ($1,true),($2,true)', [USER_A, USER_B]);
     for (const [curriculum, prefix, inputs, fixture] of [
-      [null, 'tutor_', ['오늘 회사에서 너무 바빴어.', 'I want to 아내랑 저녁 먹다.'], feedbackFor],
+      [null, 'tutor_', ['오늘 회사에서 너무 바빴어.', 'I want to 아내랑 저녁 먹다.'], chatReplyFor],
       [japanese, 'japanese_tutor_', ['커피 주세요', 'コーヒーを 두 잔 주세요'], japaneseFeedback],
     ]) {
       let calls = 0;
@@ -20,9 +20,10 @@ test('expression tips persist in existing JSONB, enter private review, and reuse
         fetchImpl: async (_url, options) => {
           calls++;
           const body = JSON.parse(options.body);
-          assert.match(body.messages[0].content, /useful reusable pattern in Korean/);
+          assert.match(body.messages[0].content, /reusable pattern in Korean/);
           assert.equal(body.max_completion_tokens, 1400);
-          return Response.json({ choices: [{ finish_reason: 'stop', message: { content: JSON.stringify(fixture(body.messages.at(-1).content)) } }], usage: { total_tokens: 900 } });
+          const value = fixture(body.messages.at(-1).content);
+          return Response.json({ choices: [{ finish_reason: 'stop', message: { content: curriculum ? JSON.stringify(value) : value } }], usage: { total_tokens: 900 } });
         },
       });
       const request = async (body, user = USER_A) => {
@@ -35,7 +36,8 @@ test('expression tips persist in existing JSONB, enter private review, and reuse
         const payload = { action: 'send', sessionId: session.id, requestId: randomUUID(), content, inputMode: 'text' };
         const reply = await request(payload);
         assert.equal(reply.status, 200, JSON.stringify(reply));
-        assert.equal(reply.body.turn.feedback.expression_tips.length, 1);
+        assert.equal(reply.body.turn.feedback.expression_tips.length, curriculum ? 1 : 0);
+        if (!curriculum) assert.equal(reply.body.turn.feedback.tutor_reply, fixture(content));
         assert.equal(reply.body.turn.feedback.assessment_eligible, false);
         assert.equal(reply.body.turn.feedback.memory, undefined);
         assert.deepEqual(reply.body.turn.feedback.errors, []);
@@ -45,11 +47,12 @@ test('expression tips persist in existing JSONB, enter private review, and reuse
         const saved = (await pg.query(`select feedback from ${prefix}turns where id=$1`, [payload.requestId])).rows[0].feedback;
         assert.deepEqual(saved.expression_tips, reply.body.turn.feedback.expression_tips);
         const bootstrap = await request({ action: 'bootstrap' });
-        assert.deepEqual(bootstrap.body.review.find(turn => turn.id === payload.requestId).feedback.expression_tips, saved.expression_tips);
+        if (curriculum) assert.deepEqual(bootstrap.body.review.find(turn => turn.id === payload.requestId).feedback.expression_tips, saved.expression_tips);
+        else assert.equal(bootstrap.body.review.length, 0);
         assert.equal(bootstrap.body.usage.total.tokens, (index + 1) * 900);
       }
       const loaded = await request({ action: 'session', sessionId: session.id });
-      assert.ok(loaded.body.turns.every(turn => turn.feedback.expression_tips.length === 1));
+      assert.ok(loaded.body.turns.every(turn => turn.feedback.expression_tips.length === (curriculum ? 1 : 0)));
       assert.equal((await request({ action: 'session', sessionId: session.id }, USER_B)).status, 404);
       assert.deepEqual((await request({ action: 'bootstrap' }, USER_B)).body.review, []);
     }

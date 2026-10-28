@@ -2,6 +2,7 @@ import { cleanTutorFeedback, learningSummary, LEVELS, requireId, TutorError, val
 import { hiveConfiguration, requestHiveCompletion, reportedTokenCount } from './hiveProvider.mjs';
 import { getTutorTopic, makeTopicOpening } from './topics.mjs';
 import { buildConversationMessages, readConversationFeedback } from './conversation.mjs';
+import { buildFreeChatMessages, readFreeChatFeedback } from './freeChat.mjs';
 import { getStudyLesson, expressionFromTurn } from './lessons.mjs';
 
 const cors = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type', 'Access-Control-Allow-Methods': 'POST, OPTIONS' };
@@ -186,8 +187,9 @@ export function createTutorHandler({ createClient, env, fetchImpl = fetch, curri
       if (!begin.fresh) return json({ turn: publicTurn(begin.turn) });
       let tokenCount = null, usageSaved = false, stage = 'context';
       try {
-        const previous = checked(await db.from('tutor_turns').select('content,feedback').eq('user_id', userId).eq('session_id', session.id).eq('state', 'completed').order('created_at', { ascending: false }).order('id').limit(6));
-        const messages = buildConversationMessages({ language: curriculum ? 'ja' : 'en', profile: begin.turn, session, turns: previous.reverse(), content: input.content, inputMode: input.inputMode });
+        const previous = checked(await db.from('tutor_turns').select('content,feedback').eq('user_id', userId).eq('session_id', session.id).eq('state', 'completed').order('created_at', { ascending: !curriculum }).order('id').limit(curriculum ? 6 : 200));
+        if (curriculum) previous.reverse();
+        const messages = (curriculum ? buildConversationMessages : buildFreeChatMessages)({ language: curriculum ? 'ja' : 'en', profile: begin.turn, session, turns: previous, content: input.content, inputMode: input.inputMode });
         stage = 'provider';
         const completion = await requestHiveCompletion(provider, messages, fetchImpl);
         tokenCount = reportedTokenCount(completion.usage);
@@ -196,9 +198,9 @@ export function createTutorHandler({ createClient, env, fetchImpl = fetch, curri
           checked(await db.rpc('tutor_report_usage', { p_user_id: userId, p_request_id: body.requestId, p_tokens: tokenCount }));
           usageSaved = true;
         }
-        stage = 'json';
+        stage = curriculum ? 'json' : 'text';
         if (completion.choices?.[0]?.finish_reason !== 'stop') throw new TutorError('INVALID_MODEL_OUTPUT', 502, 'INCOMPLETE_STREAM');
-        let feedback = readConversationFeedback(completion.choices[0].message.content, { language: curriculum ? 'ja' : 'en', lesson,
+        let feedback = (curriculum ? readConversationFeedback : readFreeChatFeedback)(completion.choices[0].message.content, { language: curriculum ? 'ja' : 'en', lesson,
           ...input, improvements: begin.turn.improvements, level: begin.turn.level,
           referenceSentences: previous.map(turn => turn.feedback?.natural?.sentence || turn.feedback?.english_version || (turn.feedback?.errors?.length ? turn.feedback.corrected : '')) });
         // Missing optional memory must not erase the owner's existing conversation summary.
@@ -221,7 +223,7 @@ export function createTutorHandler({ createClient, env, fetchImpl = fetch, curri
         }
         const code = error.name === 'AbortError' ? 'PROVIDER_TIMEOUT' : error instanceof TutorError ? error.code : 'PROVIDER_ERROR';
         // A lost commit response may already be completed; fail RPC never changes a completed turn.
-        const failed = await db.rpc('tutor_fail_turn', { p_user_id: userId, p_request_id: body.requestId, p_code: code });
+        const failed = await db.rpc('tutor_fail_turn', { p_user_id: userId, p_request_id: body.requestId, p_code: !curriculum && reason ? `${code}:${reason}` : code });
         if (failed.error) return json({ code: 'STATUS_UNKNOWN' }, 503);
         throw new TutorError(code, 502, reason);
       }

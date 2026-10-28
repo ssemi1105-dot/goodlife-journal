@@ -85,7 +85,7 @@ test('compact replies, optional aids and usage persist for both languages with o
       let calls = 0;
       const handler = createTutorHandler({ createClient: () => client, curriculum: language === 'ja' ? japanese : null,
         env: key => ({ SUPABASE_URL: 'https://fixture.invalid', SUPABASE_SERVICE_ROLE_KEY: 'test', HIVE_API_KEY: 'test' })[key],
-        fetchImpl: async () => { calls++; return Response.json({ choices: [{ finish_reason: 'stop', message: { content: JSON.stringify({ reply: language === 'ja' ? { sentence: '何を飲みますか。' } : 'What would you like to drink?', practice: { sentence: 23 } }) } }], usage: { total_tokens: 125 } }); },
+        fetchImpl: async () => { calls++; return Response.json({ choices: [{ finish_reason: 'stop', message: { content: language === 'ja' ? JSON.stringify({ reply: { sentence: '何を飲みますか。' }, practice: { sentence: 23 } }) : 'What would you like to drink?' } }], usage: { total_tokens: 125 } }); },
       });
       const request = async body => {
         const response = await handler(new Request('https://fixture.invalid', { method: 'POST', headers: { Authorization: `Bearer ${USER_A}`, 'Content-Type': 'application/json' }, body: JSON.stringify(body) }));
@@ -94,7 +94,9 @@ test('compact replies, optional aids and usage persist for both languages with o
       const { session } = await request({ action: 'create-session', title: 'Compact response' });
       const payload = { action: 'send', sessionId: session.id, requestId: randomUUID(), content: '커피 주세요', inputMode: 'text' };
       const { turn } = await request(payload);
-      assert.equal(turn.state, 'completed'); assert.equal(turn.feedback.coaching_status, 'partial');
+      assert.equal(turn.state, 'completed');
+      if (language === 'ja') assert.equal(turn.feedback.coaching_status, 'partial');
+      else assert.equal(turn.feedback.response_format, 'free_chat');
       assert.equal(turn.feedback.assessment_eligible, false); assert.equal(turn.feedback.natural, null);
       assert.deepEqual((await request(payload)).turn, turn);
       const snapshot = await request({ action: 'bootstrap' });

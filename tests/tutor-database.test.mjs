@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
-import { createTutorDatabase, applyTutorUsageMigration, USER_A, USER_B, SESSION_A, SESSION_B, feedbackFor } from './helpers/tutorDatabase.mjs';
+import { createTutorDatabase, applyTutorUsageMigration, USER_A, USER_B, SESSION_A, SESSION_B, feedbackFor, chatReplyFor } from './helpers/tutorDatabase.mjs';
 import { createTutorHandler } from '../supabase/functions/english-tutor/handler.mjs';
 import { makeTopicOpening } from '../supabase/functions/english-tutor/topics.mjs';
 
@@ -113,7 +113,7 @@ test('Edge handler + PostgreSQL: owner checks, bounded provider body, failed cal
       calls++; savedBody = JSON.parse(options.body);
       assert.equal(url, 'https://api-cdn.thehive.ai/api/v3/chat/completions');
       assert.equal(options.headers.Authorization, 'Bearer provider-only');
-      return mode === 'error' ? new Response('provider-private-debug', { status: 405 }) : new Response(JSON.stringify({ choices: [{ finish_reason: 'stop', message: { content: JSON.stringify(feedbackFor(savedBody.messages.at(-1).content)) } }], usage: { total_tokens: 1200 } }));
+      return mode === 'error' ? new Response('provider-private-debug', { status: 405 }) : new Response(JSON.stringify({ choices: [{ finish_reason: 'stop', message: { content: chatReplyFor(savedBody.messages.at(-1).content) } }], usage: { total_tokens: 1200 } }));
     } });
   const request = async (body, user = USER_A) => {
     const response = await handler(new Request('http://localhost', { method: 'POST', headers: { Authorization: `Bearer ${user}`, 'Content-Type': 'application/json' }, body: JSON.stringify(body) }));
@@ -127,7 +127,8 @@ test('Edge handler + PostgreSQL: owner checks, bounded provider body, failed cal
     const payload = { action: 'send', sessionId: SESSION_A, requestId: randomUUID(), content: 'I ate apple.', inputMode: 'text' };
     const first = await request(payload);
     assert.equal(first.status, 200, JSON.stringify(first));
-    assert.equal(first.body.turn.feedback.corrected, 'I ate an apple.');
+    assert.match(first.body.turn.feedback.tutor_reply, /I ate an apple/);
+    assert.equal(first.body.turn.feedback.corrected, 'I ate apple.');
     assert.equal(first.body.turn.feedback.memory, undefined);
     assert.equal(savedBody.stream, true); assert.equal(savedBody.max_completion_tokens, 1400);
     assert.equal(savedBody.reasoning_effort, 'none'); assert.equal(savedBody.model, 'deepseek-ai/deepseek-v4.1-flash-1017');
@@ -159,7 +160,7 @@ test('guided topic creation is private, idempotent, bounded and free; opening re
     env: key => ({ SUPABASE_URL: 'https://fixture.invalid', SUPABASE_SERVICE_ROLE_KEY: 'test-only', HIVE_API_KEY: 'test-only' })[key],
     fetchImpl: async (_url, options) => {
       calls++; providerBody = JSON.parse(options.body);
-      return Response.json({ choices: [{ finish_reason: 'stop', message: { content: JSON.stringify(feedbackFor(providerBody.messages.at(-1).content)) } }], usage: { total_tokens: 800 } });
+      return Response.json({ choices: [{ finish_reason: 'stop', message: { content: chatReplyFor(providerBody.messages.at(-1).content) } }], usage: { total_tokens: 800 } });
     },
   });
   const request = async (body, user = USER_A) => {
@@ -198,8 +199,8 @@ test('guided topic creation is private, idempotent, bounded and free; opening re
     const sent = await request({ action: 'send', sessionId, requestId: randomUUID(), content, inputMode: 'text' });
     assert.equal(sent.status, 200, JSON.stringify(sent)); assert.equal(calls, 1);
     assert.deepEqual(providerBody.messages[2], { role: 'assistant', content: first.body.session.opening.question });
-    assert.equal(sent.body.turn.feedback.natural.sentence, feedbackFor(content).natural.sentence);
-    assert.equal((await request({ action: 'bootstrap' })).body.review.length, 1);
+    assert.ok(sent.body.turn.feedback.tutor_reply.includes(feedbackFor(content).natural.sentence));
+    assert.equal((await request({ action: 'bootstrap' })).body.review.length, 0, 'plain replies are not fabricated scored corrections');
     await pg.query('insert into tutor_sessions(user_id,title) select $1,\'filler\' from generate_series(1,47)', [USER_A]);
     assert.equal((await request({ ...payload, sessionId: randomUUID() })).status, 409);
     assert.equal((await request(payload)).status, 200, 'idempotent retry still works at the cap');
@@ -280,7 +281,7 @@ test('known usage survives invalid feedback and truncated answers; missing usage
     env: name => ({ SUPABASE_URL: 'https://fixture.invalid', SUPABASE_SERVICE_ROLE_KEY: 'test', HIVE_API_KEY: 'test', TUTOR_GLOBAL_DAILY_LIMIT: '1' })[name],
     fetchImpl: async () => {
       calls++;
-      return Response.json({ choices: [{ finish_reason: mode === 'truncated' ? 'length' : 'stop', message: { content: mode === 'invalid' ? 'not-json' : JSON.stringify(feedbackFor()) } }], ...(mode === 'missing' ? {} : { usage: { total_tokens: 400 } }) });
+      return Response.json({ choices: [{ finish_reason: mode === 'truncated' ? 'length' : 'stop', message: { content: mode === 'invalid' ? '' : chatReplyFor('I ate apple.') } }], ...(mode === 'missing' ? {} : { usage: { total_tokens: 400 } }) });
     },
   });
   const request = async body => {

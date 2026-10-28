@@ -101,7 +101,8 @@ try {
         await trigger.waitFor();
         assert.equal(await page.evaluate(() => window.__topicDuringLoading), false, 'topics never mount while restoring history');
         if (scenario === 'empty') {
-          assert.equal(await page.locator('.tutor-topic-grid button').count(), language === 'en' ? 12 : 10);
+          assert.equal(await page.locator('.tutor-topic-grid button').count(), language === 'en' ? 0 : 10);
+          if (language === 'en') await page.locator('#tutor-message').waitFor();
           assert.deepEqual(actions.filter(action => action !== 'study-list'), ['bootstrap']);
         } else {
           const input = page.locator(language === 'en' ? '#tutor-message' : '#japanese-message');
@@ -129,11 +130,11 @@ try {
             assert.equal(actions.length, before, 'opening/closing topics is local, never a paid call');
             await trigger.click();
             const cafe = page.getByRole('button', { name: language === 'en' ? '카페 주제 시작' : '카페 일본어 시작', exact: true });
-            await cafe.click();
-            const startLesson = page.getByRole('button', { name: '이 주제로 대화 시작', exact: true });
-            page.once('dialog', dialog => dialog.dismiss()); await startLesson.click();
+            if (language === 'ja') await cafe.click();
+            const start = language === 'en' ? cafe : page.getByRole('button', { name: '이 주제로 대화 시작', exact: true });
+            page.once('dialog', dialog => dialog.dismiss()); await start.click();
             assert.equal(actions.length, before, 'cancelled topic switch creates no session');
-            page.once('dialog', dialog => dialog.accept()); await startLesson.click();
+            page.once('dialog', dialog => dialog.accept()); await start.click();
             await page.locator('.tutor-opening').waitFor();
             assert.equal(await input.inputValue(), '작성 중인 문장은 유지');
             assert.equal(await trigger.getAttribute('aria-expanded'), 'false');

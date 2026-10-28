@@ -30,8 +30,8 @@ const messages = {
   PROVIDER_BUSY: 'Hive 요청이 많습니다. 잠시 후 다시 시도해 주세요.',
   PROVIDER_ERROR: 'Hive에 연결하지 못했습니다. 키·모델 설정 또는 서비스 상태를 확인해 주세요.',
   PROVIDER_TIMEOUT: '답변 대기 시간이 초과되었습니다. 입력 내용은 유지됩니다.',
-  INVALID_MODEL_OUTPUT: 'AI 답변을 처리하지 못해 교정과 응답을 저장하지 못했습니다. 보낸 문장은 남아 있습니다. 반복 제출 시 추가 비용이 발생할 수 있습니다.',
-  CONTEXT_TOO_LARGE: '대화 내용이 너무 깁니다. 새 대화를 시작해 주세요.',
+  INVALID_MODEL_OUTPUT: 'AI 답변을 끝까지 확인하지 못했습니다. 보낸 문장은 남아 있습니다. 다시 제출하면 추가 비용이 발생할 수 있습니다.',
+  CONTEXT_TOO_LARGE: '이 세션의 대화가 한 번에 전송할 수 있는 범위를 넘었습니다. 기존 기록은 유지됩니다. 새 대화를 시작해 주세요.',
   STATUS_UNKNOWN: '저장 결과를 확인하지 못했습니다. 새로 보내기 전에 저장 상태를 확인해 주세요.',
   NETWORK_ERROR: '서버에 연결하지 못했습니다. 인터넷과 함수 배포 상태를 확인해 주세요.',
   CLIENT_TIMEOUT: '서버 응답 확인 시간이 초과됐습니다. 입력은 유지됩니다. 다시 제출하기 전에 저장 상태를 확인해 주세요.',
@@ -47,9 +47,13 @@ const outputMessages = {
   EMPTY_REPLY: 'AI가 빈 답변을 반환했습니다.',
   RESPONSE_TOO_LARGE: 'AI 답변이 허용 크기를 초과했습니다.',
 };
-export const tutorErrorMessage = (code, reason) => code === 'INVALID_MODEL_OUTPUT' && Object.hasOwn(outputMessages, reason)
-  ? `${outputMessages[reason]} 교정과 응답은 저장되지 않았으며 보낸 문장은 남아 있습니다. 반복 제출 시 추가 비용이 발생할 수 있습니다.`
-  : messages[code] || messages.SERVER_ERROR;
+export function tutorErrorMessage(code, reason) {
+  const [base, storedReason] = String(code || '').split(':');
+  const detail = reason || storedReason;
+  return base === 'INVALID_MODEL_OUTPUT' && Object.hasOwn(outputMessages, detail)
+    ? `${outputMessages[detail]} 보낸 문장은 남아 있습니다. 다시 제출하면 추가 비용이 발생할 수 있습니다.`
+    : messages[base] || messages.SERVER_ERROR;
+}
 export const callTutor = (action, body) => callTutorEndpoint('english-tutor', action, body);
 export async function callJapaneseTutor(action, body) {
   try { return await callTutorEndpoint('japanese-tutor', action, body); }

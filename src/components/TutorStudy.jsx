@@ -46,7 +46,10 @@ export function TutorStudyTools({ lesson, turns, language, onSpeak, onUse, study
 }
 
 export function TutorSaveTurn({ turn, study }) {
-  return <div className="study-turn-save">{['practice', 'reply'].filter(kind => expressionFromTurn(turn, kind)?.sentence).map(kind => {
+  return <div className="study-turn-save">{['practice', 'reply'].filter(kind => {
+    const sentence = expressionFromTurn(turn, kind)?.sentence;
+    return sentence && sentence.length <= 2000;
+  }).map(kind => {
     const saved = study.saved(`turn:${turn.id}:${kind}`);
     return <button type="button" key={kind} disabled={study.busy || saved} onClick={() => study.save({ turnId: turn.id, kind })}>{saved ? <Check size={14} /> : <BookmarkPlus size={14} />}{kind === 'practice' ? '추천 표현' : '튜터 문장'} {saved ? '저장됨' : '저장'}</button>;
   })}</div>;

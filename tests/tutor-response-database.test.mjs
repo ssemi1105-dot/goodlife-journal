@@ -1,17 +1,16 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
-import { createTutorDatabase, feedbackFor, USER_A, USER_B } from './helpers/tutorDatabase.mjs';
+import { createTutorDatabase, USER_A, USER_B } from './helpers/tutorDatabase.mjs';
 import { japaneseFeedback } from './helpers/japaneseFeedback.mjs';
 import { createTutorHandler } from '../supabase/functions/english-tutor/handler.mjs';
 import * as japanese from '../supabase/functions/japanese-tutor/core.mjs';
 
-test('both tutors recover complete fenced replies, preserve summary, and diagnose failures without leaking or paying twice', async () => {
+test('legacy Japanese tutor still recovers fenced replies, preserves summary, and diagnoses failures without leaking or paying twice', async () => {
   const { pg, client, close } = await createTutorDatabase({ japanese: true });
   try {
     await pg.query('insert into japanese_tutor_access(user_id,enabled) values ($1,true),($2,true)', [USER_A, USER_B]);
     for (const [curriculum, prefix, content, fixture] of [
-      [null, 'tutor_', 'I always using the air conditioner.', feedbackFor],
       [japanese, 'japanese_tutor_', '커피 주세요', japaneseFeedback],
     ]) {
       let mode = 'first', calls = 0;
@@ -24,7 +23,6 @@ test('both tutors recover complete fenced replies, preserve summary, and diagnos
           history.push(messages);
           const raw = fixture(messages.at(-1).content);
           raw.memory = mode === 'first' ? 'Previously discussed the weather in this conversation.' : null;
-          if (mode === 'first' && !curriculum) raw.tutor_reply = 'Do you usually use the air conditioner or a fan at home?';
           if (mode === 'schema') raw.flags = null;
           if (mode === 'incomplete') return new Response('data: {"choices":[{"index":0,"delta":{"content":"{}"},"finish_reason":"stop"}]}\n\n', { headers: { 'Content-Type': 'text/event-stream' } });
           const text = mode === 'json' ? 'PRIVATE_MODEL_OUTPUT'
@@ -46,11 +44,7 @@ test('both tutors recover complete fenced replies, preserve summary, and diagnos
       assert.equal(reply.body.turn.state, 'completed');
       assert.equal(reply.body.turn.feedback.memory, undefined);
       assert.equal(reply.body.turn.feedback.assessment_eligible, false);
-      if (!curriculum) {
-        assert.equal(reply.body.turn.feedback.corrected, 'I always use the air conditioner.');
-        assert.equal(reply.body.turn.feedback.errors.length, 1);
-        assert.ok(JSON.stringify(history.at(-1)).includes('or a fan at home?'));
-      } else assert.ok(reply.body.turn.feedback.natural.pronunciation_ko);
+      assert.ok(reply.body.turn.feedback.natural.pronunciation_ko);
       assert.deepEqual((await request(payload)).body.turn.feedback, reply.body.turn.feedback);
       assert.equal(calls, 2);
       const loaded = await request({ action: 'session', sessionId: session.id });

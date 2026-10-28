@@ -1,4 +1,5 @@
 import TutorExpressionTips from './TutorExpressionTips';
+import { Volume2 } from 'lucide-react';
 
 export const ERROR_LABELS = { tense: '시제', verb_form: '동사 형태', article: '관사', plural: '복수형', preposition: '전치사', word_order: '어순', word_choice: '단어 선택', spelling: '철자', agreement: '수 일치', other: '기타' };
 
@@ -11,6 +12,11 @@ function CorrectionList({ errors }) {
 }
 
 export default function TutorFeedback({ feedback, onSpeak, onPractice, disabled = false, showReply = true }) {
+  if (feedback.response_format === 'free_chat') return showReply ? <div className="tutor-feedback tutor-free-reply">
+    <div className="tutor-answer"><span className="tutor-speaker">MINA</span><p>{feedback.tutor_reply}</p>
+      {onSpeak && <button type="button" className="tutor-icon" title="답변 듣기" aria-label="답변 듣기" onClick={() => onSpeak(feedback.tutor_reply)}><Volume2 size={18} /></button>}
+    </div>
+  </div> : null;
   const errors = feedback.errors || [];
   const expression = feedback.natural?.sentence || feedback.english_version || (errors.length ? feedback.corrected : '');
   const hasTips = Boolean(feedback.english_version && feedback.expression_tips?.length);

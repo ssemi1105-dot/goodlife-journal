@@ -1,13 +1,13 @@
 {
   "name": "goodlife-journal",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "private": true,
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "test": "node --test tests/regressions.test.mjs tests/workout-import.test.mjs tests/tutor.test.mjs tests/tutor-ui.test.mjs tests/japanese-tutor.test.mjs tests/japanese-speech.test.mjs tests/tutor-conversation.test.mjs",
+    "test": "node --test tests/regressions.test.mjs tests/workout-import.test.mjs tests/tutor.test.mjs tests/tutor-ui.test.mjs tests/japanese-tutor.test.mjs tests/japanese-speech.test.mjs tests/tutor-conversation.test.mjs tests/tutor-free-chat.test.mjs",
     "test:security": "node --test tests/profile-security.test.mjs"
   },
   "dependencies": {

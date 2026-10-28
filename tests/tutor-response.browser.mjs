@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 import { mkdir, readFile } from 'node:fs/promises';
 import { createServer } from 'vite';
-import { createTutorDatabase, feedbackFor, USER_A } from './helpers/tutorDatabase.mjs';
+import { createTutorDatabase, chatReplyFor, USER_A } from './helpers/tutorDatabase.mjs';
 import { japaneseFeedback } from './helpers/japaneseFeedback.mjs';
 import { createTutorHandler } from '../supabase/functions/english-tutor/handler.mjs';
 import * as japanese from '../supabase/functions/japanese-tutor/core.mjs';
@@ -19,7 +19,8 @@ const handlers = Object.fromEntries([['english-tutor', null], ['japanese-tutor',
     fetchImpl: async (_url, options) => {
       calls++;
       const content = JSON.parse(options.body).messages.at(-1).content;
-      const feedback = (curriculum ? japaneseFeedback : feedbackFor)(content);
+      if (!curriculum) return new Response(`data: ${JSON.stringify({ choices: [{ index: 0, delta: { content: chatReplyFor(content) }, finish_reason: mode === 'limit' ? 'length' : null }] })}\n\ndata: {"choices":[],"usage":{"total_tokens":400}}\n\ndata: [DONE]\n\n`, { headers: { 'Content-Type': 'text/event-stream' } });
+      const feedback = japaneseFeedback(content);
       feedback.memory = null;
       return Response.json({ choices: [{ finish_reason: mode === 'limit' ? 'length' : 'stop',
         message: { content: '```json\n' + JSON.stringify(feedback) + '\n```' } }], usage: { total_tokens: 400 } });
@@ -86,6 +87,7 @@ try {
       const answer = language === 'en' ? page.locator('.tutor-turn .tutor-answer') : page.locator('.tutor-turn .japanese-phrase').filter({ has: page.getByRole('heading', { name: 'HARU', exact: true }) });
       await page.getByRole('button', { name: '주제 변경', exact: true }).click();
       await page.getByRole('button', { name: language === 'en' ? '카페 주제 시작' : '카페 일본어 시작', exact: true }).click();
+      if (language === 'ja') {
       const saveExpression = page.getByRole('button', { name: '연습 표현 저장', exact: true });
       if (!(await saveExpression.isDisabled())) await saveExpression.click();
       await page.waitForFunction(() => document.querySelector('[aria-label="연습 표현 저장"]')?.disabled);
@@ -103,6 +105,11 @@ try {
       assert.equal(await page.locator('.study-tool-phrase').count(), 3);
       assert.equal(calls, before);
       await page.getByRole('button', { name: '표현', exact: true }).click();
+      } else {
+        await input.waitFor();
+        assert.equal(await page.locator('.tutor-study-tools, .tutor-lesson').count(), 0);
+        assert.equal(calls, before, 'choosing an optional topic creates no paid call');
+      }
       await input.fill(content);
       await page.locator('.tutor-send').click();
       try { await answer.waitFor(); }
@@ -113,7 +120,8 @@ try {
       }
       await page.waitForFunction(selector => document.querySelector(selector)?.value === '', language === 'en' ? '#tutor-message' : '#japanese-message');
       if (language === 'en') {
-        assert.equal(await page.locator('.tutor-correction-pair strong').textContent(), 'use');
+        assert.equal(await page.locator('.tutor-correction-pair').count(), 0);
+        assert.match(await answer.textContent(), /I always use the air conditioner/);
         assert.match(await answer.textContent(), /What temperature do you usually set it to/);
       } else assert.ok((await answer.textContent()).length > 0);
       assert.equal(calls, before + 1);
@@ -122,8 +130,9 @@ try {
       assert.equal(calls, before + 1, 'reload only loads persisted data');
       await page.screenshot({ path: `test-results/response-${language}-${viewport.width}.png` });
 
-      await page.getByRole('button', { name: '추천 표현 저장', exact: true }).click();
-      await page.getByRole('button', { name: '추천 표현 저장됨', exact: true }).waitFor();
+      const saveLabel = language === 'en' ? '튜터 문장' : '추천 표현';
+      await page.getByRole('button', { name: `${saveLabel} 저장`, exact: true }).click();
+      await page.getByRole('button', { name: `${saveLabel} 저장됨`, exact: true }).waitFor();
       await page.getByRole('button', { name: '학습 메뉴', exact: true }).click();
       await page.getByRole('tab', { name: /^복습/ }).click();
       await page.locator('.study-review-card').first().waitFor();
@@ -139,6 +148,19 @@ try {
       await page.getByRole('button', { name: '학습 메뉴', exact: true }).click();
       await page.getByRole('tab', { name: language === 'en' ? '대화' : '말하기', exact: true }).click();
 
+      if (language === 'en') {
+        await page.getByRole('button', { name: '학습 메뉴', exact: true }).click();
+        const originalSession = await page.getByRole('combobox', { name: '대화 선택', exact: true }).inputValue();
+        await page.getByRole('button', { name: '새 대화', exact: true }).click();
+        await page.locator('.tutor-welcome').waitFor();
+        assert.equal(await page.locator('.tutor-turn').count(), 0);
+        await input.waitFor(); assert.equal(calls, before + 1);
+        await page.getByRole('button', { name: '학습 메뉴', exact: true }).click();
+        await page.getByRole('combobox', { name: '대화 선택', exact: true }).selectOption(originalSession);
+        await answer.waitFor();
+        await page.reload(); await answer.waitFor(); assert.equal(calls, before + 1);
+      }
+
       await db.pg.exec(`update ${prefix}usage set last_request_at=now()-interval '10 seconds'`);
       mode = 'limit';
       await input.fill(content); await page.locator('.tutor-send').click();
@@ -149,7 +171,7 @@ try {
       await page.waitForFunction(() => !document.querySelector('.tutor-send').disabled);
       assert.equal(calls, before + 2, 'status check never repeats a paid request');
       assert.equal(await input.inputValue(), content);
-      assert.match(await page.locator('.tutor-failed').textContent(), /교정과 응답을 저장하지 못했습니다/);
+      assert.match(await page.locator('.tutor-failed').textContent(), language === 'en' ? /길이 제한/ : /답변을 끝까지 확인하지/);
       assert.doesNotMatch(await page.locator('.tutor-failed').textContent(), /학습 평가에 반영하지/);
       assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1));
       const composer = await page.locator('.tutor-composer').boundingBox();
@@ -160,5 +182,5 @@ try {
     assert.deepEqual(errors, []); assert.deepEqual(external, []);
     await context.close();
   }
-  console.log('Both tutors passed mobile lessons, hints, persisted scheduled review, reply recovery, failed-draft retention, accurate errors and no automatic paid retries. Mock provider; no external API calls.');
+  console.log('English free chat, session resume/new session, Japanese lessons, persisted review, failed drafts and no paid retries passed at 320/390px. Mock provider; no real data or external API calls.');
 } finally { await browser?.close(); await server.close(); await db.close(); }
